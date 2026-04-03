@@ -19,6 +19,7 @@ fi
   cd backend
   ./.venv/bin/pip install -r requirements.txt -q
   ./.venv/bin/python manage.py migrate --noinput
+  ./.venv/bin/python manage.py collectstatic --noinput
 )
 
 if [[ ! -f frontend/.env.production ]]; then

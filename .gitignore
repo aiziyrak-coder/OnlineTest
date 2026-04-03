@@ -19,6 +19,7 @@ uploads/
 # Django / Python
 backend/db.sqlite3
 backend/db.sqlite3-journal
+backend/staticfiles/
 **/__pycache__/
 *.py[cod]
 *$py.class
