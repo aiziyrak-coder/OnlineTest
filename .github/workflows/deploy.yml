@@ -1,4 +1,5 @@
-# Serverda pull + build + restart (SSH kalit repoda Secrets da).
+# Serverda pull + build + restart.
+# Autentifikatsiya: SSH_PRIVATE_KEY yoki SSH_PASSWORD (ikkalasi ham Secret; kodga yozilmaydi).
 # Sozlash: deploy/DEPLOY-GITHUB-ACTIONS.md
 name: Deploy to server
 
@@ -15,7 +16,7 @@ jobs:
   deploy:
     name: SSH deploy
     runs-on: ubuntu-latest
-    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USERNAME != '' && secrets.SSH_PRIVATE_KEY != '' }}
+    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USERNAME != '' && (secrets.SSH_PRIVATE_KEY != '' || secrets.SSH_PASSWORD != '') }}
     steps:
       - name: Pull, build, restart on droplet
         uses: appleboy/ssh-action@v1.2.0
@@ -23,6 +24,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SSH_PASSWORD }}
           script_stop: true
           script: |
             set -euo pipefail

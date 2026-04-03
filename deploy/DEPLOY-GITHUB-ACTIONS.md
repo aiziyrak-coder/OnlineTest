@@ -9,30 +9,47 @@ Bu loyiha **Cursor agent** o‘rniga **GitHub** serveringizga ulanadi: `main` ga
 - **sudo** siz systemd restart bo‘lmaydi — deploy user uchun `sudoers` da faqat:
   `systemctl restart onlinetest-api`, `onlinetest-realtime`, `nginx reload` (tavsiya).
 
-## 2) SSH kalit (GitHub → server)
+## 2) Autentifikatsiya: kalit yoki parol
+
+**Parol server paroli** (masalan root paroli) — bu SSH **kalit emas**. Kalit fayl `-----BEGIN OPENSSH PRIVATE KEY-----` bilan boshlanadi.
+
+Tavsiya: parolni chat yoki kodga yozmang; server parolini **almashtiring** va keyin faqat **SSH kalit** ishlating.
+
+### Variant A — parol (tez, kamroq xavfsiz)
+
+GitHub’da faqat quyidagi secretlar:
+
+- `SSH_PASSWORD` — serverdagi **root** (yoki tanlangan user) paroli.
+
+`SSH_PRIVATE_KEY` ni **qo‘ymang** yoki bo‘sh qoldiring (faqat parol ishlatiladi).
+
+### Variant B — SSH kalit (tavsiya etiladi)
 
 Lokal mashinada:
 
 ```bash
 ssh-keygen -t ed25519 -f gh_deploy_onlinetest -N ""
 ssh-copy-id -i gh_deploy_onlinetest.pub root@SIZNING_IP
-# yoki public kalitni server ~/.ssh/authorized_keys ga qo‘shing
-cat gh_deploy_onlinetest   # bu PRIVATE kalit — faqat GitHub Secret ga
+cat gh_deploy_onlinetest   # PRIVATE kalit — faqat Secret SSH_PRIVATE_KEY
 ```
+
+`SSH_PASSWORD` ni bo‘sh qoldiring.
 
 ## 3) GitHub repository Secrets
 
 **Settings → Secrets and variables → Actions → New repository secret**
 
-| Nomi | Misol | Majburiy |
+| Nomi | Tavsif | Majburiy |
 |------|--------|----------|
-| `SSH_HOST` | `167.71.53.238` | ha |
-| `SSH_USERNAME` | `root` yoki `deploy` | ha |
-| `SSH_PRIVATE_KEY` | `-----BEGIN OPENSSH PRIVATE KEY-----...` | ha |
-| `SSH_APP_PATH` | `/var/www/onlinetest` | yo‘q (standart shu) |
-| `SSH_PORT` | `22` | yo‘q |
+| `SSH_HOST` | Masalan `167.71.53.238` | ha |
+| `SSH_USERNAME` | Masalan `root` | ha |
+| `SSH_PRIVATE_KEY` | To‘liq private key matni | kalit bilan — ha |
+| `SSH_PASSWORD` | Server paroli | parol bilan — ha |
+| `SSH_APP_PATH` | Masalan `/var/www/onlinetest` | yo‘q |
 
-> Agar `SSH_HOST` yoki `SSH_PRIVATE_KEY` bo‘sh bo‘lsa, **Deploy** job o‘tkazib yuboriladi (push qizil bo‘lib qolmasin).
+**Kalit yoki paroldan bittasi** bo‘lishi kerak. Ikkalasi ham to‘ldirilsa, odatda kalit ustunlik qiladi.
+
+> `SSH_HOST`, `SSH_USERNAME` va (`SSH_PRIVATE_KEY` yoki `SSH_PASSWORD`) bo‘lmasa, **Deploy** job ishlamaydi (push yashil, deploy o‘tkaziladi).
 
 ## 4) Sudo siz ishlashi
 
