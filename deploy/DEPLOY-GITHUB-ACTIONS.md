@@ -1,6 +1,8 @@
 # GitHub Actions orqali serverda avtomatik deploy
 
-Bu loyiha **Cursor agent** o‘rniga **GitHub** serveringizga ulanadi: `main` ga push yoki **Actions → Deploy to server → Run workflow**.
+**CI tugagach deploy avtomatik** (`workflow_run`). Push qilgach sizdan qo‘lda pull/restart talab qilinmaydi — faqat bir marta [SETUP-SECRETS-ONCE.md](./SETUP-SECRETS-ONCE.md).
+
+Qo‘lda ishga tushirish: **Actions → Deploy to server → Run workflow**.
 
 ## 1) Bir marta serverda (qo‘lda)
 

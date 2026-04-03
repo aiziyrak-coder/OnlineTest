@@ -1,11 +1,12 @@
-# Serverda pull + build + restart.
-# Autentifikatsiya: SSH_PRIVATE_KEY yoki SSH_PASSWORD (ikkalasi ham Secret; kodga yozilmaydi).
-# Sozlash: deploy/DEPLOY-GITHUB-ACTIONS.md
+# CI muvaffaqiyatidan keyin avtomatik: serverda git pull + build + restart.
+# Bir marta Secret: deploy/SETUP-SECRETS-ONCE.md
 name: Deploy to server
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -16,7 +17,13 @@ jobs:
   deploy:
     name: SSH deploy
     runs-on: ubuntu-latest
-    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_USERNAME != '' && (secrets.SSH_PRIVATE_KEY != '' || secrets.SSH_PASSWORD != '') }}
+    if: >-
+      secrets.SSH_HOST != '' && secrets.SSH_USERNAME != '' &&
+      (secrets.SSH_PRIVATE_KEY != '' || secrets.SSH_PASSWORD != '') &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'))
     steps:
       - name: Pull, build, restart on droplet
         uses: appleboy/ssh-action@v1.2.0
