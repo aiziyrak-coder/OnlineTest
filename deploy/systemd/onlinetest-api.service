@@ -1,0 +1,23 @@
+[Unit]
+Description=FJSTI Online Exam API (Gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+RuntimeDirectory=onlinetest
+EnvironmentFile=/etc/onlinetest/api.env
+WorkingDirectory=/var/www/onlinetest/backend
+ExecStart=/var/www/onlinetest/backend/.venv/bin/gunicorn \
+  --bind 127.0.0.1:9081 \
+  --workers 3 \
+  --timeout 120 \
+  --access-logfile - \
+  --error-logfile - \
+  exam_platform.wsgi:application
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

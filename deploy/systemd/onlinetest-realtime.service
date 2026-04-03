@@ -1,0 +1,16 @@
+[Unit]
+Description=FJSTI Online Exam Socket.IO (realtime)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+EnvironmentFile=/etc/onlinetest/realtime.env
+WorkingDirectory=/var/www/onlinetest
+ExecStart=/usr/bin/node /var/www/onlinetest/backend/realtime/server.mjs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

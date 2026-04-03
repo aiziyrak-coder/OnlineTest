@@ -1,0 +1,35 @@
+from django.urls import path
+
+from apps.api import views
+
+urlpatterns = [
+    path("health", views.health),
+    path("auth/login", views.auth_login),
+    path("student/identity-compare", views.student_identity_compare),
+    path("student/exams", views.student_exams_list),
+    path("student/exams/<int:pk>/start", views.student_exams_start),
+    path("student/exams/<int:pk>/submit", views.student_exams_submit),
+    path("student/results", views.student_results),
+    path("student/exams/<int:exam_id>/result-details", views.student_result_details),
+    path("student/exams/<int:exam_id>/certificate.pdf", views.student_certificate_pdf),
+    path("student/violations", views.student_violations),
+    path("admin/users", views.admin_users),
+    path("admin/users/<str:user_id>/unban", views.admin_users_unban),
+    path("admin/users/<str:user_id>", views.admin_user_detail),
+    path("admin/student_exams/<int:pk>/retake", views.admin_student_exams_retake),
+    path("admin/stats", views.admin_stats),
+    path("admin/levels", views.admin_levels),
+    path("admin/groups", views.admin_groups),
+    path("admin/groups/<int:pk>", views.admin_group_detail),
+    path("admin/test-bank/categories", views.admin_test_bank_categories),
+    path("admin/test-bank/categories/<int:pk>", views.admin_test_bank_categories_delete),
+    path("admin/test-bank/questions", views.admin_test_bank_questions),
+    path("admin/exams", views.admin_exams),
+    path("admin/exams/<int:pk>/results", views.admin_exams_results),
+    path("admin/exams/<int:pk>", views.admin_exam_detail),
+    path(
+        "public/verify-result/<str:result_id>/certificate.pdf",
+        views.public_verify_certificate_pdf,
+    ),
+    path("public/verify-result/<str:result_id>", views.public_verify_result),
+]

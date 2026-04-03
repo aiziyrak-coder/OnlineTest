@@ -1,0 +1,112 @@
+"""
+Django sozlamalari — FJSTI Online Exam API (Express API bilan mos marshrutlar).
+"""
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+_DEFAULT_SECRET_KEY = "dev-only-change-in-production-min-50-chars-xxxxxxxxxx"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", _DEFAULT_SECRET_KEY)
+DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
+if DEBUG and "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
+
+if not DEBUG:
+    if SECRET_KEY == _DEFAULT_SECRET_KEY or len(SECRET_KEY) < 40:
+        raise RuntimeError("Production: DJANGO_SECRET_KEY majburiy (kamida ~40 tasodifiy belgi).")
+
+JWT_SECRET = os.environ.get("JWT_SECRET", SECRET_KEY)
+if not DEBUG and (not JWT_SECRET or len(JWT_SECRET) < 24):
+    raise RuntimeError("Production: JWT_SECRET (min 24 belgi) majburiy")
+
+INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.staticfiles",
+    "corsheaders",
+    "rest_framework",
+    "apps.core",
+    "apps.api",
+]
+
+MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+X_FRAME_OPTIONS = "DENY"
+
+if not DEBUG:
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    _use_https = os.environ.get("DJANGO_SECURE_SSL", "").strip().lower() in ("1", "true", "yes")
+    if _use_https:
+        SECURE_SSL_REDIRECT = True
+        SESSION_COOKIE_SECURE = True
+        CSRF_COOKIE_SECURE = True
+        SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = True
+    _proxy = os.environ.get("SECURE_PROXY_SSL_HEADER", "").strip()
+    if _proxy and ":" in _proxy:
+        name, value = _proxy.split(":", 1)
+        SECURE_PROXY_SSL_HEADER = (name.strip(), value.strip())
+
+_csrf = [o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+CSRF_TRUSTED_ORIGINS = _csrf
+
+ROOT_URLCONF = "exam_platform.urls"
+WSGI_APPLICATION = "exam_platform.wsgi.application"
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+
+LANGUAGE_CODE = "uz"
+TIME_ZONE = "Asia/Tashkent"
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = "static/"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173").split(",")
+    if o.strip()
+]
+if not DEBUG and CORS_ALLOWED_ORIGINS:
+    CORS_ALLOW_ALL_ORIGINS = False
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.JWTAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["apps.api.permissions.IsAuthenticatedStrict"],
+    "EXCEPTION_HANDLER": "apps.api.exception_handlers.api_exception_handler",
+    "UNAUTHENTICATED_USER": None,
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+        "rest_framework.parsers.FormParser",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "10/h",
+        "face_verify": "30/m",
+        "public_verify": "200/h",
+    },
+}
+if not DEBUG:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = ["rest_framework.renderers.JSONRenderer"]
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52_428_800
+FILE_UPLOAD_MAX_MEMORY_SIZE = 52_428_800
+
+PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")

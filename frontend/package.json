@@ -1,0 +1,44 @@
+{
+  "name": "fjsti-exam-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test tests/smoke.test.ts",
+    "test:watch": "node --import tsx --watch --test tests/smoke.test.ts"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.34",
+    "@tailwindcss/vite": "^4.1.14",
+    "@tensorflow-models/coco-ssd": "^2.2.2",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.38.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.13.2",
+    "socket.io-client": "^4.8.3",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

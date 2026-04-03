@@ -1,0 +1,8 @@
+{
+  "name": "Fjsti Online Exam",
+  "description": "AI-powered online examination platform with real-time proctoring, face detection, and tab monitoring.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
