@@ -93,6 +93,31 @@ ensure_realtime_env() {
   chmod 600 "$f" 2>/dev/null || true
 }
 
+ensure_deploy_hook_env() {
+  local f=/etc/onlinetest/deploy-hook.env
+  if [[ ! -f "$f" ]]; then
+    local sec
+    sec=$(openssl rand -hex 32)
+    umask 077
+    cat > "$f" <<EOF
+DEPLOY_HOOK_SECRET=${sec}
+DEPLOY_HOOK_PORT=9085
+DEPLOY_APP_ROOT=${APP}
+EOF
+    chmod 600 "$f"
+    {
+      echo "GitHub → Settings → Secrets → Actions:"
+      echo "  DEPLOY_HOOK_SECRET=${sec}"
+      echo "  DEPLOY_HOOK_URL=https://${API_DOMAIN}/__internal_deploy/v1"
+      echo "Certbot dan keyin ham xuddi shu https URL ishlatiladi."
+    } > /root/onlinetest-github-webhook-once.txt
+    chmod 600 /root/onlinetest-github-webhook-once.txt
+    echo ">>> SSH kalitsiz deploy uchun: /root/onlinetest-github-webhook-once.txt"
+  else
+    chmod 600 "$f" 2>/dev/null || true
+  fi
+}
+
 ensure_api_env
 ensure_realtime_env
 write_frontend_env
@@ -116,8 +141,13 @@ set +a
 chown -R www-data:www-data "$APP/frontend/dist" 2>/dev/null || true
 chown -R www-data:www-data "$APP/backend" 2>/dev/null || true
 
-systemctl enable onlinetest-api onlinetest-realtime 2>/dev/null || true
-systemctl restart onlinetest-api onlinetest-realtime 2>/dev/null || true
+ensure_deploy_hook_env
+chmod +x "$APP/deploy/deploy-hook-runner.sh"
+sed "s#/var/www/onlinetest#${APP}#g" "$APP/deploy/systemd/onlinetest-deploy-hook.service" > /etc/systemd/system/onlinetest-deploy-hook.service
+systemctl daemon-reload
+
+systemctl enable onlinetest-api onlinetest-realtime onlinetest-deploy-hook 2>/dev/null || true
+systemctl restart onlinetest-api onlinetest-realtime onlinetest-deploy-hook 2>/dev/null || true
 
 bash "$APP/deploy/enable-nginx-onlinetest.sh"
 

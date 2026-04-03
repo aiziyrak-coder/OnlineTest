@@ -86,6 +86,9 @@ jobs:
       - name: Install root deps (socket.io)
         run: npm ci
 
+      - name: Deploy hook syntax
+        run: node --check deploy/deploy-hook.mjs
+
       - name: Start realtime server
         run: |
           node backend/realtime/server.mjs &

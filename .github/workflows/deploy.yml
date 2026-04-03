@@ -1,5 +1,6 @@
-# CI muvaffaqiyatidan keyin avtomatik: serverda git pull + build + restart.
-# Bir marta Secret: deploy/SETUP-SECRETS-ONCE.md
+# CI muvaffaqiyatidan keyin deploy.
+# Variant A — SSH (kalit yoki parol). Variant B — webhook (SSH shart emas).
+# Bir vaqtning o‘zida faqat bittasini ishlating: webhook bo‘lsa SSH_HOST qo‘ymang.
 name: Deploy to server
 
 on:
@@ -14,10 +15,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  deploy-webhook:
+    name: Webhook deploy (SSH kalitsiz)
+    runs-on: ubuntu-latest
+    if: >-
+      secrets.DEPLOY_HOOK_URL != '' && secrets.DEPLOY_HOOK_SECRET != '' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'))
+    steps:
+      - name: POST deploy hook
+        run: |
+          curl -fsS --max-time 600 -X POST \
+            -H "X-Deploy-Secret: ${{ secrets.DEPLOY_HOOK_SECRET }}" \
+            "${{ secrets.DEPLOY_HOOK_URL }}"
+
+  deploy-ssh:
     name: SSH deploy
     runs-on: ubuntu-latest
     if: >-
+      secrets.DEPLOY_HOOK_URL == '' &&
       secrets.SSH_HOST != '' && secrets.SSH_USERNAME != '' &&
       (secrets.SSH_PRIVATE_KEY != '' || secrets.SSH_PASSWORD != '') &&
       (github.event_name == 'workflow_dispatch' ||
