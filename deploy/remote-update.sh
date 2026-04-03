@@ -35,10 +35,13 @@ npm ci --omit=dev --prefix "$ROOT"
 
 if systemctl is-active --quiet onlinetest-api 2>/dev/null; then
   sudo systemctl restart onlinetest-api onlinetest-realtime
-  sudo systemctl reload nginx 2>/dev/null || true
-  echo "[remote-update] systemd + nginx yangilandi."
+  echo "[remote-update] systemd yangilandi."
 else
-  echo "[remote-update] onlinetest-api systemd topilmadi — birinchi o‘rnatish: deploy/DEPLOY.md"
+  echo "[remote-update] onlinetest-api systemd topilmadi — birinchi o‘rnatish: deploy/bootstrap-ubuntu-once.sh yoki deploy/DEPLOY.md"
+fi
+
+if command -v nginx >/dev/null 2>&1; then
+  sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
 fi
 
 echo "[remote-update] OK"

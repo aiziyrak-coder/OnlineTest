@@ -2,6 +2,8 @@
 
 **Push bilan avtomatik deploy:** GitHub’da Secrets qo‘ygach, `main` ga har pushda server yangilanadi — [DEPLOY-GITHUB-ACTIONS.md](./DEPLOY-GITHUB-ACTIONS.md).
 
+**Domen ochilsa boshqa sayt chiqsa:** nginx hali ulangan emas — [TROUBLESHOOT-DOMAINS.md](./TROUBLESHOOT-DOMAINS.md). Bir marta: `sudo bash deploy/bootstrap-ubuntu-once.sh` yoki faqat nginx: `sudo bash deploy/enable-nginx-onlinetest.sh`.
+
 ## Xavfsizlik (majburiy)
 
 1. Chatda yuborilgan **root parolini darhol o‘zgartiring** (`passwd`). Keyinchalik faqat **SSH kalit** (`PermitRootLogin prohibit-password`).

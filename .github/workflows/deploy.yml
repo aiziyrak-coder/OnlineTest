@@ -38,4 +38,7 @@ jobs:
             APP="${{ secrets.SSH_APP_PATH }}"
             cd "${APP:-/var/www/onlinetest}"
             git pull origin main
+            if [[ ! -L /etc/nginx/sites-enabled/fjsti-onlinetest.conf ]]; then
+              sudo bash deploy/enable-nginx-onlinetest.sh
+            fi
             bash deploy/remote-update.sh --no-git
