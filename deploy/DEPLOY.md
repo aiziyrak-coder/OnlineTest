@@ -1,5 +1,7 @@
 # DigitalOcean dropletga joylashtirish
 
+**Push bilan avtomatik deploy:** GitHub’da Secrets qo‘ygach, `main` ga har pushda server yangilanadi — [DEPLOY-GITHUB-ACTIONS.md](./DEPLOY-GITHUB-ACTIONS.md).
+
 ## Xavfsizlik (majburiy)
 
 1. Chatda yuborilgan **root parolini darhol o‘zgartiring** (`passwd`). Keyinchalik faqat **SSH kalit** (`PermitRootLogin prohibit-password`).

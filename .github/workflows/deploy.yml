@@ -1,0 +1,32 @@
+# Serverda pull + build + restart (SSH kalit repoda Secrets da).
+# Sozlash: deploy/DEPLOY-GITHUB-ACTIONS.md
+name: Deploy to server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-onlinetest
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: SSH deploy
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SSH_HOST != '' && secrets.SSH_PRIVATE_KEY != '' }}
+    steps:
+      - name: Pull, build, restart on droplet
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            APP="${{ secrets.SSH_APP_PATH }}"
+            cd "${APP:-/var/www/onlinetest}"
+            git pull origin main
+            bash deploy/remote-update.sh --no-git
