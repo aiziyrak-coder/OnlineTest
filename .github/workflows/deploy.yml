@@ -55,7 +55,8 @@ jobs:
             set -euo pipefail
             APP="${{ secrets.SSH_APP_PATH }}"
             cd "${APP:-/var/www/onlinetest}"
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             if [[ ! -L /etc/nginx/sites-enabled/fjsti-onlinetest.conf ]]; then
               sudo bash deploy/enable-nginx-onlinetest.sh
             fi

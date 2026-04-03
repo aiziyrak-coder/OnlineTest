@@ -55,6 +55,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: pip-audit (dependencies)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
       - name: Byte-compile
         run: python -m compileall -q apps exam_platform manage.py
 
@@ -64,6 +69,17 @@ jobs:
           DJANGO_DEBUG: "1"
           JWT_SECRET: ci-placeholder-jwt-secret-min-24-chars-long
         run: python manage.py check
+
+      - name: Django check --deploy (prod-like)
+        env:
+          DJANGO_SECRET_KEY: ci-django-secret-key-at-least-40-characters-long-x
+          DJANGO_DEBUG: "0"
+          JWT_SECRET: ci-placeholder-jwt-secret-min-24-chars-long
+          ALLOWED_HOSTS: api.example.org,127.0.0.1
+          CORS_ALLOWED_ORIGINS: https://app.example.org
+          CSRF_TRUSTED_ORIGINS: https://app.example.org,https://api.example.org
+          SECURE_PROXY_SSL_HEADER: X-Forwarded-Proto:https
+        run: python manage.py check --deploy
 
       - name: Tests
         env:

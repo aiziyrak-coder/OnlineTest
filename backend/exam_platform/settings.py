@@ -65,6 +65,22 @@ if not DEBUG:
 
 _csrf = [o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 CSRF_TRUSTED_ORIGINS = _csrf
+if not DEBUG and _csrf and any(o.startswith("https://") for o in _csrf):
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = True
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 ROOT_URLCONF = "exam_platform.urls"
 WSGI_APPLICATION = "exam_platform.wsgi.application"
@@ -109,6 +125,11 @@ CORS_ALLOWED_ORIGINS = [
 if not DEBUG and CORS_ALLOWED_ORIGINS:
     CORS_ALLOW_ALL_ORIGINS = False
 
+if not DEBUG and not CORS_ALLOW_ALL_ORIGINS and not CORS_ALLOWED_ORIGINS:
+    raise RuntimeError(
+        "Production: CORS_ALLOWED_ORIGINS bo‘sh — frontend domenini vergul bilan qo‘shing (api.env)."
+    )
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.JWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["apps.api.permissions.IsAuthenticatedStrict"],
@@ -119,10 +140,16 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.MultiPartParser",
         "rest_framework.parsers.FormParser",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
     "DEFAULT_THROTTLE_RATES": {
         "login": "10/h",
         "face_verify": "30/m",
         "public_verify": "200/h",
+        "anon": "120/m",
+        "user": "400/m",
     },
 }
 if not DEBUG:
@@ -134,3 +161,25 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 52_428_800
 PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
+if not DEBUG:
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "simple": {
+                "format": "{levelname} {asctime} {name} {message}",
+                "style": "{",
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "simple",
+            },
+        },
+        "root": {"handlers": ["console"], "level": "INFO"},
+        "loggers": {
+            "django.security": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        },
+    }

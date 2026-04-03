@@ -31,7 +31,12 @@ class JWTAuthentication(BaseAuthentication):
         if not token:
             return None
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+            payload = jwt.decode(
+                token,
+                settings.JWT_SECRET,
+                algorithms=["HS256"],
+                options={"require": ["exp"]},
+            )
         except jwt.PyJWTError:
             raise AuthenticationFailed("Invalid token")
         uid = payload.get("id") or payload.get("sub")
@@ -47,14 +52,22 @@ class JWTAuthentication(BaseAuthentication):
 
 
 def issue_token(user: AppUser) -> str:
+    import os
     from datetime import datetime, timedelta, timezone
 
-    exp = datetime.now(timezone.utc) + timedelta(hours=24)
+    try:
+        hours = int(os.environ.get("JWT_EXPIRE_HOURS", "24"))
+    except ValueError:
+        hours = 24
+    hours = max(1, min(hours, 168))
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(hours=hours)
     payload = {
         "id": user.id,
         "role": user.role,
         "name": user.name,
         "group_id": user.group_id,
+        "iat": now,
         "exp": exp,
     }
     raw = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")

@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 const PORT = Number.parseInt(process.env.DEPLOY_HOOK_PORT || '9085', 10);
 const SECRET = process.env.DEPLOY_HOOK_SECRET || '';
 const APP = process.env.DEPLOY_APP_ROOT || '/var/www/onlinetest';
+const MAX_BODY = 4096;
 
 if (!SECRET || SECRET.length < 24) {
   console.error('[deploy-hook] DEPLOY_HOOK_SECRET majburiy (min 24 belgi).');
@@ -26,6 +27,22 @@ function secretOk(headerVal) {
   }
 }
 
+function drainCapped(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let n = 0;
+    req.on('data', (chunk) => {
+      n += chunk.length;
+      if (n > maxBytes) {
+        req.destroy();
+        reject(new Error('payload too large'));
+      }
+    });
+    req.on('end', () => resolve());
+    req.on('error', () => resolve());
+    req.resume();
+  });
+}
+
 let busy = false;
 
 function runDeploy() {
@@ -34,7 +51,7 @@ function runDeploy() {
       '/bin/bash',
       [
         '-lc',
-        'set -euo pipefail; git fetch origin; git reset --hard origin/HEAD; bash deploy/remote-update.sh --no-git',
+        'set -euo pipefail; git fetch origin main; git reset --hard origin/main; bash deploy/remote-update.sh --no-git',
       ],
       {
         cwd: APP,
@@ -65,15 +82,44 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const cl = req.headers['content-length'];
+  if (cl !== undefined && Number(cl) > MAX_BODY) {
+    res.writeHead(413, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
+    return;
+  }
+
   if (!secretOk(req.headers['x-deploy-secret'])) {
+    try {
+      await drainCapped(req, MAX_BODY);
+    } catch {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
+      return;
+    }
     res.writeHead(401, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
     return;
   }
 
   if (busy) {
+    try {
+      await drainCapped(req, MAX_BODY);
+    } catch {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
+      return;
+    }
     res.writeHead(429, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: false, error: 'busy' }));
+    return;
+  }
+
+  try {
+    await drainCapped(req, MAX_BODY);
+  } catch {
+    res.writeHead(413, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
     return;
   }
 
@@ -87,7 +133,7 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     console.error('[deploy-hook]', e);
     res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: false, error: String(e?.message || e) }));
+    res.end(JSON.stringify({ ok: false, error: 'deploy failed' }));
   } finally {
     busy = false;
   }

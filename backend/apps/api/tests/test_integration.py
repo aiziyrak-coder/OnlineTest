@@ -27,10 +27,13 @@ QUESTIONS = [
 
 def _rf_throttle_off():
     rf = copy.deepcopy(settings.REST_FRAMEWORK)
+    rf["DEFAULT_THROTTLE_CLASSES"] = []
     rf["DEFAULT_THROTTLE_RATES"] = {
         "login": "100000/h",
         "face_verify": "100000/h",
         "public_verify": "100000/h",
+        "anon": "100000/h",
+        "user": "100000/h",
     }
     return rf
 
