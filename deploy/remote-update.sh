@@ -44,4 +44,12 @@ if command -v nginx >/dev/null 2>&1; then
   sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
 fi
 
+if id www-data &>/dev/null; then
+  if [[ $(id -u) -eq 0 ]]; then
+    chown -R www-data:www-data "$ROOT/backend" "$ROOT/frontend/dist" 2>/dev/null || true
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo chown -R www-data:www-data "$ROOT/backend" "$ROOT/frontend/dist" 2>/dev/null || true
+  fi
+fi
+
 echo "[remote-update] OK"
