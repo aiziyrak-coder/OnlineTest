@@ -133,6 +133,8 @@ def extract_text_from_bank_upload(raw: bytes, filename: str) -> str:
     """Test bazasiga AI import: PDF yoki oddiy matn fayli."""
     name = (filename or "").lower()
     if name.endswith(".pdf"):
+        if len(raw) < 5 or not raw.startswith(b"%PDF"):
+            raise ValueError("Yaroqsiz yoki buzilgan PDF fayl")
         from io import BytesIO
 
         from pypdf import PdfReader

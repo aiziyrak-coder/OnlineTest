@@ -36,6 +36,7 @@ class JWTAuthentication(BaseAuthentication):
                 settings.JWT_SECRET,
                 algorithms=["HS256"],
                 options={"require": ["exp"]},
+                leeway=60,
             )
         except jwt.PyJWTError:
             raise AuthenticationFailed("Invalid token")

@@ -134,3 +134,14 @@ sudo systemctl restart onlinetest-api onlinetest-realtime
 - `https://onlinetestapi.ziyrak.org/api/health` — `{"ok":true,"database":true}`
 - `https://onlinetest.ziyrak.org` — SPA yuklanishi
 - Brauzerda login va imtihon oqimi
+
+## Xavfsizlik (audit qoidalari)
+
+- **Maxfiy kalitlar** faqat `/etc/onlinetest/*.env` (chmod `600`), repoda emas: `DJANGO_SECRET_KEY`, `JWT_SECRET`, `GEMINI_API_KEY`, `DEPLOY_HOOK_SECRET`.
+- **Gunicorn** faqat `127.0.0.1:9081`, **realtime** prod da `REALTIME_BIND=127.0.0.1` — tashqi dunyoga faqat nginx `80/443`.
+- **Gunicorn** `--forwarded-allow-ips=127.0.0.1` — `X-Forwarded-Proto` faqat mahalliy proksi ishonchli.
+- **CORS** prod da aniq ro‘yxat (`CORS_ALLOWED_ORIGINS`); `DJANGO_DEBUG=0`.
+- **JWT** server bazasidagi `AppUser` rolini ishlatadi; muddati `JWT_EXPIRE_HOURS` bilan cheklangan.
+- **SQLite** yagona serverda yaxshi; yuqori yuk uchun keyinroq PostgreSQL ko‘rib chiqiladi.
+- **Deploy hook** `timingSafeEqual` bilan solishtiradi; nginx orqali maxfiy sarlavha.
+- **Socket.IO** hozircha `join-exam` uchun alohida JWT tekshiruvi yo‘q — xona `exam-{id}` bo‘yicha; bilgan ID bo‘lsa signal kanaliga qo‘shilishi mumkin (keyingi qatlam: handshake da token). Hozir kirish nginx + `REALTIME_BIND` bilan cheklangan.

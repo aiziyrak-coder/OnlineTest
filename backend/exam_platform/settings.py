@@ -104,6 +104,9 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        "OPTIONS": {
+            "timeout": 30,
+        },
     }
 }
 
@@ -129,6 +132,9 @@ if not DEBUG and not CORS_ALLOW_ALL_ORIGINS and not CORS_ALLOWED_ORIGINS:
     raise RuntimeError(
         "Production: CORS_ALLOWED_ORIGINS bo‘sh — frontend domenini vergul bilan qo‘shing (api.env)."
     )
+
+CORS_ALLOW_CREDENTIALS = False
+CORS_PREFLIGHT_MAX_AGE = 600
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.JWTAuthentication"],

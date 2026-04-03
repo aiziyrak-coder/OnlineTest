@@ -395,7 +395,11 @@ def admin_test_bank_import_smart(request):
     f = request.FILES.get("file")
     if f:
         raw = f.read()
-        text = extract_text_from_bank_upload(raw, getattr(f, "name", "") or "")
+        safe_name = os.path.basename(getattr(f, "name", "") or "")
+        try:
+            text = extract_text_from_bank_upload(raw, safe_name)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=400)
     elif d.get("raw_text") is not None:
         text = str(d["raw_text"])
     text = (text or "").strip()

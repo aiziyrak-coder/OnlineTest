@@ -1,12 +1,17 @@
 /**
  * Socket.IO — imtihon xonasi WebRTC signal (legacy Express bilan mos).
  * Ishga tushirish: npm run dev:realtime (repo ildizidan)
+ *
+ * Xavfsizlik: prod da REALTIME_BIND=127.0.0.1 (standart). join-exam JWT siz —
+ * keyingi yaxshilanish: handshake da token tekshirish.
  */
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 
 const PORT = Number.parseInt(process.env.REALTIME_PORT || '3001', 10);
 const isProd = process.env.NODE_ENV === 'production';
+/** Prod: faqat loopback — tashqaridan to‘g‘ridan-to‘g‘ri 9082 ga ulanishni oldini oladi (nginx orqali). */
+const BIND = process.env.REALTIME_BIND || (isProd ? '127.0.0.1' : '0.0.0.0');
 
 const corsOrigin = process.env.SOCKET_IO_CORS_ORIGIN
   ? process.env.SOCKET_IO_CORS_ORIGIN.split(',').map((s) => s.trim())
@@ -50,8 +55,8 @@ io.on('connection', (socket) => {
   });
 });
 
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`[realtime] http://0.0.0.0:${PORT}  path=/socket.io  healthz=/healthz`);
+httpServer.listen(PORT, BIND, () => {
+  console.log(`[realtime] http://${BIND}:${PORT}  path=/socket.io  healthz=/healthz`);
   if (isProd && !process.env.SOCKET_IO_CORS_ORIGIN) {
     console.warn('[realtime] SOCKET_IO_CORS_ORIGIN majburiy tavsiya etiladi (prod).');
   }
