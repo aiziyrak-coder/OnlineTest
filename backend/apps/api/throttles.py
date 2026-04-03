@@ -12,3 +12,9 @@ class FaceVerifyThrottle(UserRateThrottle):
 
 class PublicVerifyThrottle(AnonRateThrottle):
     scope = "public_verify"
+
+
+class ExamAutosaveThrottle(UserRateThrottle):
+    """Javoblarni serverga avtosaqlash (har talaba)."""
+
+    scope = "exam_autosave"

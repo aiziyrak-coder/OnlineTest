@@ -122,6 +122,21 @@ export const translations = {
       "Qoidalar 3 marta buzildi. Imtihon to‘xtatildi. Administratorga murojaat qiling.",
     proctoringSidebarHint:
       "AI yuz, ovoz va muhitni kuzatadi. Profil rasmingiz bilan yuz taxminan har 45 soniyada solishtiriladi — boshqa shaxs aniqlansa imtihon darhol to‘xtatiladi. Boshqa buzilishlar uchun 3 ogohlantirishdan keyin bloklanasiz.",
+    semesterExamBanner:
+      "Masofaviy semestr imtihoni: javoblar brauzer va serverda avtosaqlanadi; vaqt server va imtihon oynasi bo‘yicha qat’iy; boshqa varaqqa o‘tish qayd etiladi.",
+    questionProgress: "Savol {cur} / {total} · {answered} javoblangan",
+    draftSynced: "Serverga saqlandi",
+    submitExam: "Imtihonni topshirish",
+    submitting: "Yuborilyapti…",
+    leaveExamWarning: "Imtihon davom etmoqda. Sahifani yopish javoblaringizni yo‘qotishiga olib kelishi mumkin.",
+    switchedTab: "Boshqa varaq yoki oynaga o‘tildi",
+    offlineSubmit: "Internet yo‘q. Qayta ulangandan keyin topshiring.",
+    submitError: "Yuborishda xatolik",
+    timeWarningTitle: "5 daqiqa qoldi",
+    timeWarningBody: "Javoblaringizni tekshiring.",
+    connectionLostTitle: "Aloqa uzildi",
+    connectionLostBody: "Javoblar brauzerda saqlanmoqda; ulanganingizdan keyin serverga ham yoziladi.",
+    proctorWarningTitle: "Ogohlantirish",
   },
   ru: {
     login: "Вход в систему",
@@ -241,6 +256,21 @@ export const translations = {
     examTerminatedWarnings: "Правила нарушены (3 предупреждения). Обратитесь к администратору.",
     proctoringSidebarHint:
       "ИИ следит за лицом, звуком и обстановкой. Лицо сравнивается с фото профиля ~каждые 45 с — смена лица = немедленная блокировка. Иные нарушения: 3 предупреждения.",
+    semesterExamBanner:
+      "Дистанционный семестровый экзамен: ответы сохраняются в браузере и на сервере; время строго по серверу и окну экзамена; смена вкладки фиксируется.",
+    questionProgress: "Вопрос {cur} / {total} · отвечено {answered}",
+    draftSynced: "Сохранено на сервере",
+    submitExam: "Завершить экзамен",
+    submitting: "Отправка…",
+    leaveExamWarning: "Идёт экзамен. Закрытие страницы может привести к потере ответов.",
+    switchedTab: "Переключение на другую вкладку или окно",
+    offlineSubmit: "Нет сети. Подключитесь и отправьте снова.",
+    submitError: "Ошибка отправки",
+    timeWarningTitle: "Осталось 5 минут",
+    timeWarningBody: "Проверьте ответы.",
+    connectionLostTitle: "Связь потеряна",
+    connectionLostBody: "Ответы хранятся локально; после подключения синхронизируются с сервером.",
+    proctorWarningTitle: "Внимание",
   },
   en: {
     login: "Login",
@@ -360,6 +390,21 @@ export const translations = {
     examTerminatedWarnings: "Exam rules were broken (3 warnings). Contact your administrator.",
     proctoringSidebarHint:
       "AI monitors face, audio, and room. Your face is compared to your profile about every 45s — a different person ends the exam immediately. Other violations: ban after 3 warnings.",
+    semesterExamBanner:
+      "Remote semester exam: answers auto-save in your browser and on the server; time is enforced by the server and exam window; switching tabs is logged.",
+    questionProgress: "Question {cur} / {total} · {answered} answered",
+    draftSynced: "Saved to server",
+    submitExam: "Submit exam",
+    submitting: "Submitting…",
+    leaveExamWarning: "Exam in progress. Closing the page may lose answers.",
+    switchedTab: "Switched to another tab or window",
+    offlineSubmit: "You are offline. Reconnect and submit again.",
+    submitError: "Submit failed",
+    timeWarningTitle: "5 minutes left",
+    timeWarningBody: "Please review your answers.",
+    connectionLostTitle: "Connection lost",
+    connectionLostBody: "Answers are kept locally; they sync to the server when you are back online.",
+    proctorWarningTitle: "Warning",
   },
 };
 

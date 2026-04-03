@@ -34,6 +34,7 @@ def _rf_throttle_off():
         "public_verify": "100000/h",
         "anon": "100000/h",
         "user": "100000/h",
+        "exam_autosave": "100000/h",
     }
     return rf
 
@@ -134,8 +135,35 @@ class ExamFlowApiTests(TestCase):
         r = self.client.post(f"/api/student/exams/{self.exam_a.id}/start", {}, format="json")
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json().get("studentExamId"))
+        self.assertIn("submission_deadline", r.json()["exam"])
         for q in r.json()["exam"]["questions"]:
             self.assertNotIn("correctAnswer", q)
+
+    def test_submit_forbidden_after_exam_window(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        self.client.post(f"/api/student/exams/{self.exam_c.id}/start", {}, format="json")
+        Exam.objects.filter(pk=self.exam_c.id).update(end_time=dj_tz.now() - timedelta(minutes=2))
+        r = self.client.post(
+            f"/api/student/exams/{self.exam_c.id}/submit",
+            {"answers": {"1": "4", "2": "4"}, "flaggedQuestions": []},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("tugagan", r.json().get("error", "").lower())
+
+    def test_save_progress_and_draft_roundtrip(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        self.client.post(f"/api/student/exams/{self.exam_b.id}/start", {}, format="json")
+        r = self.client.post(
+            f"/api/student/exams/{self.exam_b.id}/save-progress",
+            {"answers": {"1": "4"}, "flaggedQuestions": [1]},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        g = self.client.get(f"/api/student/exams/{self.exam_b.id}/draft")
+        self.assertEqual(g.status_code, 200)
+        self.assertEqual(g.json()["answers"].get("1"), "4")
+        self.assertEqual(g.json()["flaggedQuestions"], [1])
 
     def test_submit_wrong_answers_score_zero(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")

@@ -54,10 +54,11 @@ class ExamGroupAdmin(admin.ModelAdmin):
 
 @admin.register(StudentExam)
 class StudentExamAdmin(admin.ModelAdmin):
-    list_display = ("id", "student", "exam", "status", "score")
+    list_display = ("id", "student", "exam", "status", "score", "draft_updated_at")
     list_filter = ("status",)
     search_fields = ("student__id", "exam__title", "result_public_id")
     raw_id_fields = ("student", "exam")
+    readonly_fields = ("draft_answers_json", "draft_flagged_json", "draft_updated_at")
 
 
 @admin.register(ViolationLog)

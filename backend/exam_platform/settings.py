@@ -150,6 +150,7 @@ REST_FRAMEWORK = {
         "public_verify": "200/h",
         "anon": "120/m",
         "user": "400/m",
+        "exam_autosave": "45/m",
     },
 }
 if not DEBUG:

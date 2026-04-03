@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from './components/ui';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
@@ -37,14 +37,32 @@ interface ExamRoomProps {
   onFinish: (submitPayload?: ExamResultPayload | null) => void;
 }
 
+function initialSecondsLeft(exam: ExamRoomProps['exam']) {
+  if (exam.submission_deadline) {
+    const end = new Date(exam.submission_deadline).getTime();
+    const s = Math.floor((end - Date.now()) / 1000);
+    if (!Number.isNaN(end) && s > 0) return s;
+  }
+  if (!exam.startedAt) return exam.duration_minutes * 60;
+  const startedAtTime = new Date(exam.startedAt).getTime();
+  const elapsedSeconds = Math.floor((Date.now() - startedAtTime) / 1000);
+  const totalDurationSeconds = exam.duration_minutes * 60;
+  const remaining = totalDurationSeconds - elapsedSeconds;
+  return remaining > 0 ? remaining : 0;
+}
+
 export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: ExamRoomProps) {
   const t = translations[lang];
-  const [answers, setAnswers] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem(`exam_answers_${exam.id}`);
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<number[]>([]);
+  const [draftSynced, setDraftSynced] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [banned, setBanned] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(() => initialSecondsLeft(exam));
+  const [showTimeWarning, setShowTimeWarning] = useState(false);
+  const [warnings, setWarnings] = useState(0);
+  const [warningMsg, setWarningMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -58,40 +76,118 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/draft`), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await readJsonSafe<{
+          answers?: Record<string, string>;
+          flaggedQuestions?: number[];
+          updated_at?: string | null;
+        }>(res);
+        if (!res.ok || cancelled) return;
+        const localRaw = localStorage.getItem(`exam_answers_${exam.id}`);
+        const localAns = localRaw ? (JSON.parse(localRaw) as Record<string, string>) : {};
+        const srv = (data.answers && typeof data.answers === 'object' ? data.answers : {}) as Record<string, string>;
+        const merged = { ...srv, ...localAns };
+        if (Object.keys(merged).length > 0) setAnswers(merged);
+        if (Array.isArray(data.flaggedQuestions) && data.flaggedQuestions.length > 0) {
+          setFlaggedQuestions(data.flaggedQuestions);
+        }
+      } catch {
+        const saved = localStorage.getItem(`exam_answers_${exam.id}`);
+        if (saved && !cancelled) setAnswers(JSON.parse(saved) as Record<string, string>);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [exam.id, token]);
+
+  useEffect(() => {
     localStorage.setItem(`exam_answers_${exam.id}`, JSON.stringify(answers));
+    localStorage.setItem(`exam_answers_ts_${exam.id}`, String(Date.now()));
   }, [answers, exam.id]);
+
+  useEffect(() => {
+    if (banned) return;
+    const id = window.setTimeout(() => {
+      fetch(apiUrl(`/api/student/exams/${exam.id}/save-progress`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ answers, flaggedQuestions }),
+      })
+        .then((r) => {
+          if (r.ok) {
+            setDraftSynced(true);
+            window.setTimeout(() => setDraftSynced(false), 2500);
+          }
+        })
+        .catch(() => {});
+    }, 22000);
+    return () => clearTimeout(id);
+  }, [answers, flaggedQuestions, exam.id, token, banned]);
+
+  useEffect(() => {
+    if (banned) return;
+    const sync = async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/clock`), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await readJsonSafe<{ seconds_remaining?: number }>(res);
+        if (res.ok && typeof data.seconds_remaining === 'number') {
+          setTimeLeft((prev) => {
+            const srv = data.seconds_remaining ?? 0;
+            if (Math.abs(srv - prev) > 120) return srv;
+            return prev;
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    sync();
+    const iv = window.setInterval(sync, 45000);
+    return () => clearInterval(iv);
+  }, [exam.id, token, banned]);
+
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = t.leaveExamWarning;
+    };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [t.leaveExamWarning]);
 
   const [qIndex, setQIndex] = useState(0);
   const answeredCount = Object.keys(answers).length;
   const totalQuestions = exam.questions.length;
   const progress = (answeredCount / totalQuestions) * 100;
   const currentQ = exam.questions[qIndex];
-  
-  // Calculate initial time left based on when the student started the exam
-  const calculateInitialTimeLeft = () => {
-    if (!exam.startedAt) return exam.duration_minutes * 60;
-    
-    const startedAtTime = new Date(exam.startedAt).getTime();
-    const now = new Date().getTime();
-    const elapsedSeconds = Math.floor((now - startedAtTime) / 1000);
-    const totalDurationSeconds = exam.duration_minutes * 60;
-    const remaining = totalDurationSeconds - elapsedSeconds;
-    
-    return remaining > 0 ? remaining : 0;
-  };
 
-  const [timeLeft, setTimeLeft] = useState(calculateInitialTimeLeft());
-  const [showTimeWarning, setShowTimeWarning] = useState(false);
-  const [warnings, setWarnings] = useState(0);
-  const [warningMsg, setWarningMsg] = useState('');
-  const [banned, setBanned] = useState(false);
-  
   const videoRef = useRef<HTMLVideoElement>(null);
   const bannedRef = useRef(banned);
   const tokenRef = useRef(token);
   const examIdRef = useRef(exam.id);
+  const answersRef = useRef(answers);
+  const flaggedRef = useRef(flaggedQuestions);
+  const submittingRef = useRef(false);
   const loopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+  useEffect(() => {
+    flaggedRef.current = flaggedQuestions;
+  }, [flaggedQuestions]);
 
   useEffect(() => {
     bannedRef.current = banned;
@@ -117,26 +213,6 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const isProcessingRef = useRef(false);
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<{ [id: string]: RTCPeerConnection }>({});
-
-  // --- Timer ---
-  useEffect(() => {
-    if (banned) return;
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev === 300) {
-          setShowTimeWarning(true);
-          setTimeout(() => setShowTimeWarning(false), 5000);
-        }
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [banned]);
 
   // --- AI Proctoring Setup & Security ---
   useEffect(() => {
@@ -436,59 +512,89 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     return () => clearInterval(id);
   }, [banned, user.profile_image]);
 
-  // --- Browser Focus Tracking ---
+  // --- Tab / visibility (masofaviy nazorat) ---
   useEffect(() => {
-    const handleBlur = () => logViolation("Left browser window");
-    window.addEventListener('blur', handleBlur);
-    return () => window.removeEventListener('blur', handleBlur);
-  }, [banned]);
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') {
+        void logViolationRef.current(t.switchedTab);
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [t.switchedTab]);
 
-  const [submitting, setSubmitting] = useState(false);
-
-  // --- Submit ---
-  const handleSubmit = async () => {
-    if (submitting || bannedRef.current) return;
-    if (isOffline) {
-      alert('You are offline. Please reconnect to submit your exam.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/submit`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ answers, flaggedQuestions }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert((json as { error?: string }).error || 'Yuborishda xatolik');
-        setSubmitting(false);
+  const runSubmitCore = useCallback(
+    async (ans: Record<string, string>, fl: number[]) => {
+      if (submittingRef.current || bannedRef.current) return;
+      if (isOffline) {
+        alert(t.offlineSubmit);
         return;
       }
-      localStorage.removeItem(`exam_answers_${exam.id}`);
-      const payload: ExamResultPayload = {
-        exam_id: json.exam_id,
-        result_public_id: json.result_public_id,
-        verify_url: json.verify_url,
-        overview: json.overview,
-        questions: json.questions,
-        score: json.score,
-        total: json.total,
-        integrity_code: json.integrity_code,
-        percentage: json.percentage,
-        completed_at: json.completed_at,
-        exam_title: exam.title,
-        student_name: user.name || user.id,
-      };
-      onFinish(payload);
-    } catch (err) {
-      console.error('Failed to submit', err);
-      setSubmitting(false);
-    }
-  };
+      submittingRef.current = true;
+      setSubmitting(true);
+      try {
+        const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/submit`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ answers: ans, flaggedQuestions: fl }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert((json as { error?: string }).error || t.submitError);
+          submittingRef.current = false;
+          setSubmitting(false);
+          return;
+        }
+        localStorage.removeItem(`exam_answers_${exam.id}`);
+        localStorage.removeItem(`exam_answers_ts_${exam.id}`);
+        const payload: ExamResultPayload = {
+          exam_id: json.exam_id,
+          result_public_id: json.result_public_id,
+          verify_url: json.verify_url,
+          overview: json.overview,
+          questions: json.questions,
+          score: json.score,
+          total: json.total,
+          integrity_code: json.integrity_code,
+          percentage: json.percentage,
+          completed_at: json.completed_at,
+          exam_title: exam.title,
+          student_name: user.name || user.id,
+        };
+        onFinish(payload);
+      } catch (err) {
+        console.error('Failed to submit', err);
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
+    },
+    [exam.id, exam.title, token, user.name, user.id, onFinish, isOffline, t.offlineSubmit, t.submitError]
+  );
+
+  const handleSubmit = () => runSubmitCore(answersRef.current, flaggedRef.current);
+
+  // --- Countdown (oxirgi javoblar ref orqali) ---
+  useEffect(() => {
+    if (banned) return;
+    const timer = window.setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev === 300) {
+          setShowTimeWarning(true);
+          window.setTimeout(() => setShowTimeWarning(false), 5000);
+        }
+        if (prev <= 1) {
+          window.clearInterval(timer);
+          void runSubmitCore(answersRef.current, flaggedRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [banned, runSubmitCore]);
 
   if (banned) {
     return (
@@ -540,19 +646,25 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                 <div className="h-full bg-blue-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
               </div>
               <span className="text-xs font-medium text-gray-500 whitespace-nowrap">
-                Savol {qIndex + 1} / {totalQuestions} · {answeredCount} javoblangan
+                {t.questionProgress
+                  .replace('{cur}', String(qIndex + 1))
+                  .replace('{total}', String(totalQuestions))
+                  .replace('{answered}', String(answeredCount))}
               </span>
+              {draftSynced && (
+                <span className="text-xs text-emerald-600 font-medium ml-2">{t.draftSynced}</span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
             <div className={`flex flex-col items-end ${timeLeft < 300 ? 'text-red-600' : 'text-gray-700'}`}>
-              <span className="text-xs font-medium uppercase tracking-wider opacity-70">Time Remaining</span>
+              <span className="text-xs font-medium uppercase tracking-wider opacity-70">{t.timeRemaining}</span>
               <span className="font-mono text-2xl font-bold tracking-tight">
                 {formatTime(timeLeft)}
               </span>
             </div>
             <Button onClick={handleSubmit} disabled={submitting} className="rounded-full px-8 shadow-lg shadow-black/5">
-              {submitting ? 'Submitting...' : 'Submit Exam'}
+              {submitting ? t.submitting : t.submitExam}
             </Button>
           </div>
         </motion.div>
@@ -567,8 +679,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             >
               <svg className="w-6 h-6 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <div>
-                <strong className="font-semibold block">Time Warning</strong>
-                <span className="text-sm">Only 5 minutes remaining! Please review your answers.</span>
+                <strong className="font-semibold block">{t.timeWarningTitle}</strong>
+                <span className="text-sm">{t.timeWarningBody}</span>
               </div>
             </motion.div>
           )}
@@ -581,8 +693,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             >
               <svg className="w-6 h-6 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
               <div>
-                <strong className="font-semibold block">Connection Lost</strong>
-                <span className="text-sm">You are currently offline. Your answers are saved locally and will be submitted when you reconnect.</span>
+                <strong className="font-semibold block">{t.connectionLostTitle}</strong>
+                <span className="text-sm">{t.connectionLostBody}</span>
               </div>
             </motion.div>
           )}
@@ -595,7 +707,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             >
               <svg className="w-6 h-6 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
               <div>
-                <strong className="font-semibold block">Warning!</strong>
+                <strong className="font-semibold block">{t.proctorWarningTitle}</strong>
                 <span className="text-sm">{warningMsg}</span>
               </div>
             </motion.div>

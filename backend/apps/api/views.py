@@ -18,7 +18,8 @@ from rest_framework.response import Response
 
 from apps.api.authentication import issue_token
 from apps.api.permissions import IsAuthenticatedStrict as IsAuthenticated
-from apps.api.throttles import FaceVerifyThrottle, LoginThrottle, PublicVerifyThrottle
+from apps.api.exam_time import seconds_until_deadline, submission_deadline
+from apps.api.throttles import ExamAutosaveThrottle, FaceVerifyThrottle, LoginThrottle, PublicVerifyThrottle
 from apps.api.certificate_pdf import build_certificate_pdf
 from apps.api.gemini_tools import compare_faces, generate_bank_extension, generate_exam_ai_summary
 from apps.api.services import (
@@ -260,6 +261,9 @@ def admin_student_exams_retake(request, pk: int):
         status="Pending",
         answers_json="",
         score=None,
+        draft_answers_json="{}",
+        draft_flagged_json="[]",
+        draft_updated_at=None,
     )
     if not updated:
         return Response({"error": "Not found"}, status=404)
@@ -864,6 +868,7 @@ def student_exams_start(request, pk: int):
         full_questions = safe_json_loads(exam.questions_json, [])
 
     shuffled = build_student_question_list(full_questions)
+    deadline = submission_deadline(exam, se)
     exam_out = {
         "id": exam.id,
         "teacher_id": exam.teacher_id,
@@ -876,6 +881,7 @@ def student_exams_start(request, pk: int):
         "custom_rules": exam.custom_rules,
         "exam_mode": exam.exam_mode,
         "questions": shuffled,
+        "submission_deadline": deadline.isoformat() if deadline else None,
     }
     return Response(
         {
@@ -900,8 +906,14 @@ def student_exams_submit(request, pk: int):
     if not exam:
         return Response({"error": "Exam not found"}, status=404)
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
-    if not se or se.status in ("Completed", "Banned"):
+    if not se or se.status != "In Progress":
         return Response({"error": "Cannot submit exam"}, status=403)
+    deadline = submission_deadline(exam, se)
+    if deadline and dj_tz.now() > deadline:
+        return Response(
+            {"error": "Imtihon vaqti tugagan. Javoblar qabul qilinmaydi."},
+            status=403,
+        )
     if se.session_questions_json:
         questions = safe_json_loads(se.session_questions_json, [])
     else:
@@ -925,6 +937,9 @@ def student_exams_submit(request, pk: int):
         se.result_public_id = result_public_id
         se.result_verify_secret = verify_secret
         se.ai_summary_json = ai_summary_json
+        se.draft_answers_json = "{}"
+        se.draft_flagged_json = "[]"
+        se.draft_updated_at = None
         se.save()
 
     completed_iso = completed_at.isoformat()
@@ -965,6 +980,83 @@ def student_exams_submit(request, pk: int):
             "questions": per_q,
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def student_exam_clock(request, pk: int):
+    u = request.user
+    if u.role != "student":
+        return Response({"error": "Forbidden"}, status=403)
+    exam = Exam.objects.filter(pk=pk).first()
+    if not exam:
+        return Response({"error": "Exam not found"}, status=404)
+    se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
+    if not se or se.status != "In Progress":
+        return Response({"error": "No active session"}, status=400)
+    deadline = submission_deadline(exam, se)
+    now = dj_tz.now()
+    sec = seconds_until_deadline(exam, se)
+    return Response(
+        {
+            "server_now": now.isoformat(),
+            "submission_deadline": deadline.isoformat() if deadline else None,
+            "seconds_remaining": sec if sec is not None else 0,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def student_exam_draft(request, pk: int):
+    u = request.user
+    if u.role != "student":
+        return Response({"error": "Forbidden"}, status=403)
+    if not Exam.objects.filter(pk=pk).exists():
+        return Response({"error": "Exam not found"}, status=404)
+    se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
+    if not se or se.status != "In Progress":
+        return Response({"answers": {}, "flaggedQuestions": [], "updated_at": None})
+    answers = safe_json_loads(se.draft_answers_json, {})
+    flagged = safe_json_loads(se.draft_flagged_json, [])
+    return Response(
+        {
+            "answers": answers,
+            "flaggedQuestions": flagged,
+            "updated_at": se.draft_updated_at.isoformat() if se.draft_updated_at else None,
+        }
+    )
+
+
+@api_view(["POST"])
+@throttle_classes([ExamAutosaveThrottle])
+@permission_classes([IsAuthenticated])
+def student_exam_save_progress(request, pk: int):
+    u = request.user
+    if u.role != "student":
+        return Response({"error": "Forbidden"}, status=403)
+    exam = Exam.objects.filter(pk=pk).first()
+    if not exam:
+        return Response({"error": "Exam not found"}, status=404)
+    se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
+    if not se or se.status != "In Progress":
+        return Response({"error": "No active session"}, status=400)
+    deadline = submission_deadline(exam, se)
+    if deadline and dj_tz.now() > deadline:
+        return Response({"error": "Imtihon vaqti tugagan"}, status=403)
+    answers = (request.data or {}).get("answers")
+    flagged = (request.data or {}).get("flaggedQuestions")
+    if not isinstance(answers, dict):
+        return Response({"error": "Invalid answers format"}, status=400)
+    if flagged is not None and not isinstance(flagged, list):
+        return Response({"error": "Invalid flagged format"}, status=400)
+    norm = norm_answers(answers)
+    se.draft_answers_json = json.dumps(norm)
+    if isinstance(flagged, list):
+        se.draft_flagged_json = json.dumps(flagged)
+    se.draft_updated_at = dj_tz.now()
+    se.save(update_fields=["draft_answers_json", "draft_flagged_json", "draft_updated_at"])
+    return Response({"ok": True, "saved_at": se.draft_updated_at.isoformat()})
 
 
 @api_view(["GET"])

@@ -139,6 +139,10 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
           </button>
         </div>
       </div>
+
+      <p className="text-sm text-slate-700 bg-blue-50/90 border border-blue-100 rounded-2xl px-4 py-3 mb-6 leading-relaxed shadow-sm">
+        {t.semesterExamBanner}
+      </p>
       
       {error && (
         <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50/80 backdrop-blur-md border border-red-100 text-red-800 p-4 rounded-2xl mb-8 shadow-sm">
