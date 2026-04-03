@@ -32,4 +32,9 @@ class Command(BaseCommand):
             group_id=g.id if g else None,
             profile_image="",
         )
-        self.stdout.write(self.style.SUCCESS("admin yaratildi (ID: admin). Parol: env yoki admin123"))
+        self.stdout.write(
+            self.style.SUCCESS(
+                "admin yaratildi (ID: admin). Parol: ADMIN_BOOTSTRAP_PASSWORD (env) yoki standart admin123 — "
+                "productionda /etc/onlinetest/api.env yoki /root/onlinetest-admin-once.txt ni tekshiring."
+            )
+        )
