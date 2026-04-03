@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 from datetime import timedelta
+from unittest import mock
 
 import bcrypt
 import jwt
@@ -12,7 +13,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone as dj_tz
 from rest_framework.test import APIClient
 
-from apps.core.models import AppUser, Exam, ExamGroup, Group, Level, StudentExam
+from apps.core.models import AppUser, Exam, ExamGroup, Group, Level, StudentExam, TestBankCategory, TestBankQuestion
 
 PROFILE = (
     "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlcZ/"
@@ -35,6 +36,7 @@ def _rf_throttle_off():
         "anon": "100000/h",
         "user": "100000/h",
         "exam_autosave": "100000/h",
+        "bank_ai_import": "100000/h",
     }
     return rf
 
@@ -239,6 +241,63 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(r.status_code, 200)
         completed = [x for x in r.json() if x["status"] == "Completed"]
         self.assertGreaterEqual(len(completed), 2)
+
+    def test_admin_test_bank_import_smart_requires_content(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")
+        r = self.client.post("/api/admin/test-bank/import-smart", {}, format="json")
+        self.assertEqual(r.status_code, 400)
+
+    @mock.patch(
+        "apps.api.views.parse_and_classify_questionnaire",
+        side_effect=RuntimeError("GEMINI_API_KEY is not configured"),
+    )
+    def test_admin_test_bank_import_smart_no_gemini_returns_503(self, _mock):
+        """Direct view call: APIClient can trigger Django debug logging bugs on some stacks."""
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from apps.api.authentication import JWTUser
+        from apps.api.views import admin_test_bank_import_smart
+
+        factory = APIRequestFactory()
+        django_req = factory.post(
+            "/api/admin/test-bank/import-smart",
+            {"raw_text": "1. Savol?\nA) 1\nB) 2\nC) 3\nD) 4", "language": "uz"},
+            format="json",
+        )
+        ju = JWTUser(self.admin.id, self.admin.role, self.admin.name, self.admin.group_id)
+        force_authenticate(django_req, user=ju)
+        resp = admin_test_bank_import_smart(django_req)
+        self.assertEqual(resp.status_code, 503)
+
+    def test_student_cannot_test_bank_import_smart(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        r = self.client.post("/api/admin/test-bank/import-smart", {"raw_text": "hello"}, format="json")
+        self.assertEqual(r.status_code, 403)
+
+    @mock.patch(
+        "apps.api.views.parse_and_classify_questionnaire",
+        return_value=[
+            {
+                "text": "2+2=?",
+                "options": ["3", "4", "5", "6"],
+                "correctAnswer": "4",
+                "categoryName": "Matematika",
+                "categoryDescription": "Demo",
+            }
+        ],
+    )
+    def test_admin_test_bank_import_smart_inserts_questions(self, _mock):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")
+        r = self.client.post(
+            "/api/admin/test-bank/import-smart",
+            {"raw_text": "dummy", "language": "uz"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body.get("inserted"), 1)
+        self.assertTrue(TestBankCategory.objects.filter(name__iexact="Matematika").exists())
+        self.assertEqual(TestBankQuestion.objects.count(), 1)
 
     def test_health_includes_database(self):
         r = self.client.get("/api/health")

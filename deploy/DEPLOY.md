@@ -107,10 +107,18 @@ sudo systemctl enable --now onlinetest-api onlinetest-realtime
 sudo cp deploy/nginx/onlinetest.conf /etc/nginx/sites-available/onlinetest
 sudo ln -sf /etc/nginx/sites-available/onlinetest /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
+```
+
+Ikki domen uchun SSL (yoki qo‘lda):
+
+```bash
 sudo certbot --nginx -d onlinetest.ziyrak.org -d onlinetestapi.ziyrak.org
+# yoki: sudo bash deploy/https-certbot.sh onlinetest.ziyrak.org onlinetestapi.ziyrak.org
 ```
 
 Certbot konfigni yangilaydi; keyin `listen 443 ssl` bloklari paydo bo‘ladi.
+
+**HTTPS dan keyin** `/etc/onlinetest/api.env` va `frontend/.env.production` da faqat **`https://`** URL lar bo‘lishi kerak (`deploy/https-certbot.sh` oxirida eslatma chiqadi). `DJANGO_SECURE_SSL=1` **qo‘ymang** — TLS nginx da; Django qayta yo‘naltirish cheksiz loop berishi mumkin.
 
 ## 8) Yangilash
 

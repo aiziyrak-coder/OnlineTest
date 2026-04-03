@@ -11,10 +11,10 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
   const [filterCat, setFilterCat] = useState<string>('');
   const [newCatName, setNewCatName] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
-  const [bulkCategoryId, setBulkCategoryId] = useState('');
-  const [bulkJson, setBulkJson] = useState(
-    '[\n  {"text":"Namuna savol matni?","options":["To\'g\'ri javob","Noto\'g\'ri 1","Noto\'g\'ri 2","Noto\'g\'ri 3"],"correctAnswer":"To\'g\'ri javob"}\n]',
-  );
+  const [smartFile, setSmartFile] = useState<File | null>(null);
+  const [fileKey, setFileKey] = useState(0);
+  const [smartLang, setSmartLang] = useState<'uz' | 'ru' | 'en'>(lang);
+  const [smartBusy, setSmartBusy] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
   const t = translations[lang];
 
@@ -61,32 +61,49 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
     load();
   };
 
-  const importBulk = async (e: React.FormEvent) => {
+  const importSmart = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg({ type: '', text: '' });
-    if (!bulkCategoryId) {
-      setMsg({ type: 'err', text: t.testBankPickCategory });
+    if (!smartFile) {
+      setMsg({ type: 'err', text: t.testBankAiNeedPdf });
       return;
     }
-    let arr: any[];
+    const name = smartFile.name?.toLowerCase() || '';
+    if (!name.endsWith('.pdf') && smartFile.type !== 'application/pdf') {
+      setMsg({ type: 'err', text: t.testBankAiPdfOnly });
+      return;
+    }
+    setSmartBusy(true);
+    const h: HeadersInit = { Authorization: `Bearer ${token}` };
     try {
-      arr = JSON.parse(bulkJson);
-      if (!Array.isArray(arr)) throw new Error();
-    } catch {
-      setMsg({ type: 'err', text: t.testBankInvalidJson });
-      return;
-    }
-    const res = await fetch(apiUrl('/api/admin/test-bank/questions'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ category_id: Number(bulkCategoryId), questions: arr, language: 'uz' }),
-    });
-    const d = await readJsonSafe<{ error?: string }>(res);
-    if (res.ok) {
-      setMsg({ type: 'ok', text: `${t.testBankImported} (${arr.length})` });
-      load();
-    } else {
-      setMsg({ type: 'err', text: d?.error || 'Error' });
+      const fd = new FormData();
+      fd.append('file', smartFile);
+      fd.append('language', smartLang);
+      const res = await fetch(apiUrl('/api/admin/test-bank/import-smart'), { method: 'POST', headers: h, body: fd });
+      const d = await readJsonSafe<{
+        error?: string;
+        detail?: string;
+        inserted?: number;
+        categories?: { name: string; questions_added: number }[];
+      }>(res);
+      if (res.ok && d && typeof d.inserted === 'number') {
+        const catLines =
+          Array.isArray(d.categories) && d.categories.length
+            ? d.categories.map((c) => `${c.name}: +${c.questions_added}`).join('; ')
+            : '';
+        setMsg({
+          type: 'ok',
+          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${t.testBankAiCategories}: ${catLines}` : ''}`,
+        });
+        setSmartFile(null);
+        setFileKey((k) => k + 1);
+        load();
+      } else {
+        const err = d?.error || d?.detail || 'Error';
+        setMsg({ type: 'err', text: err });
+      }
+    } finally {
+      setSmartBusy(false);
     }
   };
 
@@ -97,6 +114,10 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
+      <div className="text-center space-y-1">
+        <h2 className="text-2xl font-semibold text-gray-900 tracking-tight">{t.testBankPageTitle}</h2>
+        <p className="text-sm text-gray-500">{t.testBankCategoriesHint}</p>
+      </div>
       {msg.text && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -108,10 +129,49 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
       )}
 
       <motion.div variants={item} initial="hidden" animate="show">
+        <Card className="border-violet-200/60 bg-gradient-to-br from-violet-50/40 to-white/30">
+          <CardHeader>
+            <CardTitle>{t.testBankAiTitle}</CardTitle>
+            <p className="text-sm text-gray-500 font-normal">{t.testBankAiHint}</p>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={importSmart} className="space-y-4">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[220px]">
+                  <label className="text-xs text-gray-500 block mb-1">{t.testBankAiPdfLabel}</label>
+                  <Input
+                    key={fileKey}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={(e) => setSmartFile(e.target.files?.[0] ?? null)}
+                    className="cursor-pointer"
+                  />
+                </div>
+                <div className="min-w-[140px]">
+                  <label className="text-xs text-gray-500 block mb-1">{t.testBankAiLanguage}</label>
+                  <select
+                    className="w-full h-12 rounded-2xl border border-white/50 bg-white/50 px-4 text-sm"
+                    value={smartLang}
+                    onChange={(e) => setSmartLang(e.target.value as 'uz' | 'ru' | 'en')}
+                  >
+                    <option value="uz">O‘zbek</option>
+                    <option value="ru">Русский</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+                <Button type="submit" disabled={smartBusy} className="shrink-0">
+                  {smartBusy ? t.testBankAiRunning : t.testBankAiRun}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      <motion.div variants={item} initial="hidden" animate="show">
         <Card>
           <CardHeader>
             <CardTitle>{t.testBankCategories}</CardTitle>
-            <p className="text-sm text-gray-500 font-normal">{t.testBankCategoriesHint}</p>
           </CardHeader>
           <CardContent className="space-y-6">
             <form onSubmit={addCategory} className="flex flex-wrap gap-3 items-end">
@@ -139,44 +199,6 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      <motion.div variants={item} initial="hidden" animate="show">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.testBankBulkImport}</CardTitle>
-            <p className="text-sm text-gray-500 font-normal">{t.testBankBulkHint}</p>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={importBulk} className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">{t.testBankTargetCategory}</label>
-                <select
-                  className="w-full h-12 rounded-2xl border border-white/50 bg-white/50 px-4 text-sm"
-                  value={bulkCategoryId}
-                  onChange={(e) => setBulkCategoryId(e.target.value)}
-                >
-                  <option value="">{t.testBankPickCategory}</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">JSON</label>
-                <textarea
-                  value={bulkJson}
-                  onChange={(e) => setBulkJson(e.target.value)}
-                  rows={10}
-                  className="w-full rounded-2xl border border-white/50 bg-white/40 px-4 py-3 text-sm font-mono"
-                />
-              </div>
-              <Button type="submit">{t.testBankImportBtn}</Button>
-            </form>
           </CardContent>
         </Card>
       </motion.div>

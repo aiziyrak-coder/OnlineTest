@@ -151,6 +151,7 @@ REST_FRAMEWORK = {
         "anon": "120/m",
         "user": "400/m",
         "exam_autosave": "45/m",
+        "bank_ai_import": "15/h",
     },
 }
 if not DEBUG:

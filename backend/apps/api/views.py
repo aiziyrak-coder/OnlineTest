@@ -19,15 +19,27 @@ from rest_framework.response import Response
 from apps.api.authentication import issue_token
 from apps.api.permissions import IsAuthenticatedStrict as IsAuthenticated
 from apps.api.exam_time import seconds_until_deadline, submission_deadline
-from apps.api.throttles import ExamAutosaveThrottle, FaceVerifyThrottle, LoginThrottle, PublicVerifyThrottle
+from apps.api.throttles import (
+    BankAiImportThrottle,
+    ExamAutosaveThrottle,
+    FaceVerifyThrottle,
+    LoginThrottle,
+    PublicVerifyThrottle,
+)
 from apps.api.certificate_pdf import build_certificate_pdf
-from apps.api.gemini_tools import compare_faces, generate_bank_extension, generate_exam_ai_summary
+from apps.api.gemini_tools import (
+    compare_faces,
+    generate_bank_extension,
+    generate_exam_ai_summary,
+    parse_and_classify_questionnaire,
+)
 from apps.api.services import (
     assert_safe_result_public_id,
     build_fallback_ai_summary,
     build_student_question_list,
     integrity_code,
     next_result_public_id,
+    extract_text_from_bank_upload,
     parse_pdf_questions,
     public_base_url,
     shuffle_in_place,
@@ -353,6 +365,75 @@ def admin_group_detail(request, pk: int):
 # --- Test bank ---
 
 
+def _get_or_create_bank_category(name: str, description: str) -> TestBankCategory:
+    name_clean = (name or "").strip()[:300] or "Umumiy"
+    existing = TestBankCategory.objects.filter(name__iexact=name_clean).first()
+    if existing:
+        desc = (description or "").strip()
+        if desc and not (existing.description or "").strip():
+            existing.description = desc[:10000]
+            existing.save(update_fields=["description"])
+        return existing
+    return TestBankCategory.objects.create(
+        name=name_clean,
+        description=((description or "").strip()[:10000]) if description else "",
+    )
+
+
+@api_view(["POST"])
+@throttle_classes([BankAiImportThrottle])
+@permission_classes([IsAuthenticated])
+def admin_test_bank_import_smart(request):
+    """Savolnoma matni/PDF → Gemini: savollar + mavzu bo‘yicha kategoriyalar → bazaga."""
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    d = request.data or {}
+    language = d.get("language") or "uz"
+    if not isinstance(language, str) or len(language) > 10:
+        language = "uz"
+    text = ""
+    f = request.FILES.get("file")
+    if f:
+        raw = f.read()
+        text = extract_text_from_bank_upload(raw, getattr(f, "name", "") or "")
+    elif d.get("raw_text") is not None:
+        text = str(d["raw_text"])
+    text = (text or "").strip()
+    if not text:
+        return Response({"error": "raw_text yoki file kerak"}, status=400)
+    if len(text) > 400_000:
+        text = text[:400_000]
+    try:
+        items = parse_and_classify_questionnaire(text, language)
+    except RuntimeError as e:
+        return Response({"error": str(e)}, status=503)
+    except ValueError as e:
+        return Response({"error": str(e)}, status=400)
+    except Exception as e:
+        return Response({"error": "AI tahlil xatosi", "detail": str(e)[:500]}, status=502)
+    categories_touched: dict[str, int] = {}
+    inserted = 0
+    with transaction.atomic():
+        for it in items:
+            cat = _get_or_create_bank_category(it["categoryName"], it.get("categoryDescription") or "")
+            TestBankQuestion.objects.create(
+                category=cat,
+                text=it["text"],
+                options_json=json.dumps(it["options"]),
+                correct_answer=it["correctAnswer"],
+                language=language,
+            )
+            inserted += 1
+            categories_touched[cat.name] = categories_touched.get(cat.name, 0) + 1
+    return Response(
+        {
+            "success": True,
+            "inserted": inserted,
+            "categories": [{"name": k, "questions_added": v} for k, v in sorted(categories_touched.items())],
+        }
+    )
+
+
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def admin_test_bank_categories(request):
@@ -361,7 +442,7 @@ def admin_test_bank_categories(request):
     if request.method == "GET":
         rows = []
         for c in TestBankCategory.objects.annotate(
-            question_count=Count("testbankquestion_set")
+            question_count=Count("testbankquestion")
         ).order_by("sort_order", "name"):
             rows.append(
                 {

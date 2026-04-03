@@ -127,3 +127,19 @@ def parse_pdf_questions(file_obj) -> list[dict]:
             }
         )
     return questions
+
+
+def extract_text_from_bank_upload(raw: bytes, filename: str) -> str:
+    """Test bazasiga AI import: PDF yoki oddiy matn fayli."""
+    name = (filename or "").lower()
+    if name.endswith(".pdf"):
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        reader = PdfReader(BytesIO(raw))
+        parts = []
+        for page in reader.pages:
+            parts.append(page.extract_text() or "")
+        return "\n".join(parts)
+    return raw.decode("utf-8", errors="replace")

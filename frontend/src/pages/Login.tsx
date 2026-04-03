@@ -14,32 +14,54 @@ interface LoginProps {
   setLang: (l: Language) => void;
 }
 
+const DEMO_ADMIN_ID = 'admin';
+const DEMO_ADMIN_PASSWORD = 'admin123';
+const DEMO_STUDENT_ID = 'student';
+const DEMO_STUDENT_PASSWORD = 'student123';
+
 export function Login({ onLogin, lang, setLang }: LoginProps) {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [demoBusy, setDemoBusy] = useState<'admin' | 'student' | null>(null);
   const t = translations[lang];
+
+  const loginWithCredentials = async (loginId: string, loginPassword: string) => {
+    const res = await fetch(apiUrl('/api/auth/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: loginId, password: loginPassword }),
+    });
+    const data = await readJsonSafe<{ token?: string; user?: any; error?: string }>(res);
+    if (!res.ok) throw new Error(data?.error || 'Login failed');
+    if (!data?.token || !data?.user) throw new Error('Server did not return JSON (wrong URL or proxy?)');
+    onLogin(data.token, data.user);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
-      const res = await fetch(apiUrl('/api/auth/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, password }),
-      });
-      const data = await readJsonSafe<{ token?: string; user?: any; error?: string }>(res);
-      if (!res.ok) throw new Error(data?.error || 'Login failed');
-      if (!data?.token || !data?.user) throw new Error('Server did not return JSON (wrong URL or proxy?)');
-      onLogin(data.token, data.user);
+      await loginWithCredentials(id, password);
     } catch (err: any) {
       setError(err.message);
     }
   };
 
-  const demoLogin = (role: string) => {
-    setId(role);
-    setPassword(role + '123');
+  const runDemoLogin = async (which: 'admin' | 'student') => {
+    setError('');
+    const loginId = which === 'admin' ? DEMO_ADMIN_ID : DEMO_STUDENT_ID;
+    const loginPassword = which === 'admin' ? DEMO_ADMIN_PASSWORD : DEMO_STUDENT_PASSWORD;
+    setId(loginId);
+    setPassword(loginPassword);
+    setDemoBusy(which);
+    try {
+      await loginWithCredentials(loginId, loginPassword);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDemoBusy(null);
+    }
   };
 
   return (
@@ -91,8 +113,26 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
             <div className="mt-8 pt-6 border-t border-black/5">
               <p className="text-xs font-semibold text-gray-400 mb-4 text-center uppercase tracking-wider">Demo Accounts</p>
               <div className="grid grid-cols-2 gap-3">
-                <Button variant="outline" size="sm" onClick={() => demoLogin('admin')} className="text-xs">{t.demoAdmin}</Button>
-                <Button variant="outline" size="sm" onClick={() => demoLogin('student')} className="text-xs">{t.demoStudent}</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={demoBusy !== null}
+                  onClick={() => runDemoLogin('admin')}
+                  className="text-xs"
+                >
+                  {demoBusy === 'admin' ? t.loading : t.demoAdmin}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={demoBusy !== null}
+                  onClick={() => runDemoLogin('student')}
+                  className="text-xs"
+                >
+                  {demoBusy === 'student' ? t.loading : t.demoStudent}
+                </Button>
               </div>
             </div>
           </CardContent>

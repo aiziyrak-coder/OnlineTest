@@ -26,6 +26,7 @@ urlpatterns = [
     path("admin/groups/<int:pk>", views.admin_group_detail),
     path("admin/test-bank/categories", views.admin_test_bank_categories),
     path("admin/test-bank/categories/<int:pk>", views.admin_test_bank_categories_delete),
+    path("admin/test-bank/import-smart", views.admin_test_bank_import_smart),
     path("admin/test-bank/questions", views.admin_test_bank_questions),
     path("admin/exams", views.admin_exams),
     path("admin/exams/<int:pk>/results", views.admin_exams_results),

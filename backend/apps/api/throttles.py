@@ -18,3 +18,9 @@ class ExamAutosaveThrottle(UserRateThrottle):
     """Javoblarni serverga avtosaqlash (har talaba)."""
 
     scope = "exam_autosave"
+
+
+class BankAiImportThrottle(UserRateThrottle):
+    """Test bazasiga AI orqali yuklash (qimmat)."""
+
+    scope = "bank_ai_import"
