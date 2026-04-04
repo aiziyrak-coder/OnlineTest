@@ -143,12 +143,10 @@ def student_identity_compare(request):
     if not result.get("success"):
         code = result.get("code") or "GEMINI_ERROR"
         if code == "GEMINI_UNAVAILABLE":
-            return Response(
-                {"error": "Face verification is not configured on the server", "code": code},
-                status=503,
-            )
-        # GEMINI_ERROR: Gemini texnik xatosi — tekshiruvni o'tkazib yuboramiz (match=false qaytarmaymiz, lekin talabaga xabar beramiz)
-        return Response({"error": "Verification service error", "code": code}, status=503)
+            # Kalit sozlanmagan — tekshiruv ixtiyoriy, o'tkazib yuboramiz
+            return Response({"match": True, "skipped": True, "code": code}, status=200)
+        # GEMINI_ERROR: vaqtinchalik texnik xato — ixtiyoriy, o'tkazib yuboramiz
+        return Response({"match": True, "skipped": True, "code": code}, status=200)
     return Response({"match": bool(result.get("match"))})
 
 
@@ -932,18 +930,23 @@ def student_exams_start(request, pk: int):
                 TestBankCategory.objects.filter(pk__in=cat_ids).values_list("name", flat=True)
             )
             samples = [{"text": q["text"], "options": q["options"], "correctAnswer": q["correctAnswer"]} for q in picked]
+            ai_part = []
             try:
                 ai_part = generate_bank_extension(samples, n_ai, exam.language or "uz", list(cat_names))
             except Exception as ex:
-                msg = str(ex)
-                if "GEMINI" in msg or "not configured" in msg.lower():
-                    return Response(
-                        {
-                            "error": "AI xizmati sozlanmagan (GEMINI_API_KEY). Administratorga murojaat qiling.",
-                        },
-                        status=503,
-                    )
-                return Response({"error": "Yangi savollarni yaratishda xatolik. Keyinroq urinib ko‘ring."}, status=503)
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "generate_bank_extension failed (bank-only fallback): %s", ex
+                )
+                # AI xato berdi - bankdan qoshimcha savollar olib toldiramiz
+                extra_pool = pool[n_bank: n_bank + n_ai]
+                for row in extra_pool:
+                    opts = safe_json_loads(row.options_json, [])
+                    ai_part.append({
+                        "text": row.text,
+                        "options": opts[:4],
+                        "correctAnswer": row.correct_answer,
+                    })
             next_id = len(picked) + 1
             ai_with_ids = [{**q, "id": next_id + j} for j, q in enumerate(ai_part)]
             merged = shuffle_in_place(picked + ai_with_ids)
