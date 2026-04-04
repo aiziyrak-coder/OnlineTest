@@ -147,6 +147,7 @@ def student_identity_compare(request):
                 {"error": "Face verification is not configured on the server", "code": code},
                 status=503,
             )
+        # GEMINI_ERROR: Gemini texnik xatosi — tekshiruvni o'tkazib yuboramiz (match=false qaytarmaymiz, lekin talabaga xabar beramiz)
         return Response({"error": "Verification service error", "code": code}, status=503)
     return Response({"match": bool(result.get("match"))})
 

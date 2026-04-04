@@ -27,8 +27,24 @@ def _generate(client, prompt, contents=None) -> str:
     return resp.text or ""
 
 
+def _detect_image_mime(data: bytes) -> str:
+    """Rasm bytes dan MIME tur aniqlash."""
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return "image/png"
+    if data[:3] == b'\xff\xd8\xff':
+        return "image/jpeg"
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return "image/gif"
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return "image/webp"
+    return "image/jpeg"
+
+
 def compare_faces(profile_b64: str, live_b64: str) -> dict:
     """Express compareFacePairWithGemini bilan mos: success, match?, code."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     client = _client()
     if not client:
         return {"success": False, "code": "GEMINI_UNAVAILABLE"}
@@ -36,19 +52,35 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
         import base64
         from google.genai import types
 
-        p = base64.b64decode(profile_b64.split(",")[-1] if "," in profile_b64 else profile_b64)
-        l = base64.b64decode(live_b64.split(",")[-1] if "," in live_b64 else live_b64)
+        def _decode(s: str) -> bytes:
+            s = s.strip()
+            if "," in s:
+                s = s.split(",", 1)[1].strip()
+            # Padding to'g'rilash
+            pad = len(s) % 4
+            if pad:
+                s += "=" * (4 - pad)
+            return base64.b64decode(s)
+
+        p_bytes = _decode(profile_b64)
+        l_bytes = _decode(live_b64)
+
+        p_mime = _detect_image_mime(p_bytes)
+        l_mime = _detect_image_mime(l_bytes)
+
         contents = [
-            "Compare these two images. First: reference profile. Second: live capture. "
-            "Same person? Reply ONLY MATCH or NO_MATCH.",
-            types.Part.from_bytes(data=p, mime_type="image/jpeg"),
-            types.Part.from_bytes(data=l, mime_type="image/jpeg"),
+            "Compare these two face images. First image: reference profile photo. "
+            "Second image: live camera capture. Are they the same person? "
+            "Reply ONLY with MATCH or NO_MATCH.",
+            types.Part.from_bytes(data=p_bytes, mime_type=p_mime),
+            types.Part.from_bytes(data=l_bytes, mime_type=l_mime),
         ]
         raw = _generate(client, None, contents=contents).strip().upper()
         ok = raw == "MATCH" or ("MATCH" in raw and "NO_MATCH" not in raw)
         return {"success": True, "match": ok}
-    except Exception:
-        return {"success": False, "code": "GEMINI_ERROR"}
+    except Exception as exc:
+        logger.warning("compare_faces Gemini error: %s", exc)
+        return {"success": False, "code": "GEMINI_ERROR", "detail": str(exc)[:200]}
 
 
 def generate_exam_ai_summary(questions: list[dict], answers: dict[str, str], language: str) -> dict:

@@ -78,7 +78,15 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
       });
       const data = await response.json().catch(() => ({}));
       if (response.status === 503) {
-        setError(t.identityVerifyUnavailable);
+        const code = data?.code || '';
+        if (code === 'GEMINI_UNAVAILABLE') {
+          // Kalit sozlanmagan — ixtiyoriy, o'tkazib yuboramiz
+          setVerified(true);
+          setError('');
+        } else {
+          // Texnik xato — qayta urinish imkoni
+          setError(t.identityVerifyError);
+        }
         return;
       }
       if (!response.ok) {
