@@ -1,4 +1,4 @@
-"""Google Gemini (ixtiyoriy). Kalit bo‘lmasa fallback."""
+"""Google Gemini (ixtiyoriy). Kalit bo'lmasa fallback. google-genai SDK."""
 from __future__ import annotations
 
 import json
@@ -12,31 +12,39 @@ def _client():
     key = settings.GEMINI_API_KEY
     if not key:
         return None
-    import google.generativeai as genai
+    from google import genai
+    return genai.Client(api_key=key)
 
-    genai.configure(api_key=key)
-    return genai.GenerativeModel(settings.GEMINI_MODEL)
+
+def _generate(client, prompt, contents=None) -> str:
+    """Matn yoki multimodal so'rov yuboradi, javob matnini qaytaradi."""
+    from google import genai as _genai
+    model = settings.GEMINI_MODEL
+    resp = client.models.generate_content(
+        model=model,
+        contents=contents if contents is not None else prompt,
+    )
+    return resp.text or ""
 
 
 def compare_faces(profile_b64: str, live_b64: str) -> dict:
     """Express compareFacePairWithGemini bilan mos: success, match?, code."""
-    model = _client()
-    if not model:
+    client = _client()
+    if not client:
         return {"success": False, "code": "GEMINI_UNAVAILABLE"}
     try:
         import base64
+        from google.genai import types
 
         p = base64.b64decode(profile_b64.split(",")[-1] if "," in profile_b64 else profile_b64)
         l = base64.b64decode(live_b64.split(",")[-1] if "," in live_b64 else live_b64)
-        r = model.generate_content(
-            [
-                "Compare these two images. First: reference profile. Second: live capture. "
-                "Same person? Reply ONLY MATCH or NO_MATCH.",
-                {"mime_type": "image/jpeg", "data": p},
-                {"mime_type": "image/jpeg", "data": l},
-            ]
-        )
-        raw = (r.text or "").strip().upper()
+        contents = [
+            "Compare these two images. First: reference profile. Second: live capture. "
+            "Same person? Reply ONLY MATCH or NO_MATCH.",
+            types.Part.from_bytes(data=p, mime_type="image/jpeg"),
+            types.Part.from_bytes(data=l, mime_type="image/jpeg"),
+        ]
+        raw = _generate(client, None, contents=contents).strip().upper()
         ok = raw == "MATCH" or ("MATCH" in raw and "NO_MATCH" not in raw)
         return {"success": True, "match": ok}
     except Exception:
@@ -46,8 +54,8 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
 def generate_exam_ai_summary(questions: list[dict], answers: dict[str, str], language: str) -> dict:
     from apps.api.services import build_fallback_ai_summary
 
-    model = _client()
-    if not model:
+    client = _client()
+    if not client:
         return build_fallback_ai_summary(questions, answers)
     payload = []
     for q in questions:
@@ -69,8 +77,7 @@ Til: {lang}.
 Faqat bitta JSON obyekt: {{"overview":"...","items":[{{"questionId":n,"isCorrect":bool,"commentCorrect":"","whyStudentWrong":"","whyCorrectIsRight":""}}]}}
 Har bir savol uchun bitta item."""
     try:
-        r = model.generate_content(prompt)
-        t = (r.text or "").strip()
+        t = _generate(client, prompt).strip()
         fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", t)
         if fence:
             t = fence.group(1).strip()
@@ -85,8 +92,8 @@ Har bir savol uchun bitta item."""
 def generate_bank_extension(
     samples: list[dict], count: int, language: str, category_names: list[str]
 ) -> list[dict]:
-    model = _client()
-    if not model:
+    client = _client()
+    if not client:
         raise RuntimeError("GEMINI_API_KEY is not configured")
     sample_block = json.dumps(samples[:14], ensure_ascii=False)
     lang = "O'zbek" if language == "uz" else "Russian" if language == "ru" else "English"
@@ -96,8 +103,7 @@ Each: "text", "options" (4 strings), "correctAnswer" (one of options).
 Output ONLY JSON array, no markdown.
 Samples for style:
 {sample_block}"""
-    r = model.generate_content(prompt)
-    t = (r.text or "").strip()
+    t = _generate(client, prompt).strip()
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", t)
     if fence:
         t = fence.group(1).strip()
@@ -143,11 +149,10 @@ def parse_and_classify_questionnaire(raw_text: str, language: str) -> list[dict]
     Namunaviy savolnoma matnidan MCQ ajratish va har biriga mavzu (kategoriya) berish.
     Qaytadi: [{"text","options","correctAnswer","categoryName","categoryDescription?"}, ...]
     """
-    model = _client()
-    if not model:
+    client = _client()
+    if not client:
         raise RuntimeError("GEMINI_API_KEY is not configured")
     lang = "O'zbek" if language == "uz" else "Russian" if language == "ru" else "English"
-    # Juda uzun matn — model konteksti; qolgan qism uchun faylni bo'limlab yuklash
     snippet = (
         raw_text
         if len(raw_text) <= 220_000
@@ -174,8 +179,8 @@ MATN:
 {snippet}
 ---
 """
-    r = model.generate_content(prompt)
-    arr = _extract_json_array_from_model_text(r.text or "")
+    t = _generate(client, prompt)
+    arr = _extract_json_array_from_model_text(t)
     out: list[dict] = []
     for item in arr:
         if not isinstance(item, dict):
