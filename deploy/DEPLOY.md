@@ -145,3 +145,22 @@ sudo systemctl restart onlinetest-api onlinetest-realtime
 - **SQLite** yagona serverda yaxshi; yuqori yuk uchun keyinroq PostgreSQL ko‘rib chiqiladi.
 - **Deploy hook** `timingSafeEqual` bilan solishtiradi; nginx orqali maxfiy sarlavha.
 - **Socket.IO** hozircha `join-exam` uchun alohida JWT tekshiruvi yo‘q — xona `exam-{id}` bo‘yicha; bilgan ID bo‘lsa signal kanaliga qo‘shilishi mumkin (keyingi qatlam: handshake da token). Hozir kirish nginx + `REALTIME_BIND` bilan cheklangan.
+
+## Ma’lumotlarning doimiyligi (muhim)
+
+Barcha **foydalanuvchilar**, **test bazasi savollari/kategoriyalari**, **imtihonlar**, **talaba natijalari**, **qoidabuzarliklar** — bittada **`/var/www/onlinetest/backend/db.sqlite3`** faylida saqlanadi.
+
+- **`git pull` va `migrate`** bu faylni **o‘chirib yubormaydi**; migratsiyalar faqat jadval tuzilmasini yangilaydi (ma’lumotlar saqlanadi).
+- Repoda `db.sqlite3` **yo‘q** (`.gitignore`) — bu **to‘g‘ri**: bazani Git orqali boshqarmang.
+- Serverda **disk zaxirasi** majburiy: `sudo mkdir -p /var/backups/onlinetest` va cron:
+
+```bash
+sudo bash /var/www/onlinetest/deploy/backup-database.sh
+sudo cp deploy/backup-cron.example /etc/cron.d/onlinetest-backup
+sudo chmod 644 /etc/cron.d/onlinetest-backup
+```
+
+Zaxira nusxalari: `BACKUP_DIR` (standart `/var/backups/onlinetest`), `45` kundan oshiq eski fayllar avtomatik o‘chiriladi (`BACKUP_KEEP_DAYS`).
+
+- Droplet/snapshot yoki hosting **disk backup** ni alohida yoqing.
+- Keyinroq juda yuqori yuk bo‘lsa **PostgreSQL** ga o‘tish mumkin; hozirgi loyiha SQLite bilan to‘liq ishlaydi.

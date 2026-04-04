@@ -1,0 +1,8 @@
+# /etc/cron.d/onlinetest-backup — nusxa: sudo cp deploy/backup-cron.example /etc/cron.d/onlinetest-backup
+# sudo chmod 644 /etc/cron.d/onlinetest-backup
+#
+# Har kuni 03:15 va 15:15 UTC (yoki vaqtni o'zgartiring)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+15 3,15 * * * root ONLINETEST_ROOT=/var/www/onlinetest BACKUP_DIR=/var/backups/onlinetest /var/www/onlinetest/deploy/backup-database.sh >> /var/log/onlinetest-backup.log 2>&1
