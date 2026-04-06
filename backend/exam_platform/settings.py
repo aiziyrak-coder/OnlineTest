@@ -136,6 +136,31 @@ if not DEBUG and not CORS_ALLOW_ALL_ORIGINS and not CORS_ALLOWED_ORIGINS:
 CORS_ALLOW_CREDENTIALS = False
 CORS_PREFLIGHT_MAX_AGE = 600
 
+# SPA boshqa domen orqali POST (multipart /api/admin/...) yuborilganda Django CSRF
+# HTTP_ORIGIN ni CSRF_TRUSTED_ORIGINS bilan solishtiradi. GET o'tadi, POST 403 bo'lishi mumkin
+# agar faqat API domeni yozilgan bo'lsa. CORS_ALLOWED_ORIGINS dagi frontend domenlarini bu yerga ham qo'shamiz.
+_csrf_merged: list[str] = []
+_seen_csrf: set[str] = set()
+
+def _csrf_add(url: str) -> None:
+    u = (url or "").strip()
+    if not u or u in _seen_csrf:
+        return
+    _seen_csrf.add(u)
+    _csrf_merged.append(u)
+
+
+for _u in CSRF_TRUSTED_ORIGINS:
+    _csrf_add(_u)
+for _u in CORS_ALLOWED_ORIGINS:
+    _csrf_add(_u)
+    if _u.startswith("http://"):
+        _csrf_add("https://" + _u[7:])
+    elif _u.startswith("https://"):
+        _csrf_add("http://" + _u[8:])
+
+CSRF_TRUSTED_ORIGINS = _csrf_merged
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.JWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["apps.api.permissions.IsAuthenticatedStrict"],
