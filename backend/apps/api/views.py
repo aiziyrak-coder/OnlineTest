@@ -109,12 +109,13 @@ def auth_login(request):
             {"error": "Teacher role is no longer supported. Use an admin or student account."},
             status=403,
         )
+    role_out = (user.role or "").strip().lower()
     return Response(
         {
             "token": issue_token(user),
             "user": {
                 "id": user.id,
-                "role": user.role,
+                "role": role_out,
                 "name": user.name,
                 "status": user.status,
                 "group_id": user.group_id,

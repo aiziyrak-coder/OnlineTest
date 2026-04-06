@@ -48,7 +48,9 @@ class JWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed("User not found")
         if user.status == "Banned":
             raise AuthenticationFailed("Banned")
-        jwt_user = JWTUser(uid, user.role, user.name, user.group_id)
+        # DB da "Admin", bo'shliq yoki boshqa registr — admin endpointlar 403 bermasligi uchun
+        role_norm = (user.role or "").strip().lower()
+        jwt_user = JWTUser(uid, role_norm, user.name, user.group_id)
         return (jwt_user, None)
 
 

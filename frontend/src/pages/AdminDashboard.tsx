@@ -1,14 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Button } from '../components/ui';
 import { translations, Language } from '../i18n';
 import { KontingentTab } from './KontingentTab';
 import { TestBankTab } from './TestBankTab';
 import { ImtixonTab } from './ImtixonTab';
+import { apiUrl } from '../lib/apiUrl';
 
 export function AdminDashboard({ token, lang }: { token: string; lang: Language }) {
   const t = translations[lang];
   const [tab, setTab] = useState<'kontingent' | 'testBank' | 'imtixon'>('kontingent');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(apiUrl('/api/admin/stats'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (cancelled || res.ok || res.status === 401) return;
+      if (res.status === 403) {
+        alert(
+          lang === 'uz'
+            ? "API rad etdi (403). Odatda sabab: brauzerda 'admin' ko'rinsa-da, token boshqa foydalanuvchiga tegishli yoki bazada rolingiz 'admin' emas. Chiqish qiling va admin login bilan qayta kiring."
+            : lang === 'ru'
+              ? 'Доступ запрещён (403). Выйдите и войдите снова под админом; проверьте роль в базе.'
+              : 'Access denied (403). Log out and sign in again as admin; verify your role in the database.',
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, lang]);
 
   const container = {
     hidden: { opacity: 0 },
