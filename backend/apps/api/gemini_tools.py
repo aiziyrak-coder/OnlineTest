@@ -176,6 +176,108 @@ def _extract_json_array_from_model_text(t: str) -> list:
     raise ValueError("Model javobi JSON massiv emas")
 
 
+def translate_en_questions_to_uz_ru(questions: list[dict]) -> list[dict]:
+    """Inglizcha savollarni tibbiy terminologiya bilan O‘zbek (lotin) va Ruschaga tarjima qiladi."""
+    if not questions:
+        return []
+    client = _client()
+    if not client:
+        return [{} for _ in questions]
+    import json
+
+    out_all: list[dict] = []
+    chunk_size = 5
+    for i in range(0, len(questions), chunk_size):
+        chunk = questions[i : i + chunk_size]
+        batch = [
+            {"text": q["text"], "options": q.get("options", []), "correctAnswer": q.get("correctAnswer")}
+            for q in chunk
+        ]
+        prompt = f"""You are an expert medical translator for Central Asian medical schools. Translate each MCQ from English to Uzbek (Latin script) and Russian. Use correct clinical terminology (anatomy, pharmacology, pathophysiology); avoid literal machine translation where a standard medical term exists in the target language.
+
+INPUT JSON array (length {len(batch)}):
+{json.dumps(batch, ensure_ascii=False)}
+
+OUTPUT: JSON array ONLY, same length. Each object:
+{{"text_uz":"...","text_ru":"...","options_uz":["..."],"options_ru":["..."],"correct_answer_uz":"exact copy of one element of options_uz","correct_answer_ru":"exact copy of one element of options_ru"}}
+
+Rules:
+- options_uz and options_ru must have the SAME length and order as English options (parallel translation).
+- correct_answer_uz must equal options_uz[k] for the same k as the correct English option.
+- correct_answer_ru must equal options_ru[k] likewise.
+"""
+        try:
+            t = _generate(client, prompt).strip()
+            arr = _extract_json_array_from_model_text(t)
+        except Exception:
+            arr = []
+        for j in range(len(chunk)):
+            row = arr[j] if j < len(arr) and isinstance(arr[j], dict) else {}
+            out_all.append(row)
+    return out_all[: len(questions)]
+
+
+def paraphrase_medical_mcqs(questions: list[dict], exam_language: str) -> list[dict]:
+    """So‘zlarni/sinonimlarni o‘zgartirib savollarni yangilash; qiyinlik va mazmun saqlanadi."""
+    if not questions:
+        return []
+    client = _client()
+    if not client:
+        return questions
+    import json
+
+    lang = (
+        "English"
+        if exam_language == "en"
+        else "O'zbek (Latin)"
+        if exam_language == "uz"
+        else "Russian"
+    )
+    batch = [
+        {"text": q["text"], "options": q.get("options", []), "correctAnswer": q.get("correctAnswer")}
+        for q in questions
+    ]
+    prompt = f"""You rewrite medical multiple-choice questions for exam security (students may have memorized exact wording).
+
+STRICT RULES:
+- Output language for every field: {lang}.
+- Preserve difficulty level and clinical topic; do not make questions easier or harder.
+- Rephrase the stem using synonyms and sentence restructuring.
+- Rephrase each option similarly. Use 3 to 5 options (same count as input).
+- You may change trivial numbers ONLY if the scenario remains medically realistic and difficulty unchanged.
+- correctAnswer must be EXACTLY one full string from the new options array (same meaning as input correct answer).
+
+INPUT JSON:
+{json.dumps(batch, ensure_ascii=False)}
+
+OUTPUT: JSON array only, same length as input. Each item: {{"text":"...","options":[...],"correctAnswer":"..."}}
+"""
+    try:
+        t = _generate(client, prompt).strip()
+        arr = _extract_json_array_from_model_text(t)
+    except Exception:
+        return questions
+    out: list[dict] = []
+    for j, q in enumerate(questions):
+        if j < len(arr) and isinstance(arr[j], dict):
+            opts = [str(x) for x in (arr[j].get("options") or [])][:5]
+            while len(opts) < 3:
+                opts.append(f"Option {len(opts) + 1}")
+            ca = str(arr[j].get("correctAnswer") or opts[0])
+            if ca not in opts and opts:
+                ca = opts[0]
+            out.append(
+                {
+                    "text": str(arr[j].get("text") or q["text"]),
+                    "options": opts,
+                    "correctAnswer": ca,
+                }
+            )
+        else:
+            out.append(dict(q))
+    return out if out else questions
+
+
 def parse_and_classify_questionnaire(raw_text: str, language: str) -> list[dict]:
     """
     Namunaviy savolnoma matnidan MCQ ajratish va har biriga mavzu (kategoriya) berish.
@@ -190,7 +292,32 @@ def parse_and_classify_questionnaire(raw_text: str, language: str) -> list[dict]
         if len(raw_text) <= 220_000
         else raw_text[:220_000] + "\n\n[...matn qisqartirildi — qolgan sahifalarni alohida PDF sifatida yuklang...]"
     )
-    prompt = f"""Sen tibbiyot/ta'lim testlarini tahlil qiluvchi mutaxassissan.
+    if language == "en":
+        prompt = f"""You are a medical education expert. Extract ALL multiple-choice questions from the document text (PDF/OCR). Do not skip pages.
+
+The document may use:
+- Question numbers: 1. or 1) or Q1
+- Options labeled A) B) C) D) E) OR 1) 2) 3) 4) 5) OR a. b. c.
+- An ANSWER KEY at the end (e.g. "Answers:", "Key:", "1-B", "1. B", "Answer: 1-3" mapping question number to option letter or number). Use the key to set correctAnswer.
+
+For EACH valid MCQ output one JSON object in a JSON ARRAY (no markdown):
+- "text": question stem ONLY (no option letters in stem if possible)
+- "options": array of 3 to 5 option texts (full text, no "A)" prefix)
+- "correctAnswer": must be EXACTLY equal to one string in "options" (the correct choice)
+- "categoryName": short English topic e.g. "Cardiology", "Pharmacology" — group similar questions
+- "categoryDescription": optional one line
+
+Skip incomplete or ambiguous items. If answer key conflicts with text, prefer the answer key section at the end of the document.
+
+OUTPUT: JSON array only.
+
+TEXT:
+---
+{snippet}
+---
+"""
+    else:
+        prompt = f"""Sen tibbiyot/ta'lim testlarini tahlil qiluvchi mutaxassissan.
 Quyidagi matn butun hujjatdan (masalan PDF dan chiqarilgan) bo'lishi mumkin — boshidan oxirigacha BARCHA ko'p tanlovli (MCQ) savollarni top va ajratib ol. Hech bir sahifani o'tkazma.
 Matn tartibsiz bo'lishi mumkin: raqamlar 1. yoki 1), variantlar A) B) yoki a) b), to'g'ri javob oxirida yoki kalitda.
 
@@ -217,9 +344,14 @@ MATN:
     for item in arr:
         if not isinstance(item, dict):
             continue
-        opts = [str(x).strip() for x in (item.get("options") or [])][:4]
-        while len(opts) < 4:
-            opts.append(f"Variant {len(opts) + 1}")
+        if language == "en":
+            opts = [str(x).strip() for x in (item.get("options") or [])][:5]
+            while len(opts) < 3:
+                opts.append(f"Option {len(opts) + 1}")
+        else:
+            opts = [str(x).strip() for x in (item.get("options") or [])][:4]
+            while len(opts) < 4:
+                opts.append(f"Variant {len(opts) + 1}")
         ca = str(item.get("correctAnswer") or opts[0]).strip()
         if ca not in opts:
             ca = opts[0]

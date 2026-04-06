@@ -12,6 +12,7 @@
     "ci:backend": "cd backend && python manage.py check && python manage.py test apps.api.tests -v 1"
   },
   "dependencies": {
+    "jsonwebtoken": "^9.0.2",
     "socket.io": "4.8.3"
   },
   "engines": {

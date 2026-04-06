@@ -32,14 +32,18 @@ from apps.api.gemini_tools import (
     generate_bank_extension,
     generate_exam_ai_summary,
     parse_and_classify_questionnaire,
+    paraphrase_medical_mcqs,
+    translate_en_questions_to_uz_ru,
 )
 from apps.api.services import (
     assert_safe_result_public_id,
+    bank_row_to_exam_dict,
     build_fallback_ai_summary,
     build_student_question_list,
+    extract_text_from_bank_upload,
+    filter_bank_questions_for_group,
     integrity_code,
     next_result_public_id,
-    extract_text_from_bank_upload,
     parse_pdf_questions,
     public_base_url,
     shuffle_in_place,
@@ -93,7 +97,7 @@ def auth_login(request):
     password = (request.data or {}).get("password")
     if not uid or not password:
         return Response({"error": "ID and password are required"}, status=400)
-    user = AppUser.objects.filter(pk=uid).first()
+    user = AppUser.objects.select_related("group").filter(pk=uid).first()
     if not user or not _check_pw(password, user.password):
         return Response({"error": "Invalid credentials"}, status=401)
     if user.status == "Banned":
@@ -113,6 +117,8 @@ def auth_login(request):
                 "status": user.status,
                 "group_id": user.group_id,
                 "profile_image": user.profile_image or None,
+                "program_track": getattr(user.group, "program_track", None) if user.group_id else None,
+                "academic_year": getattr(user.group, "academic_year", None) if user.group_id else None,
             },
         }
     )
@@ -383,13 +389,18 @@ def _get_or_create_bank_category(name: str, description: str) -> TestBankCategor
 @throttle_classes([BankAiImportThrottle])
 @permission_classes([IsAuthenticated])
 def admin_test_bank_import_smart(request):
-    """Savolnoma matni/PDF → Gemini: savollar + mavzu bo‘yicha kategoriyalar → bazaga."""
+    """PDF/DOCX/matn → Gemini: MCQ (inglizcha 3–5 variant, javob kaliti) → baza + uz/ru tarjima."""
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
     d = request.data or {}
-    language = d.get("language") or "uz"
+    language = d.get("language") or "en"
     if not isinstance(language, str) or len(language) > 10:
-        language = "uz"
+        language = "en"
+    target_cat_id = d.get("target_category_id")
+    try:
+        target_cat_id = int(target_cat_id) if target_cat_id not in (None, "", "0") else None
+    except (TypeError, ValueError):
+        target_cat_id = None
     text = ""
     f = request.FILES.get("file")
     if f:
@@ -414,17 +425,59 @@ def admin_test_bank_import_smart(request):
         return Response({"error": str(e)}, status=400)
     except Exception as e:
         return Response({"error": "AI tahlil xatosi", "detail": str(e)[:500]}, status=502)
+
+    translations: list[dict] = []
+    if language == "en":
+        payload = [
+            {"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items
+        ]
+        translations = translate_en_questions_to_uz_ru(payload)
+
     categories_touched: dict[str, int] = {}
     inserted = 0
     with transaction.atomic():
-        for it in items:
-            cat = _get_or_create_bank_category(it["categoryName"], it.get("categoryDescription") or "")
+        fixed_cat = None
+        if target_cat_id:
+            fixed_cat = TestBankCategory.objects.filter(pk=target_cat_id).first()
+            if not fixed_cat:
+                return Response({"error": "Tanlangan kategoriya topilmadi"}, status=400)
+            uf = ["source_language"]
+            pt = d.get("category_program_track")
+            if isinstance(pt, str) and pt.strip():
+                fixed_cat.program_track = pt.strip()[:20]
+                uf.append("program_track")
+            ay = d.get("category_academic_year")
+            if ay not in (None, "", "null"):
+                try:
+                    fixed_cat.academic_year = int(ay)
+                    uf.append("academic_year")
+                except (TypeError, ValueError):
+                    pass
+            fixed_cat.source_language = language
+            fixed_cat.save(update_fields=uf)
+
+        for idx, it in enumerate(items):
+            if fixed_cat:
+                cat = fixed_cat
+            else:
+                cat = _get_or_create_bank_category(it["categoryName"], it.get("categoryDescription") or "")
+                cat.source_language = language
+                cat.save(update_fields=["source_language"])
+            tr = translations[idx] if idx < len(translations) else {}
+            ouz = tr.get("options_uz") if isinstance(tr.get("options_uz"), list) else []
+            oru = tr.get("options_ru") if isinstance(tr.get("options_ru"), list) else []
             TestBankQuestion.objects.create(
                 category=cat,
                 text=it["text"],
                 options_json=json.dumps(it["options"]),
                 correct_answer=it["correctAnswer"],
-                language=language,
+                language="en" if language == "en" else language,
+                text_uz=str(tr.get("text_uz") or "")[:50000],
+                text_ru=str(tr.get("text_ru") or "")[:50000],
+                options_uz_json=json.dumps(ouz) if ouz else "[]",
+                options_ru_json=json.dumps(oru) if oru else "[]",
+                correct_answer_uz=str(tr.get("correct_answer_uz") or "")[:500],
+                correct_answer_ru=str(tr.get("correct_answer_ru") or "")[:500],
             )
             inserted += 1
             categories_touched[cat.name] = categories_touched.get(cat.name, 0) + 1
@@ -578,8 +631,8 @@ def admin_exams(request):
     return _admin_exams_create_impl(request)
 
 
-def _bank_pool_check(cat_ids: list, lang: str, need_bank: int) -> tuple[bool, int]:
-    pool_len = TestBankQuestion.objects.filter(category_id__in=cat_ids, language=lang).count()
+def _bank_pool_check(cat_ids: list, need_bank: int) -> tuple[bool, int]:
+    pool_len = TestBankQuestion.objects.filter(category_id__in=cat_ids).count()
     return pool_len >= need_bank, pool_len
 
 
@@ -641,10 +694,10 @@ def admin_exam_detail(request, pk: int):
             return Response({"error": "Select at least one test bank category"}, status=400)
         n = max(8, min(200, int(d.get("bank_question_count") or e.bank_question_count or 20)))
         need_bank = int(n * 0.75)
-        ok, pool_len = _bank_pool_check(cat_ids, lang, need_bank)
+        ok, pool_len = _bank_pool_check(cat_ids, need_bank)
         if not ok:
             return Response(
-                {"error": f"Test bazasida yetarli savol yo'q ({pool_len}/{need_bank}, til: {lang})"},
+                {"error": f"Test bazasida yetarli savol yo'q ({pool_len}/{need_bank})"},
                 status=400,
             )
         bank_cats_json = json.dumps(cat_ids)
@@ -749,12 +802,12 @@ def _admin_exams_create_impl(request):
             return Response({"error": "Select at least one test bank category"}, status=400)
         n = max(8, min(200, int(d.get("bank_question_count") or 20)))
         need_bank = int(n * 0.75)
-        ok, pool_len = _bank_pool_check(cat_ids, lang, need_bank)
+        ok, pool_len = _bank_pool_check(cat_ids, need_bank)
         if not ok:
             return Response(
                 {
                     "error": (
-                        f"Test bazasida yetarli savol yo'q ({pool_len}/{need_bank} kerak, til: {lang}). "
+                        f"Test bazasida yetarli savol yo'q ({pool_len}/{need_bank} kerak). "
                         "Kategoriyalarga savol qo'shing yoki sonni kamaytiring."
                     )
                 },
@@ -899,54 +952,74 @@ def student_exams_start(request, pk: int):
             full_questions = safe_json_loads(se.session_questions_json, [])
         else:
             n = max(8, exam.bank_question_count or 20)
-            n_bank = int(n * 0.75)
-            n_ai = n - n_bank
+            group = Group.objects.filter(pk=u.group_id).first() if u.group_id else None
+            track = (group.program_track or "bachelor").lower() if group else "bachelor"
+            if track in ("residency", "master"):
+                n_ai = 0
+                n_bank = n
+            else:
+                n_bank = int(n * 0.75)
+                n_ai = n - n_bank
             cat_ids = safe_json_loads(exam.bank_category_ids, [])
             if not cat_ids:
                 return Response({"error": "Invalid exam bank configuration"}, status=500)
-            pool = list(
-                TestBankQuestion.objects.filter(
-                    category_id__in=cat_ids, language=exam.language or "uz"
-                )
+            base_qs = TestBankQuestion.objects.filter(category_id__in=cat_ids).select_related(
+                "category"
             )
+            base_qs = filter_bank_questions_for_group(base_qs, group)
+            pool = list(base_qs)
             if len(pool) < n_bank:
                 return Response(
-                    {"error": "Test bazasida hozircha yetarli savol yo‘q. Administratorga murojaat qiling."},
+                    {
+                        "error": "Sizning guruhingiz (kurs/dastur) uchun tanlangan kategoriyalarda "
+                        "yetarli savol yo'q. Administrator kategoriya yoki guruh sozlamalarini tekshirsin."
+                    },
                     status=400,
                 )
             shuffle_in_place(pool)
-            picked = []
-            for i, row in enumerate(pool[:n_bank]):
-                opts = safe_json_loads(row.options_json, [])
-                picked.append(
-                    {
-                        "id": i + 1,
-                        "text": row.text,
-                        "options": opts[:4],
-                        "correctAnswer": row.correct_answer,
-                    }
-                )
+            picked_rows = pool[:n_bank]
+            ex_lang = exam.language or "uz"
+            picked = [bank_row_to_exam_dict(row, ex_lang) for row in picked_rows]
+            if track == "bachelor" and picked:
+                n_para = max(1, int(len(picked) * 0.25))
+                idxs = list(range(len(picked)))
+                shuffle_in_place(idxs)
+                para_idxs = set(idxs[:n_para])
+                new_picked: list[dict] = []
+                for i, qd in enumerate(picked):
+                    if i in para_idxs:
+                        try:
+                            pr = paraphrase_medical_mcqs([qd], ex_lang)
+                            new_picked.append(pr[0] if pr else qd)
+                        except Exception:
+                            new_picked.append(qd)
+                    else:
+                        new_picked.append(qd)
+                picked = new_picked
+            elif track in ("residency", "master") and picked:
+                try:
+                    picked = paraphrase_medical_mcqs(picked, ex_lang)
+                except Exception:
+                    pass
+            for i, qd in enumerate(picked):
+                qd["id"] = i + 1
             cat_names = list(
                 TestBankCategory.objects.filter(pk__in=cat_ids).values_list("name", flat=True)
             )
             samples = [{"text": q["text"], "options": q["options"], "correctAnswer": q["correctAnswer"]} for q in picked]
-            ai_part = []
-            try:
-                ai_part = generate_bank_extension(samples, n_ai, exam.language or "uz", list(cat_names))
-            except Exception as ex:
-                import logging as _log
-                _log.getLogger(__name__).warning(
-                    "generate_bank_extension failed (bank-only fallback): %s", ex
-                )
-                # AI xato berdi - bankdan qoshimcha savollar olib toldiramiz
-                extra_pool = pool[n_bank: n_bank + n_ai]
-                for row in extra_pool:
-                    opts = safe_json_loads(row.options_json, [])
-                    ai_part.append({
-                        "text": row.text,
-                        "options": opts[:4],
-                        "correctAnswer": row.correct_answer,
-                    })
+            ai_part: list[dict] = []
+            if n_ai > 0:
+                try:
+                    ai_part = generate_bank_extension(samples, n_ai, ex_lang, list(cat_names))
+                except Exception as ex:
+                    import logging as _log
+
+                    _log.getLogger(__name__).warning(
+                        "generate_bank_extension failed (bank-only fallback): %s", ex
+                    )
+                    extra_pool = pool[n_bank : n_bank + n_ai]
+                    for row in extra_pool:
+                        ai_part.append(bank_row_to_exam_dict(row, ex_lang))
             next_id = len(picked) + 1
             ai_with_ids = [{**q, "id": next_id + j} for j, q in enumerate(ai_part)]
             merged = shuffle_in_place(picked + ai_with_ids)

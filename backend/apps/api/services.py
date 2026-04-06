@@ -14,7 +14,8 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone as dj_tz
 
-from apps.core.models import ResultIdCounter
+from apps.core.models import Group, ResultIdCounter
+from apps.api.view_utils import safe_json_loads
 
 
 def shuffle_in_place(arr: list) -> list:
@@ -130,7 +131,7 @@ def parse_pdf_questions(file_obj) -> list[dict]:
 
 
 def extract_text_from_bank_upload(raw: bytes, filename: str) -> str:
-    """Test bazasiga AI import: PDF yoki oddiy matn fayli."""
+    """Test bazasiga AI import: PDF, DOCX yoki oddiy matn."""
     name = (filename or "").lower()
     if name.endswith(".pdf"):
         if len(raw) < 5 or not raw.startswith(b"%PDF"):
@@ -144,4 +145,70 @@ def extract_text_from_bank_upload(raw: bytes, filename: str) -> str:
         for page in reader.pages:
             parts.append(page.extract_text() or "")
         return "\n".join(parts)
+    if name.endswith(".docx"):
+        from io import BytesIO
+
+        from docx import Document
+
+        doc = Document(BytesIO(raw))
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    if name.endswith(".doc"):
+        # Eski .doc — to‘liq qo‘llab-quvvatlanmaydi; UTF-8 matn sifatida urinib ko‘ramiz
+        try:
+            return raw.decode("utf-8", errors="replace")
+        except Exception:
+            raise ValueError(
+                ".doc faylini Word orqali .docx ga saqlab, qayta yuklang (yoki PDF)."
+            )
     return raw.decode("utf-8", errors="replace")
+
+
+def filter_bank_questions_for_group(qs, group: Group | None):
+    """Talaba guruhi bo‘yicha test bazasi savollarini filtrlash."""
+    from django.db.models import Q
+
+    if group is None:
+        return qs
+    pt = (group.program_track or "bachelor").lower()
+    if pt == "residency":
+        return qs.filter(Q(category__program_track__in=("residency", "any")))
+    if pt == "master":
+        return qs.filter(Q(category__program_track__in=("master", "any")))
+    q = Q(category__program_track__in=("bachelor", "any"))
+    qs2 = qs.filter(q)
+    ay = group.academic_year
+    if ay is not None:
+        qs2 = qs2.filter(
+            Q(category__academic_year__isnull=True) | Q(category__academic_year=ay)
+        )
+    return qs2
+
+
+def bank_row_to_exam_dict(row, exam_lang: str) -> dict:
+    """TestBankQuestion qatoridan imtihon tili bo‘yicha savol dict (to‘g‘ri javob bilan)."""
+    opts_en = safe_json_loads(row.options_json, [])
+    exam_lang = (exam_lang or "uz").lower()
+    if exam_lang == "en":
+        text, opts, ca = row.text, list(opts_en), row.correct_answer
+    elif exam_lang == "ru":
+        opts = safe_json_loads(getattr(row, "options_ru_json", None) or "[]", [])
+        text = (getattr(row, "text_ru", None) or "").strip() or row.text
+        if not opts:
+            opts = list(opts_en)
+        ca = (getattr(row, "correct_answer_ru", None) or "").strip() or row.correct_answer
+    else:
+        opts = safe_json_loads(getattr(row, "options_uz_json", None) or "[]", [])
+        text = (getattr(row, "text_uz", None) or "").strip() or row.text
+        if not opts:
+            opts = list(opts_en)
+        ca = (getattr(row, "correct_answer_uz", None) or "").strip() or row.correct_answer
+    opts = [str(x) for x in opts][:5]
+    if len(opts) < 2:
+        opts = [str(x) for x in opts_en][:5]
+    while len(opts) < 2 and opts_en:
+        opts.append(str(opts_en[len(opts)]))
+    while len(opts) < 2:
+        opts.append(f"Variant {len(opts) + 1}")
+    if ca not in opts and opts:
+        ca = opts[0]
+    return {"text": text, "options": opts, "correctAnswer": ca}

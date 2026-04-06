@@ -11,6 +11,9 @@ class Level(models.Model):
 class Group(models.Model):
     name = models.CharField(max_length=200)
     level = models.ForeignKey(Level, on_delete=models.CASCADE, db_column="level_id")
+    # Talaba yo‘nalishi: bakalavr (1–6 kurs), ordinatura, magistratura — test bazasi filtri uchun
+    program_track = models.CharField(max_length=20, default="bachelor")
+    academic_year = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "groups"
@@ -92,6 +95,10 @@ class TestBankCategory(models.Model):
     name = models.CharField(max_length=300)
     description = models.TextField(blank=True)
     sort_order = models.IntegerField(default=0)
+    # Kategoriya qaysi talabalar uchun: bachelor + kurs, residency, master, any (hammasi)
+    program_track = models.CharField(max_length=20, default="any")
+    academic_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    source_language = models.CharField(max_length=10, default="en")
 
     class Meta:
         db_table = "test_bank_categories"
@@ -99,11 +106,19 @@ class TestBankCategory(models.Model):
 
 class TestBankQuestion(models.Model):
     category = models.ForeignKey(TestBankCategory, on_delete=models.CASCADE, db_column="category_id")
+    # Asosiy (odatda inglizcha) matn va variantlar
     text = models.TextField()
     options_json = models.TextField()
     correct_answer = models.CharField(max_length=500)
-    language = models.CharField(max_length=10, default="uz")
+    language = models.CharField(max_length=10, default="en")
     created_at = models.DateTimeField(auto_now_add=True)
+    # O‘zbek va ruscha tarjimalar (imtihon tili bo‘yicha)
+    text_uz = models.TextField(blank=True)
+    text_ru = models.TextField(blank=True)
+    options_uz_json = models.TextField(blank=True, default="[]")
+    options_ru_json = models.TextField(blank=True, default="[]")
+    correct_answer_uz = models.CharField(max_length=500, blank=True)
+    correct_answer_ru = models.CharField(max_length=500, blank=True)
 
     class Meta:
         db_table = "test_bank_questions"

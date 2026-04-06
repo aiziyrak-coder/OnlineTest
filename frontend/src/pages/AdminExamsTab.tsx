@@ -149,8 +149,6 @@ export function AdminExamsTab({ token, lang }: { token: string; lang: Language }
     }
   };
 
-  const viewerId = JSON.parse(atob(token.split('.')[1])).id as string;
-
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <motion.div variants={item}>
@@ -401,7 +399,7 @@ export function AdminExamsTab({ token, lang }: { token: string; lang: Language }
 
       <AnimatePresence>
         {activeMonitorExamId && (
-          <LiveMonitor examId={activeMonitorExamId} viewerId={viewerId} onClose={() => setActiveMonitorExamId(null)} />
+          <LiveMonitor examId={activeMonitorExamId} token={token} onClose={() => setActiveMonitorExamId(null)} />
         )}
       </AnimatePresence>
 

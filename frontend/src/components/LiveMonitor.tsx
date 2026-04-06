@@ -3,25 +3,39 @@ import { io, Socket } from 'socket.io-client';
 import { Card, CardContent, CardHeader, CardTitle, Button } from './ui';
 import { motion } from 'motion/react';
 
+function jwtPayloadUserId(jwtToken: string): string {
+  try {
+    const p = jwtToken.split('.')[1];
+    if (!p) return 'viewer';
+    const b64 = p.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+    const json = JSON.parse(atob(b64 + pad)) as { id?: string };
+    return json?.id != null ? String(json.id) : 'viewer';
+  } catch {
+    return 'viewer';
+  }
+}
+
 interface LiveMonitorProps {
   examId: number;
-  viewerId: string;
+  token: string;
   onClose: () => void;
 }
 
-export function LiveMonitor({ examId, viewerId, onClose }: LiveMonitorProps) {
+export function LiveMonitor({ examId, token, onClose }: LiveMonitorProps) {
   const [students, setStudents] = useState<{ id: string, socketId: string }[]>([]);
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<{ [id: string]: RTCPeerConnection }>({});
   const videoRefs = useRef<{ [id: string]: HTMLVideoElement | null }>({});
 
   useEffect(() => {
+    const viewerId = jwtPayloadUserId(token);
     const socketUrl =
       (import.meta.env.VITE_SOCKET_URL as string | undefined)?.trim() ||
       (import.meta.env.DEV ? 'http://127.0.0.1:3001' : undefined);
     const socket = socketUrl
-      ? io(socketUrl, { path: '/socket.io' })
-      : io({ path: '/socket.io' });
+      ? io(socketUrl, { path: '/socket.io', auth: { token } })
+      : io({ path: '/socket.io', auth: { token } });
     socketRef.current = socket;
 
     socket.emit('join-exam', examId, 'proctor', viewerId);
@@ -75,7 +89,7 @@ export function LiveMonitor({ examId, viewerId, onClose }: LiveMonitorProps) {
       socket.disconnect();
       Object.values(peerConnectionsRef.current).forEach(pc => pc.close());
     };
-  }, [examId, viewerId]);
+  }, [examId, token]);
 
   return (
     <motion.div 

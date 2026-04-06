@@ -257,10 +257,10 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           (import.meta.env.VITE_SOCKET_URL as string | undefined)?.trim() ||
           (import.meta.env.DEV ? 'http://127.0.0.1:3001' : undefined);
         const socket = socketUrl
-          ? io(socketUrl, { path: '/socket.io' })
-          : io({ path: '/socket.io' });
+          ? io(socketUrl, { path: '/socket.io', auth: { token } })
+          : io({ path: '/socket.io', auth: { token } });
         socketRef.current = socket;
-        
+
         socket.emit('join-exam', exam.id, 'student', user.id);
 
         socket.on('offer', async (fromId: string, offer: RTCSessionDescriptionInit) => {
@@ -350,7 +350,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         audioContextRef.current.close().catch(() => {});
       }
     };
-  }, [banned]);
+  }, [banned, exam.id, token, user.id]);
 
   // --- AI Processing Loop ---
   const processFrame = async () => {
