@@ -7,53 +7,23 @@ import { apiUrl } from '../lib/apiUrl';
 
 export function TestBankTab({ token, lang }: { token: string; lang: Language }) {
   const [categories, setCategories] = useState<any[]>([]);
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [filterCat, setFilterCat] = useState<string>('');
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatDesc, setNewCatDesc] = useState('');
+  const [collectionName, setCollectionName] = useState('');
   const [smartFile, setSmartFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
-  const [smartLang, setSmartLang] = useState<'uz' | 'ru' | 'en'>(lang);
   const [smartBusy, setSmartBusy] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
   const t = translations[lang];
 
   const load = async () => {
     const h = { Authorization: `Bearer ${token}` };
-    const [cRes, qRes] = await Promise.all([
-      fetch(apiUrl('/api/admin/test-bank/categories'), { headers: h }),
-      fetch(apiUrl(`/api/admin/test-bank/questions${filterCat ? `?category_id=${filterCat}` : ''}`), {
-        headers: h,
-      }),
-    ]);
+    const cRes = await fetch(apiUrl('/api/admin/test-bank/categories'), { headers: h });
     const c = cRes.ok ? await readJsonSafe<any[]>(cRes) : null;
-    const q = qRes.ok ? await readJsonSafe<any[]>(qRes) : null;
     setCategories(Array.isArray(c) ? c : []);
-    setQuestions(Array.isArray(q) ? q : []);
   };
 
   useEffect(() => {
     load();
-  }, [filterCat]);
-
-  const addCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMsg({ type: '', text: '' });
-    const res = await fetch(apiUrl('/api/admin/test-bank/categories'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: newCatName, description: newCatDesc }),
-    });
-    if (res.ok) {
-      setNewCatName('');
-      setNewCatDesc('');
-      setMsg({ type: 'ok', text: t.testBankCatAdded });
-      load();
-    } else {
-      const d = await readJsonSafe<{ error?: string }>(res);
-      setMsg({ type: 'err', text: d?.error || 'Error' });
-    }
-  };
+  }, [token]);
 
   const delCategory = async (id: number) => {
     if (!confirm(t.testBankCatDeleteConfirm)) return;
@@ -64,22 +34,32 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
   const importSmart = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg({ type: '', text: '' });
+    const name = collectionName.trim();
+    if (!name) {
+      setMsg({ type: 'err', text: t.testCollectionNameEn });
+      return;
+    }
     if (!smartFile) {
       setMsg({ type: 'err', text: t.testBankAiNeedPdf });
       return;
     }
-    const name = smartFile.name?.toLowerCase() || '';
-    if (!name.endsWith('.pdf') && smartFile.type !== 'application/pdf') {
-      setMsg({ type: 'err', text: t.testBankAiPdfOnly });
+    const fn = smartFile.name?.toLowerCase() || '';
+    const okExt = fn.endsWith('.pdf') || fn.endsWith('.docx') || fn.endsWith('.doc');
+    if (!okExt) {
+      setMsg({ type: 'err', text: 'PDF, DOC yoki DOCX' });
       return;
     }
     setSmartBusy(true);
-    const h: HeadersInit = { Authorization: `Bearer ${token}` };
     try {
       const fd = new FormData();
       fd.append('file', smartFile);
-      fd.append('language', smartLang);
-      const res = await fetch(apiUrl('/api/admin/test-bank/import-smart'), { method: 'POST', headers: h, body: fd });
+      fd.append('collection_name', name);
+      fd.append('language', 'en');
+      const res = await fetch(apiUrl('/api/admin/test-bank/import-smart'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
       const d = await readJsonSafe<{
         error?: string;
         detail?: string;
@@ -93,14 +73,13 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
             : '';
         setMsg({
           type: 'ok',
-          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${t.testBankAiCategories}: ${catLines}` : ''}`,
+          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${catLines}` : ''}`,
         });
         setSmartFile(null);
         setFileKey((k) => k + 1);
         load();
       } else {
-        const err = d?.error || d?.detail || 'Error';
-        setMsg({ type: 'err', text: err });
+        setMsg({ type: 'err', text: d?.error || d?.detail || 'Error' });
       }
     } finally {
       setSmartBusy(false);
@@ -116,7 +95,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
     <div className="space-y-8 max-w-5xl mx-auto">
       <div className="text-center space-y-1">
         <h2 className="text-2xl font-semibold text-gray-900 tracking-tight">{t.testBankPageTitle}</h2>
-        <p className="text-sm text-gray-500">{t.testBankCategoriesHint}</p>
+        <p className="text-sm text-gray-500 max-w-xl mx-auto">{t.testCollectionFileHint}</p>
       </div>
       {msg.text && (
         <motion.div
@@ -132,37 +111,26 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
         <Card className="border-violet-200/60 bg-gradient-to-br from-violet-50/40 to-white/30">
           <CardHeader>
             <CardTitle>{t.testBankAiTitle}</CardTitle>
-            <p className="text-sm text-gray-500 font-normal">{t.testBankAiHint}</p>
           </CardHeader>
           <CardContent>
             <form onSubmit={importSmart} className="space-y-4">
-              <div className="flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[220px]">
-                  <label className="text-xs text-gray-500 block mb-1">{t.testBankAiPdfLabel}</label>
-                  <Input
-                    key={fileKey}
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    onChange={(e) => setSmartFile(e.target.files?.[0] ?? null)}
-                    className="cursor-pointer"
-                  />
-                </div>
-                <div className="min-w-[140px]">
-                  <label className="text-xs text-gray-500 block mb-1">{t.testBankAiLanguage}</label>
-                  <select
-                    className="w-full h-12 rounded-2xl border border-white/50 bg-white/50 px-4 text-sm"
-                    value={smartLang}
-                    onChange={(e) => setSmartLang(e.target.value as 'uz' | 'ru' | 'en')}
-                  >
-                    <option value="uz">O‘zbek</option>
-                    <option value="ru">Русский</option>
-                    <option value="en">English</option>
-                  </select>
-                </div>
-                <Button type="submit" disabled={smartBusy} className="shrink-0">
-                  {smartBusy ? t.testBankAiRunning : t.testBankAiRun}
-                </Button>
+              <div>
+                <label className="text-xs text-gray-600 block mb-1 font-medium">{t.testCollectionNameEn}</label>
+                <Input value={collectionName} onChange={(e) => setCollectionName(e.target.value)} placeholder="Internal Medicine Final — EN" required />
               </div>
+              <div>
+                <label className="text-xs text-gray-600 block mb-1">{t.testBankAiPdfLabel}</label>
+                <Input
+                  key={fileKey}
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(e) => setSmartFile(e.target.files?.[0] ?? null)}
+                  className="cursor-pointer"
+                />
+              </div>
+              <Button type="submit" disabled={smartBusy}>
+                {smartBusy ? t.testBankAiRunning : t.testBankAiRun}
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -171,63 +139,43 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
       <motion.div variants={item} initial="hidden" animate="show">
         <Card>
           <CardHeader>
-            <CardTitle>{t.testBankCategories}</CardTitle>
+            <CardTitle>{t.testCollectionsList}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <form onSubmit={addCategory} className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[160px]">
-                <label className="text-xs text-gray-500 block mb-1">{t.testBankCatName}</label>
-                <Input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required placeholder="Ichki kasalliklari" />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-gray-500 block mb-1">{t.testBankCatDesc}</label>
-                <Input value={newCatDesc} onChange={(e) => setNewCatDesc(e.target.value)} placeholder="Qisqa izoh" />
-              </div>
-              <Button type="submit">{t.testBankAddCat}</Button>
-            </form>
-            <ul className="divide-y divide-black/5 border border-white/40 rounded-2xl overflow-hidden bg-white/20">
+          <CardContent className="space-y-4">
+            <ul className="space-y-4">
               {categories.map((c) => (
-                <li key={c.id} className="flex justify-between items-center px-4 py-3 gap-2">
-                  <div>
-                    <span className="font-medium text-gray-900">{c.name}</span>
-                    <span className="text-xs text-gray-500 ml-2">({c.question_count ?? 0} savol)</span>
-                    {c.description ? <p className="text-xs text-gray-500 mt-0.5">{c.description}</p> : null}
+                <li key={c.id} className="p-4 rounded-2xl border border-white/40 bg-white/25 space-y-3">
+                  <div className="flex flex-wrap justify-between gap-2 items-start">
+                    <div>
+                      <p className="font-semibold text-gray-900">{c.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {c.question_count ?? 0} savol · EN → UZ / RU
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" className="text-red-600 border-red-200 shrink-0" onClick={() => delCategory(c.id)}>
+                      {t.testBankDelete}
+                    </Button>
                   </div>
-                  <Button type="button" variant="outline" size="sm" className="shrink-0 text-red-600 border-red-200" onClick={() => delCategory(c.id)}>
-                    {t.testBankDelete}
-                  </Button>
+                  {c.preview && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                      <div className="p-2 rounded-xl bg-white/50 border border-white/40">
+                        <span className="font-semibold text-gray-600 block mb-1">EN</span>
+                        <p className="text-gray-800 line-clamp-4">{c.preview.text_en || '—'}</p>
+                      </div>
+                      <div className="p-2 rounded-xl bg-emerald-50/50 border border-emerald-100">
+                        <span className="font-semibold text-emerald-800 block mb-1">UZ</span>
+                        <p className="text-gray-800 line-clamp-4">{c.preview.text_uz || '—'}</p>
+                      </div>
+                      <div className="p-2 rounded-xl bg-sky-50/50 border border-sky-100">
+                        <span className="font-semibold text-sky-900 block mb-1">RU</span>
+                        <p className="text-gray-800 line-clamp-4">{c.preview.text_ru || '—'}</p>
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      <motion.div variants={item} initial="hidden" animate="show">
-        <Card>
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-            <CardTitle>{t.testBankRecentQuestions}</CardTitle>
-            <select
-              className="text-sm rounded-xl border border-white/50 bg-white/50 px-3 py-2"
-              value={filterCat}
-              onChange={(e) => setFilterCat(e.target.value)}
-            >
-              <option value="">{t.testBankAllCats}</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </CardHeader>
-          <CardContent className="max-h-80 overflow-y-auto text-sm space-y-2">
-            {questions.slice(0, 80).map((q) => (
-              <div key={q.id} className="p-3 rounded-xl bg-white/30 border border-white/30 text-gray-800">
-                <span className="text-[10px] uppercase text-gray-400">{q.category_name || '—'}</span>
-                <p className="mt-1">{q.text}</p>
-              </div>
-            ))}
-            {questions.length === 0 && <p className="text-gray-500 text-center py-8">{t.testBankNoQuestions}</p>}
+            {categories.length === 0 && <p className="text-gray-500 text-center py-8">{t.testBankNoQuestions}</p>}
           </CardContent>
         </Card>
       </motion.div>

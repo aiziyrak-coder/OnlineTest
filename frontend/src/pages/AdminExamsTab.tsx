@@ -20,7 +20,15 @@ const item: any = {
   show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
 };
 
-export function AdminExamsTab({ token, lang }: { token: string; lang: Language }) {
+export function AdminExamsTab({
+  token,
+  lang,
+  hideExamSettings,
+}: {
+  token: string;
+  lang: Language;
+  hideExamSettings?: boolean;
+}) {
   const [exams, setExams] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -151,9 +159,11 @@ export function AdminExamsTab({ token, lang }: { token: string; lang: Language }
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
-      <motion.div variants={item}>
-        <ExamSettings token={token} lang={lang} groups={groups} onSuccess={fetchExams} />
-      </motion.div>
+      {!hideExamSettings && (
+        <motion.div variants={item}>
+          <ExamSettings token={token} lang={lang} groups={groups} onSuccess={fetchExams} />
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div variants={item}>

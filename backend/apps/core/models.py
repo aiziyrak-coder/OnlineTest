@@ -59,6 +59,34 @@ class ExamGroup(models.Model):
         unique_together = [("exam", "group")]
 
 
+class ExamStudentException(models.Model):
+    """Tanlangan talaba ushbu imtihonni boshlay olmaydi (sabab ko‘rsatiladi)."""
+
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, db_column="exam_id")
+    student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column="student_id", to_field="id")
+    reason = models.TextField()
+
+    class Meta:
+        db_table = "exam_student_exceptions"
+        unique_together = [("exam", "student")]
+
+
+class ExamRetakeWindow(models.Model):
+    """Imtihon yopilgandan keyin ma’lum talaba uchun qayta kirish vaqti."""
+
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, db_column="exam_id")
+    student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column="student_id", to_field="id")
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    note = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "exam_retake_windows"
+        indexes = [
+            models.Index(fields=["exam", "student"]),
+        ]
+
+
 class StudentExam(models.Model):
     student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column="student_id", to_field="id")
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, db_column="exam_id")

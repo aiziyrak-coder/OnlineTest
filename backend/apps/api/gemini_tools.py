@@ -106,6 +106,8 @@ def generate_exam_ai_summary(questions: list[dict], answers: dict[str, str], lan
     prompt = f"""FJSTI tibbiyot testlari. Savollar va javoblar:
 {json.dumps(payload, ensure_ascii=False)}
 Til: {lang}.
+Qoidalar: overview qisqa va aniq bo‘lsin. To‘g‘ri javoblar uchun commentCorrect — qisqa ijobiy tafsilot.
+Xato javoblar uchun whyStudentWrong — qaysi xato mantiq yoki tushuncha (tibbiy jihatdan); whyCorrectIsRight — to‘g‘ri variantni qisqa klinik/asos bilan isbotlang (fantaziya qo‘shmang, savol matniga tayaning).
 Faqat bitta JSON obyekt: {{"overview":"...","items":[{{"questionId":n,"isCorrect":bool,"commentCorrect":"","whyStudentWrong":"","whyCorrectIsRight":""}}]}}
 Har bir savol uchun bitta item."""
     try:

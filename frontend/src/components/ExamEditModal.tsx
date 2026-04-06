@@ -40,6 +40,15 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
   const [questionsJson, setQuestionsJson] = useState('');
   const [selectedBankCats, setSelectedBankCats] = useState<number[]>([]);
   const [bankCount, setBankCount] = useState(12);
+  const [exceptions, setExceptions] = useState<{ student_id: string; reason: string }[]>([]);
+  const [retakeList, setRetakeList] = useState<
+    { id: number; student_id: string; window_start: string; window_end: string; note: string }[]
+  >([]);
+  const [rtStudent, setRtStudent] = useState('');
+  const [rtStart, setRtStart] = useState('');
+  const [rtEnd, setRtEnd] = useState('');
+  const [rtNote, setRtNote] = useState('');
+  const [exBusy, setExBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +73,8 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         setQuestionsJson(JSON.stringify(data.questions || [], null, 2));
         setSelectedBankCats(Array.isArray(data.bank_category_ids) ? data.bank_category_ids : []);
         setBankCount(Number(data.bank_question_count) || 12);
+        setExceptions(Array.isArray(data.exceptions) ? data.exceptions : []);
+        setRetakeList(Array.isArray(data.retake_windows) ? data.retake_windows : []);
         if (data.exam_mode === 'bank_mixed') {
           const cr = await fetch(apiUrl('/api/admin/test-bank/categories'), { headers: { Authorization: `Bearer ${token}` } });
           if (cr.ok && !cancelled) {
@@ -137,6 +148,80 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
       setError(e.message || 'Error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveExceptions = async () => {
+    setExBusy(true);
+    setError('');
+    try {
+      const res = await fetch(apiUrl(`/api/admin/exams/${examId}/exceptions`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items: exceptions }),
+      });
+      const data = (await readJsonSafe<{ error?: string }>(res)) || {};
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+    } catch (e: any) {
+      setError(e.message || 'Error');
+    } finally {
+      setExBusy(false);
+    }
+  };
+
+  const addExceptionRow = () => {
+    setExceptions((p) => [...p, { student_id: '', reason: '' }]);
+  };
+
+  const addRetake = async () => {
+    if (!rtStudent.trim() || !rtStart || !rtEnd) {
+      setError('Talaba ID va vaqt oralig‘i kerak');
+      return;
+    }
+    setExBusy(true);
+    setError('');
+    try {
+      const res = await fetch(apiUrl(`/api/admin/exams/${examId}/retake-windows`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          student_id: rtStudent.trim(),
+          window_start: new Date(rtStart).toISOString(),
+          window_end: new Date(rtEnd).toISOString(),
+          note: rtNote,
+        }),
+      });
+      const data = (await readJsonSafe<{ error?: string; id?: number }>(res)) || {};
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      const r2 = await fetch(apiUrl(`/api/admin/exams/${examId}`), { headers: { Authorization: `Bearer ${token}` } });
+      const ex = await readJsonSafe<any>(r2);
+      if (r2.ok && ex?.retake_windows) setRetakeList(ex.retake_windows);
+      setRtStudent('');
+      setRtNote('');
+    } catch (e: any) {
+      setError(e.message || 'Error');
+    } finally {
+      setExBusy(false);
+    }
+  };
+
+  const delRetake = async (wid: number) => {
+    setExBusy(true);
+    setError('');
+    try {
+      const res = await fetch(apiUrl(`/api/admin/exams/${examId}/retake-windows/${wid}`), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = (await readJsonSafe<{ error?: string }>(res)) || {};
+        throw new Error(data.error || 'Delete failed');
+      }
+      setRetakeList((p) => p.filter((x) => x.id !== wid));
+    } catch (e: any) {
+      setError(e.message || 'Error');
+    } finally {
+      setExBusy(false);
     }
   };
 
@@ -258,6 +343,63 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                   </div>
                 </>
               )}
+              <div className="space-y-3 pt-4 border-t border-gray-200/60">
+                <p className="text-sm font-semibold text-gray-800">{t.exceptionsTitle}</p>
+                <p className="text-xs text-gray-500">{t.exceptionsHint}</p>
+                {exceptions.map((row, i) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Input
+                      placeholder="student_id"
+                      value={row.student_id}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setExceptions((p) => p.map((x, j) => (j === i ? { ...x, student_id: v } : x)));
+                      }}
+                    />
+                    <Input
+                      placeholder={t.exceptionReason}
+                      value={row.reason}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setExceptions((p) => p.map((x, j) => (j === i ? { ...x, reason: v } : x)));
+                      }}
+                    />
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={addExceptionRow}>
+                    + istisno
+                  </Button>
+                  <Button type="button" size="sm" onClick={saveExceptions} disabled={exBusy}>
+                    {t.save} (istisnolar)
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-3 pt-4 border-t border-gray-200/60">
+                <p className="text-sm font-semibold text-gray-800">{t.retakeSectionTitle}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Input placeholder={t.retakeStudent} value={rtStudent} onChange={(e) => setRtStudent(e.target.value)} />
+                  <Input placeholder={t.retakeNote} value={rtNote} onChange={(e) => setRtNote(e.target.value)} />
+                  <Input type="datetime-local" value={rtStart} onChange={(e) => setRtStart(e.target.value)} />
+                  <Input type="datetime-local" value={rtEnd} onChange={(e) => setRtEnd(e.target.value)} />
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={addRetake} disabled={exBusy}>
+                  {t.retakeAddBtn}
+                </Button>
+                <ul className="text-xs space-y-2 max-h-32 overflow-y-auto">
+                  {retakeList.map((rw) => (
+                    <li key={rw.id} className="flex justify-between gap-2 p-2 rounded-lg bg-white/50 border">
+                      <span className="font-mono">{rw.student_id}</span>
+                      <span className="text-gray-600 truncate">
+                        {new Date(rw.window_start).toLocaleString()} — {new Date(rw.window_end).toLocaleString()}
+                      </span>
+                      <Button type="button" variant="ghost" size="sm" className="text-red-600 shrink-0" onClick={() => delRetake(rw.id)}>
+                        ×
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
               <div className="flex flex-wrap gap-2 pt-4 border-t">
                 <Button type="button" onClick={handleSave} disabled={saving}>
                   {saving ? '…' : t.save}

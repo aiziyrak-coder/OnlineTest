@@ -30,6 +30,12 @@ urlpatterns = [
     path("admin/test-bank/questions", views.admin_test_bank_questions),
     path("admin/exams", views.admin_exams),
     path("admin/exams/<int:pk>/results", views.admin_exams_results),
+    path("admin/exams/<int:pk>/exceptions", views.admin_exam_exceptions),
+    path("admin/exams/<int:pk>/retake-windows", views.admin_exam_retake_windows),
+    path(
+        "admin/exams/<int:pk>/retake-windows/<int:wid>",
+        views.admin_exam_retake_window_delete,
+    ),
     path("admin/exams/<int:pk>", views.admin_exam_detail),
     path(
         "public/verify-result/<str:result_id>/certificate.pdf",

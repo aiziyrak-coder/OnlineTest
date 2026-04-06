@@ -53,6 +53,8 @@ from apps.core.models import (
     AppUser,
     Exam,
     ExamGroup,
+    ExamRetakeWindow,
+    ExamStudentException,
     Group,
     Level,
     StudentExam,
@@ -165,8 +167,18 @@ def admin_users(request):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
     if request.method == "GET":
+        qs = AppUser.objects.select_related("group").all()
+        gid = request.query_params.get("group_id")
+        if gid not in (None, ""):
+            try:
+                qs = qs.filter(group_id=int(gid))
+            except (TypeError, ValueError):
+                pass
+        role_f = request.query_params.get("role")
+        if role_f:
+            qs = qs.filter(role=role_f)
         rows = []
-        for u in AppUser.objects.select_related("group").all():
+        for u in qs.order_by("name"):
             rows.append(
                 {
                     "id": u.id,
@@ -305,12 +317,21 @@ def admin_stats(request):
 # --- Admin: levels / groups ---
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def admin_levels(request):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
-    return Response(list(Level.objects.values()))
+    if request.method == "GET":
+        return Response(list(Level.objects.order_by("name").values()))
+    name = (request.data or {}).get("name")
+    if not name or not str(name).strip():
+        return Response({"error": "Name required"}, status=400)
+    name = str(name).strip()[:200]
+    if Level.objects.filter(name__iexact=name).exists():
+        return Response({"error": "Bu nomdagi level allaqachon bor"}, status=400)
+    lv = Level.objects.create(name=name)
+    return Response({"id": lv.id, "name": lv.name})
 
 
 @api_view(["GET", "POST"])
@@ -327,6 +348,8 @@ def admin_groups(request):
                     "name": g.name,
                     "level_id": g.level_id,
                     "level_name": g.level.name,
+                    "program_track": getattr(g, "program_track", "bachelor") or "bachelor",
+                    "academic_year": getattr(g, "academic_year", None),
                 }
             )
         return Response(out)
@@ -334,7 +357,15 @@ def admin_groups(request):
     name, level_id = d.get("name"), d.get("level_id")
     if not name or not level_id:
         return Response({"error": "Name and level_id are required"}, status=400)
-    g = Group.objects.create(name=name, level_id=level_id)
+    pt = (d.get("program_track") or "bachelor").strip()[:20]
+    ay = d.get("academic_year")
+    ay_val = None
+    if ay not in (None, "", "null"):
+        try:
+            ay_val = int(ay)
+        except (TypeError, ValueError):
+            ay_val = None
+    g = Group.objects.create(name=name, level_id=level_id, program_track=pt, academic_year=ay_val)
     return Response({"success": True, "id": g.id})
 
 
@@ -355,15 +386,32 @@ def admin_group_detail(request, pk: int):
     if "level_id" in d and d["level_id"] is not None:
         if not Level.objects.filter(pk=d["level_id"]).exists():
             return Response({"error": "Invalid level"}, status=400)
+    uf = []
     if "name" in d and "level_id" in d:
         g.name, g.level_id = d["name"], d["level_id"]
+        uf.extend(["name", "level_id"])
     elif "name" in d:
         g.name = d["name"]
+        uf.append("name")
     elif "level_id" in d:
         g.level_id = d["level_id"]
-    else:
+        uf.append("level_id")
+    if "program_track" in d:
+        g.program_track = str(d["program_track"] or "bachelor").strip()[:20] or "bachelor"
+        uf.append("program_track")
+    if "academic_year" in d:
+        v = d["academic_year"]
+        if v in ("", None, "null"):
+            g.academic_year = None
+        else:
+            try:
+                g.academic_year = int(v)
+            except (TypeError, ValueError):
+                return Response({"error": "academic_year noto‘g‘ri"}, status=400)
+        uf.append("academic_year")
+    if not uf:
         return Response({"error": "No fields to update"}, status=400)
-    g.save()
+    g.save(update_fields=list(dict.fromkeys(uf)))
     return Response({"success": True})
 
 
@@ -396,7 +444,20 @@ def admin_test_bank_import_smart(request):
     language = d.get("language") or "en"
     if not isinstance(language, str) or len(language) > 10:
         language = "en"
-    target_cat_id = d.get("target_category_id")
+    collection_name = (d.get("collection_name") or "").strip()[:300]
+    single_cat = None
+    if collection_name:
+        language = "en"
+        single_cat, _ = TestBankCategory.objects.get_or_create(
+            name=collection_name,
+            defaults={
+                "description": "",
+                "sort_order": 0,
+                "program_track": "any",
+                "source_language": "en",
+            },
+        )
+    target_cat_id = None if single_cat else d.get("target_category_id")
     try:
         target_cat_id = int(target_cat_id) if target_cat_id not in (None, "", "0") else None
     except (TypeError, ValueError):
@@ -457,7 +518,9 @@ def admin_test_bank_import_smart(request):
             fixed_cat.save(update_fields=uf)
 
         for idx, it in enumerate(items):
-            if fixed_cat:
+            if single_cat:
+                cat = single_cat
+            elif fixed_cat:
                 cat = fixed_cat
             else:
                 cat = _get_or_create_bank_category(it["categoryName"], it.get("categoryDescription") or "")
@@ -500,6 +563,19 @@ def admin_test_bank_categories(request):
         for c in TestBankCategory.objects.annotate(
             question_count=Count("testbankquestion")
         ).order_by("sort_order", "name"):
+            fq = (
+                TestBankQuestion.objects.filter(category_id=c.id)
+                .order_by("-id")
+                .only("text", "text_uz", "text_ru")
+                .first()
+            )
+            preview = None
+            if fq:
+                preview = {
+                    "text_en": (fq.text or "")[:280],
+                    "text_uz": (fq.text_uz or "")[:280],
+                    "text_ru": (fq.text_ru or "")[:280],
+                }
             rows.append(
                 {
                     "id": c.id,
@@ -507,6 +583,8 @@ def admin_test_bank_categories(request):
                     "description": c.description,
                     "sort_order": c.sort_order,
                     "question_count": c.question_count,
+                    "source_language": getattr(c, "source_language", "en"),
+                    "preview": preview,
                 }
             )
         return Response(rows)
@@ -652,6 +730,20 @@ def admin_exam_detail(request, pk: int):
         d["group_ids"] = gids
         d["questions"] = questions
         d["bank_category_ids"] = bank_category_ids
+        d["exceptions"] = [
+            {"student_id": x.student_id, "reason": x.reason}
+            for x in ExamStudentException.objects.filter(exam_id=pk)
+        ]
+        d["retake_windows"] = [
+            {
+                "id": x.id,
+                "student_id": x.student_id,
+                "window_start": x.window_start.isoformat(),
+                "window_end": x.window_end.isoformat(),
+                "note": x.note or "",
+            }
+            for x in ExamRetakeWindow.objects.filter(exam_id=pk).order_by("-window_start")
+        ]
         return Response(d)
     if request.method == "DELETE":
         n, _ = Exam.objects.filter(pk=pk).delete()
@@ -693,7 +785,7 @@ def admin_exam_detail(request, pk: int):
         if not isinstance(cat_ids, list) or not cat_ids:
             return Response({"error": "Select at least one test bank category"}, status=400)
         n = max(8, min(200, int(d.get("bank_question_count") or e.bank_question_count or 20)))
-        need_bank = int(n * 0.75)
+        need_bank = n
         ok, pool_len = _bank_pool_check(cat_ids, need_bank)
         if not ok:
             return Response(
@@ -801,7 +893,7 @@ def _admin_exams_create_impl(request):
         if not isinstance(cat_ids, list) or not cat_ids:
             return Response({"error": "Select at least one test bank category"}, status=400)
         n = max(8, min(200, int(d.get("bank_question_count") or 20)))
-        need_bank = int(n * 0.75)
+        need_bank = n
         ok, pool_len = _bank_pool_check(cat_ids, need_bank)
         if not ok:
             return Response(
@@ -846,6 +938,14 @@ def _admin_exams_create_impl(request):
     group_ids_raw = d.get("group_ids")
     gids = safe_json_loads(group_ids_raw, []) if isinstance(group_ids_raw, str) else (group_ids_raw or [])
 
+    ex_raw = d.get("exam_exceptions")
+    if isinstance(ex_raw, str):
+        ex_list = safe_json_loads(ex_raw, [])
+    elif isinstance(ex_raw, list):
+        ex_list = ex_raw
+    else:
+        ex_list = []
+
     with transaction.atomic():
         ex = Exam.objects.create(
             teacher_id=request.user.id,
@@ -864,7 +964,91 @@ def _admin_exams_create_impl(request):
         if isinstance(gids, list):
             ExamGroup.objects.bulk_create([ExamGroup(exam_id=ex.id, group_id=gid) for gid in gids])
         eid = ex.id
+        for item in ex_list:
+            if not isinstance(item, dict):
+                continue
+            sid = item.get("student_id")
+            if not sid:
+                continue
+            reason = str(item.get("reason") or "Imtihonga kiritilmadingiz.").strip()[:8000]
+            if not AppUser.objects.filter(pk=sid, role="student").exists():
+                continue
+            ExamStudentException.objects.update_or_create(
+                exam_id=eid, student_id=sid, defaults={"reason": reason}
+            )
     return Response({"id": eid})
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def admin_exam_exceptions(request, pk: int):
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    if not Exam.objects.filter(pk=pk).exists():
+        return Response({"error": "Exam not found"}, status=404)
+    items = (request.data or {}).get("items")
+    if not isinstance(items, list):
+        return Response({"error": "items[] kerak"}, status=400)
+    with transaction.atomic():
+        ExamStudentException.objects.filter(exam_id=pk).delete()
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            sid = item.get("student_id")
+            if not sid:
+                continue
+            reason = str(item.get("reason") or "Imtihonga kiritilmadingiz.").strip()[:8000]
+            if AppUser.objects.filter(pk=sid, role="student").exists():
+                ExamStudentException.objects.create(exam_id=pk, student_id=sid, reason=reason)
+    return Response({"success": True})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def admin_exam_retake_windows(request, pk: int):
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    if not Exam.objects.filter(pk=pk).exists():
+        return Response({"error": "Exam not found"}, status=404)
+    if request.method == "GET":
+        return Response(
+            [
+                {
+                    "id": x.id,
+                    "student_id": x.student_id,
+                    "window_start": x.window_start.isoformat(),
+                    "window_end": x.window_end.isoformat(),
+                    "note": x.note or "",
+                }
+                for x in ExamRetakeWindow.objects.filter(exam_id=pk).order_by("-window_start")
+            ]
+        )
+    d = request.data or {}
+    sid = d.get("student_id")
+    ws = parse_iso_datetime(d.get("window_start"))
+    we = parse_iso_datetime(d.get("window_end"))
+    if not sid or not ws or not we:
+        return Response({"error": "student_id, window_start, window_end kerak"}, status=400)
+    if ws >= we:
+        return Response({"error": "Vaqt oralig‘i noto‘g‘ri"}, status=400)
+    if not AppUser.objects.filter(pk=sid, role="student").exists():
+        return Response({"error": "Talaba topilmadi"}, status=404)
+    note = str(d.get("note") or "")[:2000]
+    w = ExamRetakeWindow.objects.create(
+        exam_id=pk, student_id=sid, window_start=ws, window_end=we, note=note
+    )
+    return Response({"id": w.id})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def admin_exam_retake_window_delete(request, pk: int, wid: int):
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    n, _ = ExamRetakeWindow.objects.filter(pk=wid, exam_id=pk).delete()
+    if not n:
+        return Response({"error": "Not found"}, status=404)
+    return Response({"success": True})
 
 
 # --- Student ---
@@ -918,10 +1102,21 @@ def student_exams_start(request, pk: int):
         return Response({"error": "Invalid PIN"}, status=403)
     if not ExamGroup.objects.filter(exam_id=pk, group_id=u.group_id).exists():
         return Response({"error": "Exam not assigned to your group"}, status=403)
+
+    ex_row = ExamStudentException.objects.filter(exam_id=pk, student_id=u.id).first()
+    if ex_row:
+        return Response({"error": ex_row.reason, "code": "EXAM_BLOCKED"}, status=403)
+
     now = dj_tz.now()
-    if exam.start_time and now < exam.start_time:
-        return Response({"error": "Exam has not started yet"}, status=403)
-    if exam.end_time and now > exam.end_time:
+    in_general = bool(
+        exam.start_time and exam.end_time and exam.start_time <= now <= exam.end_time
+    )
+    in_retake = ExamRetakeWindow.objects.filter(
+        exam_id=pk, student_id=u.id, window_start__lte=now, window_end__gte=now
+    ).exists()
+    if not in_general and not in_retake:
+        if exam.start_time and now < exam.start_time:
+            return Response({"error": "Exam has not started yet"}, status=403)
         return Response({"error": "Exam has already ended"}, status=403)
 
     prof = AppUser.objects.filter(pk=u.id).values_list("profile_image", flat=True).first()
@@ -945,6 +1140,13 @@ def student_exams_start(request, pk: int):
         se.status = "In Progress"
         se.started_at = se.started_at or dj_tz.now()
         se.save(update_fields=["status", "started_at"])
+
+    retake_only = in_retake and not in_general
+    if retake_only and exam.exam_mode == "bank_mixed" and se:
+        se.session_questions_json = None
+        se.draft_answers_json = "{}"
+        se.draft_flagged_json = "[]"
+        se.save(update_fields=["session_questions_json", "draft_answers_json", "draft_flagged_json"])
 
     full_questions: list[dict]
     if exam.exam_mode == "bank_mixed":
