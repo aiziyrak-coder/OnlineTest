@@ -144,7 +144,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
       }
       if (exam?.exam_mode === 'bank_mixed') {
         body.bank_category_ids = selectedBankCats;
-        body.bank_question_count = bankCount;
+        body.bank_question_count = Math.max(1, Math.min(200, Number(bankCount) || 1));
       }
       const res = await fetch(apiUrl(`/api/admin/exams/${examId}`), {
         method: 'PATCH',
@@ -350,7 +350,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-700">{t.examBankQuestionCount}</label>
-                    <Input type="number" min={8} max={200} value={bankCount} onChange={(e) => setBankCount(Number(e.target.value))} className="mt-1" />
+                    <Input type="number" min={1} max={200} value={bankCount} onChange={(e) => setBankCount(Number(e.target.value))} className="mt-1" />
                   </div>
                 </>
               )}

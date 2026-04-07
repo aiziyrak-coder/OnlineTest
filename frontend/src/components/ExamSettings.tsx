@@ -55,7 +55,8 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
       fd.append('bank_category_ids', JSON.stringify(catIds));
       const count = fd.get('bank_question_count');
       fd.delete('bank_question_count');
-      fd.append('bank_question_count', String(count || '20'));
+      const normalizedCount = Math.max(1, Math.min(200, Number(count) || 1));
+      fd.append('bank_question_count', String(normalizedCount));
     }
 
     if (method === 'manual') {
@@ -171,7 +172,7 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">{t.examBankQuestionCount}</label>
-                  <Input name="bank_question_count" type="number" min={8} max={200} defaultValue={20} required />
+                  <Input name="bank_question_count" type="number" min={1} max={200} defaultValue={20} required />
                 </div>
               </>
             )}

@@ -110,6 +110,7 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
     }
     const startIso = toIsoOrNull(startLocal);
     const endIso = toIsoOrNull(endLocal);
+    const normalizedBankCount = Math.max(1, Math.min(200, Number(bankCount) || 1));
     if (!startIso || !endIso) {
       setMsg({ type: 'err', text: 'Sana/vaqt formati noto‘g‘ri. Qayta tanlang.' });
       return;
@@ -126,7 +127,7 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
         custom_rules: customRules || '',
         exam_mode: 'bank_mixed',
         bank_category_ids: selCats,
-        bank_question_count: bankCount,
+        bank_question_count: normalizedBankCount,
         group_ids: selGroups,
         exam_exceptions: exceptionsPayload,
       };
@@ -234,7 +235,7 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">{t.examBankQuestionCount}</label>
-                <Input type="number" min={8} max={200} value={bankCount} onChange={(e) => setBankCount(Number(e.target.value))} className="mt-1" required />
+                <Input type="number" min={1} max={200} value={bankCount} onChange={(e) => setBankCount(Number(e.target.value))} className="mt-1" required />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">{t.customRules}</label>
