@@ -123,10 +123,18 @@ Certbot konfigni yangilaydi; keyin `listen 443 ssl` bloklari paydo bo‘ladi.
 ## 8) Yangilash
 
 ```bash
-cd /var/www/onlinetest && git pull
-cd backend && source .venv/bin/activate && pip install -r requirements.txt && python manage.py migrate && deactivate
-cd ../frontend && npm ci && npm run build
-sudo systemctl restart onlinetest-api onlinetest-realtime
+cd /var/www/onlinetest
+bash deploy/remote-update.sh
+```
+
+Qo'shimcha flaglar:
+
+```bash
+# git pull qilmasin
+bash deploy/remote-update.sh --no-git
+
+# lokal o'zgarishlarni auto-stash qilmasin
+bash deploy/remote-update.sh --no-autostash
 ```
 
 ## Tekshiruv

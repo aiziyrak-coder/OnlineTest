@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Serverda loyiha ildizidan: pull (ixtiyoriy), backend, frontend build, restart.
+# Serverda loyiha ildizidan: pull (ixtiyoriy), backend, frontend build, restart + health-check.
 # Ishlatish:
 #   bash deploy/remote-update.sh
 #   bash deploy/remote-update.sh --no-git
@@ -35,9 +35,54 @@ ensure_realtime_env() {
   echo "[remote-update] realtime.env JWT/CORS sync qilindi."
 }
 
-if [[ "${1:-}" != "--no-git" ]]; then
-  git pull origin main
+AUTOSTASH=1
+if [[ "${1:-}" == "--no-git" ]]; then
+  NO_GIT=1
+else
+  NO_GIT=0
 fi
+if [[ "${2:-}" == "--no-autostash" ]] || [[ "${1:-}" == "--no-autostash" ]]; then
+  AUTOSTASH=0
+fi
+
+STASHED=0
+STASH_NAME="remote-update-autostash-$(date +%F-%H%M%S)"
+
+git_pull_safe() {
+  if [[ "$NO_GIT" -eq 1 ]]; then
+    echo "[remote-update] --no-git: git pull o'tkazib yuborildi."
+    return 0
+  fi
+  if [[ "$AUTOSTASH" -eq 1 ]] && [[ -n "$(git status --porcelain)" ]]; then
+    git stash push -u -m "$STASH_NAME" >/dev/null
+    STASHED=1
+    echo "[remote-update] Lokal o'zgarishlar vaqtincha stash qilindi."
+  fi
+  git pull origin main
+}
+
+restore_stash_if_any() {
+  if [[ "$STASHED" -eq 1 ]]; then
+    if git stash list | grep -q "$STASH_NAME"; then
+      echo "[remote-update] Stash qaytarilmoqda..."
+      if ! git stash pop --index >/dev/null 2>&1; then
+        echo "[remote-update] WARN: stash auto-popda konflikt bo'ldi. Qo'lda tekshiring: git stash list"
+      fi
+    fi
+  fi
+}
+
+check_health() {
+  local local_api="http://127.0.0.1:9081/api/health"
+  local public_api="https://onlinetestapi.ziyrak.org/api/health"
+  if command -v curl >/dev/null 2>&1; then
+    echo "[remote-update] Health tekshirilmoqda..."
+    curl -fsS --max-time 8 "$local_api" >/dev/null && echo "  - local api: OK" || echo "  - local api: FAIL ($local_api)"
+    curl -fsS --max-time 12 "$public_api" >/dev/null && echo "  - public api: OK" || echo "  - public api: FAIL ($public_api)"
+  fi
+}
+
+git_pull_safe
 
 # systemd/nginx shablonlarini serverga qo'llash
 if [[ -f "$ROOT/deploy/systemd/onlinetest-api.service" ]]; then
@@ -83,7 +128,8 @@ else
 fi
 
 if command -v nginx >/dev/null 2>&1; then
-  sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
+  sudo nginx -t
+  sudo systemctl reload nginx
 fi
 
 if id www-data &>/dev/null; then
@@ -94,4 +140,6 @@ if id www-data &>/dev/null; then
   fi
 fi
 
+restore_stash_if_any
+check_health
 echo "[remote-update] OK"
