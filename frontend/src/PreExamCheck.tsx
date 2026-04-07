@@ -6,6 +6,25 @@ import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import { InstituteLogo } from './components/InstituteLogo';
 
+const VIRTUAL_CAMERA_LABEL_RE = /(droidcam|epoccam|iriun|ivcam|obs|virtual)/i;
+
+async function getPreferredCameraStream(withAudio: boolean): Promise<MediaStream> {
+  const initial = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const preferred = devices.find(
+    (d) => d.kind === 'videoinput' && !VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')
+  );
+  if (!preferred?.deviceId) return initial;
+  const currentTrack = initial.getVideoTracks()[0];
+  const currentId = currentTrack?.getSettings?.().deviceId;
+  if (currentId && currentId === preferred.deviceId) return initial;
+  initial.getTracks().forEach((t) => t.stop());
+  return navigator.mediaDevices.getUserMedia({
+    video: { deviceId: { exact: preferred.deviceId } },
+    audio: withAudio,
+  });
+}
+
 export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: { exam: any, token: string, user: any, lang: Language, onComplete: (examData: any, seId: number) => void, onCancel: () => void }) {
   const [cameraReady, setCameraReady] = useState(false);
   const [micReady, setMicReady] = useState(false);
@@ -23,7 +42,7 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
     let stream: MediaStream | null = null;
     const checkDevices = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        stream = await getPreferredCameraStream(true);
         setCameraReady(true);
         setMicReady(true);
         if (videoRef.current) {
