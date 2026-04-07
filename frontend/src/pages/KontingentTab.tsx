@@ -129,7 +129,8 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
   const addUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setUserFormError('');
-    const fd = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const fd = new FormData(formEl);
     const role = 'student';
     const profileFile = fd.get('profile_image') as File;
     let profileImageBase64 = null;
@@ -164,7 +165,7 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
     if (selectedGroup) loadStudents(selectedGroup.id);
     loadStats();
     loadBanned();
-    e.currentTarget.reset();
+    formEl.reset();
   };
 
   const deleteUser = async (u: StudentRow) => {
