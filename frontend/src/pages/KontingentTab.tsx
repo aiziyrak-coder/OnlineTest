@@ -21,6 +21,7 @@ type StudentRow = {
   status: string;
   group_id: number | null;
   profile_image?: string;
+  group_name?: string | null;
 };
 
 export function KontingentTab({ token, lang }: { token: string; lang: Language }) {
@@ -38,6 +39,11 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
   const [newTrack, setNewTrack] = useState('bachelor');
   const [newYear, setNewYear] = useState('');
   const [userFormError, setUserFormError] = useState('');
+  const [editing, setEditing] = useState<StudentRow | null>(null);
+  const [unbanUser, setUnbanUser] = useState<StudentRow | null>(null);
+  const [unbanReason, setUnbanReason] = useState('');
+  const [unbanFile, setUnbanFile] = useState<File | null>(null);
+  const [banList, setBanList] = useState<StudentRow[]>([]);
 
   const loadStats = useCallback(async () => {
     const res = await fetch(apiUrl('/api/admin/stats'), { headers: h });
@@ -66,11 +72,18 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
     [token],
   );
 
+  const loadBanned = useCallback(async () => {
+    const res = await fetch(apiUrl('/api/admin/users?role=student&status=Banned'), { headers: h });
+    const j = await readJsonSafe<StudentRow[]>(res);
+    setBanList(Array.isArray(j) ? j : []);
+  }, [token]);
+
   useEffect(() => {
     loadStats();
     loadLevels();
     loadGroups();
-  }, [loadStats, loadLevels, loadGroups]);
+    loadBanned();
+  }, [loadStats, loadLevels, loadGroups, loadBanned]);
 
   useEffect(() => {
     if (view === 'students' && selectedGroup) {
@@ -150,7 +163,73 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
     }
     if (selectedGroup) loadStudents(selectedGroup.id);
     loadStats();
+    loadBanned();
     e.currentTarget.reset();
+  };
+
+  const deleteUser = async (u: StudentRow) => {
+    if (!confirm(`${u.name} (${u.id}) ni o'chirasizmi?`)) return;
+    const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(u.id)}`), {
+      method: 'DELETE',
+      headers: h,
+    });
+    if (!res.ok) return;
+    if (selectedGroup) loadStudents(selectedGroup.id);
+    loadStats();
+    loadBanned();
+  };
+
+  const saveEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editing) return;
+    const fd = new FormData(e.currentTarget);
+    const payload: any = {
+      name: fd.get('name'),
+      status: fd.get('status'),
+      password: fd.get('password') || undefined,
+    };
+    const file = fd.get('profile_image') as File;
+    if (file && file.size > 0) {
+      payload.profile_image = await new Promise<string>((resolve) => {
+        const r = new FileReader();
+        r.onloadend = () => resolve(r.result as string);
+        r.readAsDataURL(file);
+      });
+    }
+    const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(editing.id)}`), {
+      method: 'PATCH',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return;
+    setEditing(null);
+    if (selectedGroup) loadStudents(selectedGroup.id);
+    loadStats();
+    loadBanned();
+  };
+
+  const submitUnban = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unbanUser || !unbanFile) return;
+    const fd = new FormData();
+    fd.append('reason', unbanReason.trim());
+    fd.append('evidence', unbanFile);
+    const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(unbanUser.id)}/unban`), {
+      method: 'POST',
+      headers: h,
+      body: fd,
+    });
+    const data = await readJsonSafe<{ error?: string }>(res);
+    if (!res.ok) {
+      alert(data?.error || 'Unban failed');
+      return;
+    }
+    setUnbanUser(null);
+    setUnbanReason('');
+    setUnbanFile(null);
+    if (selectedGroup) loadStudents(selectedGroup.id);
+    loadStats();
+    loadBanned();
   };
 
   const item = {
@@ -428,6 +507,7 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                       <th className="p-2">{t.userFullName}</th>
                       <th className="p-2">ID</th>
                       <th className="p-2">{t.userStatus}</th>
+                      <th className="p-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -436,6 +516,16 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                         <td className="p-2 font-medium">{u.name}</td>
                         <td className="p-2 font-mono text-xs">{u.id}</td>
                         <td className="p-2">{u.status}</td>
+                        <td className="p-2">
+                          <div className="flex justify-end gap-2">
+                            <Button type="button" size="sm" variant="outline" onClick={() => setEditing(u)}>
+                              Edit
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" className="text-red-600 border-red-200" onClick={() => deleteUser(u)}>
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -444,7 +534,111 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
               </CardContent>
             </Card>
           </motion.div>
+          <motion.div variants={item} className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Banned students</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {banList.map((u) => (
+                  <div key={u.id} className="p-3 border rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{u.name}</p>
+                      <p className="text-xs text-gray-500">{u.id}</p>
+                    </div>
+                    <Button type="button" size="sm" onClick={() => setUnbanUser(u)}>
+                      Unban
+                    </Button>
+                  </div>
+                ))}
+                {banList.length === 0 && <p className="text-gray-500 text-sm">No banned students</p>}
+              </CardContent>
+            </Card>
+          </motion.div>
         </motion.div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg">
+            <CardHeader>
+              <CardTitle>Edit student — {editing.id}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={saveEdit} className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-600">Name</label>
+                  <Input name="name" defaultValue={editing.name} required />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Status</label>
+                  <select
+                    name="status"
+                    defaultValue={editing.status}
+                    className="w-full h-12 rounded-2xl border border-white/50 bg-white/50 px-3 text-sm"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Banned">Banned</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">New password (optional)</label>
+                  <Input name="password" type="password" />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">New profile photo (optional)</label>
+                  <Input name="profile_image" type="file" accept="image/*" className="h-12 pt-2" />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Save</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {unbanUser && (
+        <div className="fixed inset-0 z-50 bg-black/35 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="w-full max-w-xl">
+            <CardHeader>
+              <CardTitle>Unban evidence — {unbanUser.id}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={submitUnban} className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-600">Reason (required)</label>
+                  <textarea
+                    value={unbanReason}
+                    onChange={(e) => setUnbanReason(e.target.value)}
+                    required
+                    minLength={8}
+                    className="w-full min-h-24 rounded-2xl border border-white/50 bg-white/50 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Evidence file (JPG/PDF)</label>
+                  <Input
+                    type="file"
+                    accept=".jpg,.jpeg,application/pdf,image/jpeg"
+                    required
+                    onChange={(e) => setUnbanFile(e.target.files?.[0] || null)}
+                    className="h-12 pt-2"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setUnbanUser(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Unban</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

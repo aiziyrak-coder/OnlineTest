@@ -11,9 +11,10 @@ from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone as dj_tz
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from apps.core.models import AppUser, Exam, ExamGroup, Group, Level, StudentExam, TestBankCategory, TestBankQuestion
+from apps.core.models import AppUser, Exam, ExamGroup, Group, Level, StudentExam, TestBankCategory, TestBankQuestion, UnbanEvidence
 
 PROFILE = (
     "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlcZ/"
@@ -304,3 +305,26 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json().get("ok"))
         self.assertTrue(r.json().get("database"))
+
+    def test_unban_requires_reason_and_evidence(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")
+        AppUser.objects.filter(pk=self.student.id).update(status="Banned")
+        StudentExam.objects.create(student_id=self.student.id, exam_id=self.exam_a.id, status="Banned")
+        r = self.client.post(f"/api/admin/users/{self.student.id}/unban", {"reason": "reason-ok-123"}, format="multipart")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("evidence", (r.json().get("error") or "").lower())
+
+    def test_unban_with_pdf_evidence_succeeds(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")
+        AppUser.objects.filter(pk=self.student.id).update(status="Banned")
+        StudentExam.objects.create(student_id=self.student.id, exam_id=self.exam_a.id, status="Banned")
+        pdf = SimpleUploadedFile("receipt.pdf", b"%PDF-1.4\n%test\n", content_type="application/pdf")
+        r = self.client.post(
+            f"/api/admin/users/{self.student.id}/unban",
+            {"reason": "Tuplov kvitansiyasi taqdim etildi", "evidence": pdf},
+            format="multipart",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.status, "Active")
+        self.assertTrue(UnbanEvidence.objects.filter(student_id=self.student.id, admin_id=self.admin.id).exists())

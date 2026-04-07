@@ -119,6 +119,19 @@ class ViolationLog(models.Model):
         db_table = "violations_log"
 
 
+class UnbanEvidence(models.Model):
+    student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column="student_id", to_field="id")
+    admin = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column="admin_id", related_name="unban_actions", to_field="id")
+    reason = models.TextField()
+    file_name = models.CharField(max_length=255)
+    file_mime = models.CharField(max_length=100)
+    file_base64 = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "unban_evidence"
+
+
 class TestBankCategory(models.Model):
     name = models.CharField(max_length=300)
     description = models.TextField(blank=True)

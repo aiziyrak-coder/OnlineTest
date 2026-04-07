@@ -10,6 +10,7 @@ from .models import (
     StudentExam,
     TestBankCategory,
     TestBankQuestion,
+    UnbanEvidence,
     ViolationLog,
 )
 
@@ -85,3 +86,10 @@ class TestBankQuestionAdmin(admin.ModelAdmin):
 @admin.register(ResultIdCounter)
 class ResultIdCounterAdmin(admin.ModelAdmin):
     list_display = ("id", "next_num")
+
+
+@admin.register(UnbanEvidence)
+class UnbanEvidenceAdmin(admin.ModelAdmin):
+    list_display = ("id", "student", "admin", "file_name", "file_mime", "created_at")
+    search_fields = ("student__id", "admin__id", "reason", "file_name")
+    raw_id_fields = ("student", "admin")

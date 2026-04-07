@@ -105,6 +105,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [warnings, setWarnings] = useState(0);
   const [warningMsg, setWarningMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [hardBlocked, setHardBlocked] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -207,6 +208,30 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     window.addEventListener('beforeunload', h);
     return () => window.removeEventListener('beforeunload', h);
   }, [t.leaveExamWarning]);
+
+  useEffect(() => {
+    const ua = navigator.userAgent || '';
+    if (/anydesk|teamviewer|rustdesk|splashtop/i.test(ua)) {
+      void logViolationRef.current('REMOTE_CONTROL_SUSPECTED');
+      setHardBlocked(true);
+    }
+    const onBlur = () => {
+      void logViolationRef.current('TAB_SWITCH_HARD');
+      setHardBlocked(true);
+    };
+    const onFs = () => {
+      if (!document.fullscreenElement) {
+        void logViolationRef.current('FULLSCREEN_EXIT_HARD');
+        setHardBlocked(true);
+      }
+    };
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('fullscreenchange', onFs);
+    return () => {
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('fullscreenchange', onFs);
+    };
+  }, []);
 
   const [qIndex, setQIndex] = useState(0);
   const answeredCount = Object.keys(answers).length;
@@ -636,7 +661,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     return () => window.clearInterval(timer);
   }, [banned, runSubmitCore]);
 
-  if (banned) {
+  if (banned || hardBlocked) {
     return (
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}

@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import tempfile
+import base64
 from datetime import datetime
 
 import bcrypt
@@ -61,6 +62,7 @@ from apps.core.models import (
     StudentExam,
     TestBankCategory,
     TestBankQuestion,
+    UnbanEvidence,
     ViolationLog,
 )
 
@@ -179,6 +181,9 @@ def admin_users(request):
         role_f = request.query_params.get("role")
         if role_f:
             qs = qs.filter(role=role_f)
+        status_f = request.query_params.get("status")
+        if status_f:
+            qs = qs.filter(status=status_f)
         rows = []
         for u in qs.order_by("name"):
             rows.append(
@@ -276,9 +281,38 @@ def admin_user_detail(request, user_id: str):
 def admin_users_unban(request, user_id: str):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
+    row = AppUser.objects.filter(pk=user_id).first()
+    if not row:
+        return Response({"error": "User not found"}, status=404)
+    reason = str((request.data or {}).get("reason") or "").strip()
+    if len(reason) < 8:
+        return Response({"error": "Unban reason is required (min 8 chars)"}, status=400)
+    ev = request.FILES.get("evidence")
+    if not ev:
+        return Response({"error": "JPG yoki PDF evidence fayli majburiy"}, status=400)
+    mime = (getattr(ev, "content_type", "") or "").lower()
+    ok_mime = mime in ("application/pdf", "image/jpeg")
+    if not ok_mime:
+        return Response({"error": "Faqat JPG yoki PDF qabul qilinadi"}, status=400)
+    raw = ev.read()
+    if not raw or len(raw) > 5 * 1024 * 1024:
+        return Response({"error": "Evidence fayl hajmi 5MB dan oshmasin"}, status=400)
+    ext = os.path.splitext(getattr(ev, "name", "") or "")[1].lower()
+    if mime == "application/pdf" and ext != ".pdf":
+        return Response({"error": "PDF fayl yuklang"}, status=400)
+    if mime == "image/jpeg" and ext not in (".jpg", ".jpeg"):
+        return Response({"error": "JPG fayl yuklang"}, status=400)
     with transaction.atomic():
         AppUser.objects.filter(pk=user_id).update(status="Active")
         StudentExam.objects.filter(student_id=user_id, status="Banned").update(status="Pending")
+        UnbanEvidence.objects.create(
+            student_id=user_id,
+            admin_id=request.user.id,
+            reason=reason[:5000],
+            file_name=os.path.basename(getattr(ev, "name", "") or "evidence.bin")[:255],
+            file_mime=mime,
+            file_base64=base64.b64encode(raw).decode("ascii"),
+        )
     return Response({"success": True})
 
 
@@ -1706,7 +1740,13 @@ def student_violations(request):
         screenshot_url=screenshot,
     )
     cnt = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
-    if vtype == "IDENTITY_SUBSTITUTION":
+    hard_types = {
+        "IDENTITY_SUBSTITUTION",
+        "REMOTE_CONTROL_SUSPECTED",
+        "TAB_SWITCH_HARD",
+        "FULLSCREEN_EXIT_HARD",
+    }
+    if vtype in hard_types:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
             StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")

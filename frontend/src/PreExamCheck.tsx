@@ -34,9 +34,53 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
   const [starting, setStarting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [livenessPassed, setLivenessPassed] = useState(false);
+  const [livenessStep, setLivenessStep] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const t = translations[lang];
+  const livenessSigRef = useRef<number>(0);
+
+  const captureMotionSignature = () => {
+    if (!videoRef.current || !canvasRef.current) return 0;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video.videoWidth || !video.videoHeight) return 0;
+    canvas.width = 96;
+    canvas.height = 72;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 0;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let sum = 0;
+    for (let i = 0; i < frame.length; i += 16) {
+      sum += frame[i] + frame[i + 1] + frame[i + 2];
+    }
+    return sum;
+  };
+
+  const runLivenessStep = (nextStep: number, hint: string) => {
+    const base = captureMotionSignature();
+    if (!base) {
+      setError('Liveness check failed: camera frame not ready.');
+      return;
+    }
+    livenessSigRef.current = base;
+    setError(hint);
+    window.setTimeout(() => {
+      const after = captureMotionSignature();
+      const delta = Math.abs(after - livenessSigRef.current);
+      if (delta < 7000) {
+        setError('Liveness failed. Harakat aniq ko‘rinmadi, qayta urinib ko‘ring.');
+        setLivenessPassed(false);
+        setLivenessStep(0);
+        return;
+      }
+      setError('');
+      setLivenessStep(nextStep);
+      if (nextStep >= 3) setLivenessPassed(true);
+    }, 1800);
+  };
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -256,6 +300,23 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
                   >
                     {verifying ? t.identityVerifying : verified ? t.identityVerified : t.identityVerifyBtn}
                   </Button>
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-600">Liveness challenge: 3 bosqich (majburiy)</p>
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" variant="outline" disabled={!verified || livenessStep > 0} onClick={() => runLivenessStep(1, 'Boshingizni chapga buring')}>
+                        1) Turn left
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" disabled={!verified || livenessStep !== 1} onClick={() => runLivenessStep(2, 'Boshingizni o‘ngga buring')}>
+                        2) Turn right
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" disabled={!verified || livenessStep !== 2} onClick={() => runLivenessStep(3, 'Kameraga yaqinlashib qayting')}>
+                        3) Move close
+                      </Button>
+                    </div>
+                    <p className={`text-xs ${livenessPassed ? 'text-green-700' : 'text-gray-500'}`}>
+                      {livenessPassed ? 'Liveness: PASSED' : `Liveness step: ${livenessStep}/3`}
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="p-5 border border-red-500/30 bg-red-50/80 rounded-3xl backdrop-blur-md text-red-800 text-sm">
@@ -294,7 +355,7 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
             <Button variant="outline" onClick={onCancel} className="px-8 rounded-full" disabled={starting}>Cancel</Button>
             <Button 
               onClick={handleStart} 
-              disabled={!cameraReady || !micReady || !agreed || starting || (exam.has_pin && !pin) || !user.profile_image || !verified}
+              disabled={!cameraReady || !micReady || !agreed || starting || (exam.has_pin && !pin) || !user.profile_image || !verified || !livenessPassed}
               className="px-8 rounded-full shadow-lg shadow-black/10"
             >
               {starting ? 'Starting...' : t.takeExam}
