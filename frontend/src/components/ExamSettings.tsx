@@ -50,13 +50,20 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
         setError(t.testBankPickCategory);
         return;
       }
+      const selectedPoolCount = bankCategories
+        .filter((c: any) => catIds.includes(Number(c.id)))
+        .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.question_count) || 0), 0);
+      if (selectedPoolCount < 1) {
+        setError('Selected categories contain no questions.');
+        return;
+      }
       fd.delete('bank_category_ids');
       fd.append('exam_mode', 'bank_mixed');
       fd.append('bank_category_ids', JSON.stringify(catIds));
       const count = fd.get('bank_question_count');
       fd.delete('bank_question_count');
       const normalizedCount = Math.max(1, Math.min(200, Number(count) || 1));
-      fd.append('bank_question_count', String(normalizedCount));
+      fd.append('bank_question_count', String(Math.min(normalizedCount, selectedPoolCount)));
     }
 
     if (method === 'manual') {

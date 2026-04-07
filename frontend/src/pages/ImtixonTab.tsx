@@ -115,6 +115,18 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
       setMsg({ type: 'err', text: 'Sana/vaqt formati noto‘g‘ri. Qayta tanlang.' });
       return;
     }
+    if (new Date(startIso).getTime() >= new Date(endIso).getTime()) {
+      setMsg({ type: 'err', text: 'Boshlanish vaqti tugash vaqtidan oldin bo‘lishi kerak.' });
+      return;
+    }
+    const selectedPoolCount = categories
+      .filter((c: any) => selCats.includes(c.id))
+      .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.question_count) || 0), 0);
+    if (selectedPoolCount < 1) {
+      setMsg({ type: 'err', text: 'Tanlangan kategoriyalarda savollar mavjud emas.' });
+      return;
+    }
+    const effectiveBankCount = Math.min(normalizedBankCount, selectedPoolCount);
     setBusy(true);
     try {
       const body = {
@@ -127,7 +139,7 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
         custom_rules: customRules || '',
         exam_mode: 'bank_mixed',
         bank_category_ids: selCats,
-        bank_question_count: normalizedBankCount,
+        bank_question_count: effectiveBankCount,
         group_ids: selGroups,
         exam_exceptions: exceptionsPayload,
       };
@@ -141,7 +153,13 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
         setMsg({ type: 'err', text: d?.error || 'Error' });
         return;
       }
-      setMsg({ type: 'ok', text: t.examCreated });
+      setMsg({
+        type: 'ok',
+        text:
+          effectiveBankCount !== normalizedBankCount
+            ? `${t.examCreated} (savollar soni ${effectiveBankCount} ga moslashtirildi)`
+            : t.examCreated,
+      });
       setTitle('');
       setPin('');
       setSelCats([]);

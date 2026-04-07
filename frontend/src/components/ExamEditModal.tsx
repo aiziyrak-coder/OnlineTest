@@ -143,8 +143,19 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         }
       }
       if (exam?.exam_mode === 'bank_mixed') {
+        const selectedPoolCount = bankCats
+          .filter((c: any) => selectedBankCats.includes(c.id))
+          .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.question_count) || 0), 0);
+        if (selectedPoolCount < 1) {
+          setError('Tanlangan kategoriyalarda savollar mavjud emas');
+          setSaving(false);
+          return;
+        }
         body.bank_category_ids = selectedBankCats;
-        body.bank_question_count = Math.max(1, Math.min(200, Number(bankCount) || 1));
+        body.bank_question_count = Math.min(
+          Math.max(1, Math.min(200, Number(bankCount) || 1)),
+          selectedPoolCount,
+        );
       }
       const res = await fetch(apiUrl(`/api/admin/exams/${examId}`), {
         method: 'PATCH',
