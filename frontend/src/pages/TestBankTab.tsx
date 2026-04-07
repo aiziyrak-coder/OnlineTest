@@ -66,6 +66,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
         inserted?: number;
         chunks?: number;
         translation_limited?: boolean;
+        ai_skipped_for_size?: boolean;
         categories?: { name: string; questions_added: number }[];
       }>(res);
       if (res.ok && d && typeof d.inserted === 'number') {
@@ -75,7 +76,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
             : '';
         setMsg({
           type: 'ok',
-          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${catLines}` : ''}${d.chunks && d.chunks > 1 ? ` · chunks: ${d.chunks}` : ''}${d.translation_limited ? ' · tarjima qisman (katta fayl)' : ''}`,
+          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${catLines}` : ''}${d.chunks && d.chunks > 1 ? ` · chunks: ${d.chunks}` : ''}${d.ai_skipped_for_size ? ' · katta fayl: lokal parser ishlatildi' : ''}${d.translation_limited ? ' · tarjima qisman (katta fayl)' : ''}`,
         });
         setSmartFile(null);
         setFileKey((k) => k + 1);

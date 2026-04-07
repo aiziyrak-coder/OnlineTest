@@ -541,8 +541,20 @@ def admin_test_bank_import_smart(request):
         text = text[:400_000]
     source_language = language if language in ("en", "uz", "ru") else detect_question_language(text)
     chunks = _split_large_text(text)
+    # Juda katta fayllarda AI chaqiruvlari worker timeout berishi mumkin.
+    force_local_parse = len(text) > 180_000 or len(chunks) >= 3
     items: list[dict] = []
     for chunk in chunks:
+        if force_local_parse:
+            try:
+                parsed = parse_flexible_questionnaire(chunk, source_language)
+            except Exception:
+                try:
+                    parsed = parse_structured_questionnaire(chunk, source_language)
+                except Exception:
+                    parsed = []
+            items.extend(parsed or [])
+            continue
         try:
             parsed = parse_and_classify_questionnaire(chunk, source_language)
         except RuntimeError:
@@ -584,11 +596,14 @@ def admin_test_bank_import_smart(request):
     translations: list[dict] = []
     payload = [{"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items]
     # Juda katta importlarda request timeout bo'lmasligi uchun tarjimani cheklaymiz.
-    if len(payload) <= 80:
-        translations = translate_questions_to_other_languages(payload, source_language)
-    else:
-        head = translate_questions_to_other_languages(payload[:80], source_language)
-        translations = head + ([{}] * max(0, len(payload) - len(head)))
+    try:
+        if len(payload) <= 80:
+            translations = translate_questions_to_other_languages(payload, source_language)
+        else:
+            head = translate_questions_to_other_languages(payload[:80], source_language)
+            translations = head + ([{}] * max(0, len(payload) - len(head)))
+    except Exception:
+        translations = [{} for _ in payload]
 
     categories_touched: dict[str, int] = {}
     inserted = 0
@@ -647,6 +662,7 @@ def admin_test_bank_import_smart(request):
             "categories": [{"name": k, "questions_added": v} for k, v in sorted(categories_touched.items())],
             "chunks": len(chunks),
             "translation_limited": len(payload) > 80,
+            "ai_skipped_for_size": force_local_parse,
         }
     )
 
