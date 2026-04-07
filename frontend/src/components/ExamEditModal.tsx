@@ -11,6 +11,12 @@ function toLocalDatetimeValue(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function toIsoOrNull(localValue: string): string | null {
+  const d = new Date(localValue);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 export type ExamSavedEvent = { examId: number; deleted?: boolean };
 
 type Props = {
@@ -109,8 +115,13 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
     setSaving(true);
     setError('');
     try {
-      const startIso = new Date(startLocal).toISOString();
-      const endIso = new Date(endLocal).toISOString();
+      const startIso = toIsoOrNull(startLocal);
+      const endIso = toIsoOrNull(endLocal);
+      if (!startIso || !endIso) {
+        setError('Invalid date/time');
+        setSaving(false);
+        return;
+      }
       const body: Record<string, unknown> = {
         title,
         start_time: startIso,

@@ -8,6 +8,12 @@ import { AdminExamsTab } from './AdminExamsTab';
 
 type StudentRow = { id: string; name: string; group_id: number | null };
 
+function toIsoOrNull(localValue: string): string | null {
+  const d = new Date(localValue);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
   const t = translations[lang];
   const h = { Authorization: `Bearer ${token}` };
@@ -102,12 +108,18 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
       setMsg({ type: 'err', text: 'Vaqt maydonlari' });
       return;
     }
+    const startIso = toIsoOrNull(startLocal);
+    const endIso = toIsoOrNull(endLocal);
+    if (!startIso || !endIso) {
+      setMsg({ type: 'err', text: 'Sana/vaqt formati noto‘g‘ri. Qayta tanlang.' });
+      return;
+    }
     setBusy(true);
     try {
       const body = {
         title: title.trim(),
-        start_time: new Date(startLocal).toISOString(),
-        end_time: new Date(endLocal).toISOString(),
+        start_time: startIso,
+        end_time: endIso,
         duration_minutes: duration,
         language,
         pin: pin || '',
