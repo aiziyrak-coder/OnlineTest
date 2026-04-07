@@ -5,12 +5,28 @@ import { translations, Language } from '../i18n';
 import { readJsonSafe } from '../lib/http';
 import { apiUrl } from '../lib/apiUrl';
 
+type ImportProgressState = {
+  running: boolean;
+  progress: number;
+  stage: string;
+  startedAt: number;
+};
+
+const sharedImportState: ImportProgressState = {
+  running: false,
+  progress: 0,
+  stage: '',
+  startedAt: 0,
+};
+
 export function TestBankTab({ token, lang }: { token: string; lang: Language }) {
   const [categories, setCategories] = useState<any[]>([]);
   const [collectionName, setCollectionName] = useState('');
   const [smartFile, setSmartFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
   const [smartBusy, setSmartBusy] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importStage, setImportStage] = useState('');
   const [msg, setMsg] = useState({ type: '', text: '' });
   const t = translations[lang];
 
@@ -24,6 +40,24 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
   useEffect(() => {
     load();
   }, [token]);
+
+  useEffect(() => {
+    // Page almashtirilsa ham jarayon holatini qayta tiklaymiz.
+    setSmartBusy(sharedImportState.running);
+    setImportProgress(sharedImportState.progress);
+    setImportStage(sharedImportState.stage);
+    const timer = window.setInterval(() => {
+      if (!sharedImportState.running) return;
+      const elapsedSec = Math.floor((Date.now() - sharedImportState.startedAt) / 1000);
+      const nextProgress = Math.min(95, Math.max(sharedImportState.progress, Math.floor(elapsedSec * 1.8)));
+      sharedImportState.progress = nextProgress;
+      sharedImportState.stage = elapsedSec < 10 ? 'Fayl yuklanmoqda...' : elapsedSec < 30 ? 'Matn ajratilmoqda...' : 'AI tahlil qilmoqda...';
+      setImportProgress(sharedImportState.progress);
+      setImportStage(sharedImportState.stage);
+      setSmartBusy(true);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const delCategory = async (id: number) => {
     if (!confirm(t.testBankCatDeleteConfirm)) return;
@@ -43,6 +77,10 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
       setMsg({ type: 'err', text: t.testBankAiNeedPdf });
       return;
     }
+    if (sharedImportState.running) {
+      setMsg({ type: 'err', text: 'Oldingi tahlil hali tugamagan.' });
+      return;
+    }
     const fn = smartFile.name?.toLowerCase() || '';
     const okExt = fn.endsWith('.pdf') || fn.endsWith('.docx') || fn.endsWith('.doc');
     if (!okExt) {
@@ -50,6 +88,12 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
       return;
     }
     setSmartBusy(true);
+    sharedImportState.running = true;
+    sharedImportState.progress = 3;
+    sharedImportState.stage = 'Fayl yuborilmoqda...';
+    sharedImportState.startedAt = Date.now();
+    setImportProgress(3);
+    setImportStage(sharedImportState.stage);
     try {
       const fd = new FormData();
       fd.append('file', smartFile);
@@ -79,6 +123,10 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
           type: 'ok',
           text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${typeof d.detected === 'number' ? ` · topildi: ${d.detected}` : ''}${catLines ? ` — ${catLines}` : ''}${d.chunks && d.chunks > 1 ? ` · chunks: ${d.chunks}` : ''}${d.ai_skipped_for_size ? ' · katta fayl: lokal parser ishlatildi' : ''}${d.translation_limited ? ' · tarjima qisman (katta fayl)' : ''}`,
         });
+        sharedImportState.progress = 100;
+        sharedImportState.stage = 'Tugadi';
+        setImportProgress(100);
+        setImportStage('Tugadi');
         setSmartFile(null);
         setFileKey((k) => k + 1);
         load();
@@ -88,6 +136,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
     } catch {
       setMsg({ type: 'err', text: 'Tarmoq xatosi yoki timeout. API/Nginx logini tekshiring.' });
     } finally {
+      sharedImportState.running = false;
       setSmartBusy(false);
     }
   };
@@ -137,6 +186,16 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
               <Button type="submit" disabled={smartBusy}>
                 {smartBusy ? t.testBankAiRunning : t.testBankAiRun}
               </Button>
+              {smartBusy && (
+                <div className="pt-2">
+                  <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                    <div className="h-2 bg-violet-500 transition-all duration-700" style={{ width: `${importProgress}%` }} />
+                  </div>
+                  <p className="text-xs text-gray-600 mt-2">
+                    {importStage || t.testBankAiRunning} ({importProgress}%)
+                  </p>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>

@@ -100,8 +100,8 @@ export const translations = {
     navKontingent: "Kontingent",
     navImtixon: "Imtihon",
     navTestBaza: "Test baza",
-    testCollectionNameEn: "Test to‘plami nomi (inglizcha)",
-    testCollectionFileHint: "PDF yoki DOCX — matn inglizcha bo‘lishi kerak; tizim o‘zbek va ruscha tarjima qiladi.",
+    testCollectionNameEn: "Test to‘plami nomi",
+    testCollectionFileHint: "PDF yoki DOCX — istalgan tilda bo‘lishi mumkin; tizim avtomatik aniqlab EN/UZ/RU tarjimalarini tayyorlaydi. Juda katta PDF uchun maksimal 15 bet tavsiya etiladi.",
     testCollectionsList: "Test to‘plamlari (namuna tarjima)",
     examCreateBankTitle: "Test bazasidan imtihon yaratish",
     examBankMixedExplain:
@@ -277,8 +277,8 @@ export const translations = {
     navKontingent: "Контингент",
     navImtixon: "Экзамен",
     navTestBaza: "Тест-база",
-    testCollectionNameEn: "Набор тестов (на английском)",
-    testCollectionFileHint: "PDF или DOCX; текст на английском, система переведёт на узб. и рус.",
+    testCollectionNameEn: "Название набора тестов",
+    testCollectionFileHint: "PDF или DOCX на любом языке; система автоопределяет язык и готовит переводы EN/UZ/RU. Для очень больших PDF рекомендуется максимум 15 страниц.",
     testCollectionsList: "Наборы (фрагменты перевода)",
     examCreateBankTitle: "Создать экзамен из банка",
     examBankMixedExplain:
@@ -451,8 +451,8 @@ export const translations = {
     navKontingent: "Contingent",
     navImtixon: "Exams",
     navTestBaza: "Question bank",
-    testCollectionNameEn: "Test collection name (English)",
-    testCollectionFileHint: "PDF or DOCX; English source text — Uzbek and Russian translations are generated.",
+    testCollectionNameEn: "Test collection name",
+    testCollectionFileHint: "PDF or DOCX can be in any language; the system auto-detects and generates EN/UZ/RU translations. For very large PDFs, keep it within 15 pages.",
     testCollectionsList: "Collections (translation preview)",
     examCreateBankTitle: "Create exam from bank",
     examBankMixedExplain:

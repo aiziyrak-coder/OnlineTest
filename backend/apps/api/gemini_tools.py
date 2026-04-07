@@ -181,7 +181,7 @@ def _extract_json_array_from_model_text(t: str) -> list:
 
 
 def detect_question_language(raw_text: str) -> str:
-    """Heuristic til aniqlash: uz / ru / en."""
+    """Heuristic til aniqlash: uz / ru / en / other."""
     t = (raw_text or "").lower()
     if not t:
         return "en"
@@ -196,6 +196,8 @@ def detect_question_language(raw_text: str) -> str:
     eng = len(re.findall(r"\b(question|answer|choose|which|following|disease|patient)\b", t))
     if cyr > 12:
         return "ru"
+    if cyr < 5 and uz < 2 and eng < 2:
+        return "other"
     if uz >= eng:
         return "uz"
     return "en"
@@ -488,11 +490,11 @@ Rules:
 
 
 def translate_questions_to_other_languages(questions: list[dict], source_language: str) -> list[dict]:
-    """Savollarni manba tilidan qolgan 2 tilga tarjima qilish."""
+    """Savollarni manba tilidan kerakli tillarga tarjima qilish."""
     if not questions:
         return []
     src = (source_language or "en").lower()
-    if src not in ("en", "uz", "ru"):
+    if src not in ("en", "uz", "ru", "other"):
         src = detect_question_language("\n".join(str(q.get("text") or "") for q in questions[:8]))
     if src == "en":
         return translate_en_questions_to_uz_ru(questions)
@@ -501,7 +503,7 @@ def translate_questions_to_other_languages(questions: list[dict], source_languag
         return [{} for _ in questions]
     out_all: list[dict] = []
     chunk_size = 5
-    src_name = "Uzbek (Latin)" if src == "uz" else "Russian"
+    src_name = "Uzbek (Latin)" if src == "uz" else "Russian" if src == "ru" else "Original language"
     for i in range(0, len(questions), chunk_size):
         chunk = questions[i : i + chunk_size]
         batch = [

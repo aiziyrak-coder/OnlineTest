@@ -141,6 +141,12 @@ def extract_text_from_bank_upload(raw: bytes, filename: str) -> str:
         from pypdf import PdfReader
 
         reader = PdfReader(BytesIO(raw))
+        page_count = len(reader.pages)
+        max_pages = 15
+        if page_count > max_pages:
+            raise ValueError(
+                f"PDF juda katta ({page_count} bet). Hozircha maksimal {max_pages} betni import qiling."
+            )
         parts = []
         for page in reader.pages:
             parts.append(page.extract_text() or "")
