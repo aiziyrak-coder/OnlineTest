@@ -60,6 +60,7 @@ ensure_api_env() {
     cat > "$f" <<EOF
 DJANGO_SECRET_KEY=${sk}
 JWT_SECRET=${jk}
+ADMIN_BOOTSTRAP_ID=fjstiadmin
 ADMIN_BOOTSTRAP_PASSWORD=${adm}
 DJANGO_DEBUG=0
 ALLOWED_HOSTS=${API_DOMAIN},127.0.0.1,localhost
@@ -73,7 +74,7 @@ EOF
     chmod 600 "$f"
     umask 077
     {
-      echo "Login: admin"
+      echo "Login: fjstiadmin"
       echo "Parol: ${adm}"
       echo "Fayl: /etc/onlinetest/api.env (ADMIN_BOOTSTRAP_PASSWORD)"
     } > /root/onlinetest-admin-once.txt

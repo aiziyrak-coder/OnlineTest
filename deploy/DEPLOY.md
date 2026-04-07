@@ -47,6 +47,16 @@ git clone https://github.com/aiziyrak-coder/OnlineTest.git .
 # yoki mavjud repodan: git pull
 ```
 
+### To'liq 0-dan qayta o'rnatish (tavsiya)
+
+```bash
+sudo rm -rf /var/www/onlinetest
+sudo mkdir -p /var/www/onlinetest
+sudo git clone https://github.com/aiziyrak-coder/OnlineTest.git /var/www/onlinetest
+cd /var/www/onlinetest
+sudo CERTBOT_EMAIL=admin@ziyrak.org FRONT_DOMAIN=onlinetest.ziyrak.org API_DOMAIN=onlinetestapi.ziyrak.org bash deploy/full-install-root.sh
+```
+
 ## 4) Backend
 
 ```bash
