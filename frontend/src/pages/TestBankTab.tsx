@@ -64,6 +64,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
         error?: string;
         detail?: string;
         inserted?: number;
+        detected?: number;
         chunks?: number;
         translation_limited?: boolean;
         ai_skipped_for_size?: boolean;
@@ -76,7 +77,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
             : '';
         setMsg({
           type: 'ok',
-          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${catLines}` : ''}${d.chunks && d.chunks > 1 ? ` · chunks: ${d.chunks}` : ''}${d.ai_skipped_for_size ? ' · katta fayl: lokal parser ishlatildi' : ''}${d.translation_limited ? ' · tarjima qisman (katta fayl)' : ''}`,
+          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${typeof d.detected === 'number' ? ` · topildi: ${d.detected}` : ''}${catLines ? ` — ${catLines}` : ''}${d.chunks && d.chunks > 1 ? ` · chunks: ${d.chunks}` : ''}${d.ai_skipped_for_size ? ' · katta fayl: lokal parser ishlatildi' : ''}${d.translation_limited ? ' · tarjima qisman (katta fayl)' : ''}`,
         });
         setSmartFile(null);
         setFileKey((k) => k + 1);

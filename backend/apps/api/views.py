@@ -599,6 +599,19 @@ def admin_test_bank_import_smart(request):
                     parsed = []
         items.extend(parsed or [])
 
+    if raw_doc and safe_name and len(items) < 5 and len(raw_doc) <= 20 * 1024 * 1024:
+        # Kam topilsa multimodal parsing bilan to'ldirishga harakat qilamiz.
+        try:
+            visual_items = parse_and_classify_document_bytes(raw_doc, safe_name, source_language)
+            seen = {f"{x.get('text','')}||{'|'.join(x.get('options', []))}" for x in items}
+            for vi in visual_items:
+                sig = f"{vi.get('text','')}||{'|'.join(vi.get('options', []))}"
+                if sig not in seen:
+                    items.append(vi)
+                    seen.add(sig)
+        except Exception:
+            pass
+
     if not items:
         return Response(
             {
@@ -673,6 +686,7 @@ def admin_test_bank_import_smart(request):
         {
             "success": True,
             "inserted": inserted,
+            "detected": len(items),
             "categories": [{"name": k, "questions_added": v} for k, v in sorted(categories_touched.items())],
             "chunks": len(chunks),
             "translation_limited": len(payload) > 80,
@@ -912,7 +926,7 @@ def admin_exam_detail(request, pk: int):
             cat_ids = safe_json_loads(e.bank_category_ids, [])
         if not isinstance(cat_ids, list) or not cat_ids:
             return Response({"error": "Select at least one test bank category"}, status=400)
-        n = max(8, min(200, int(d.get("bank_question_count") or e.bank_question_count or 20)))
+        n = max(1, min(200, int(d.get("bank_question_count") or e.bank_question_count or 20)))
         need_bank = n
         ok, pool_len = _bank_pool_check(cat_ids, need_bank)
         if not ok:
@@ -1020,7 +1034,7 @@ def _admin_exams_create_impl(request):
         cat_ids = safe_json_loads(d.get("bank_category_ids") or "[]", [])
         if not isinstance(cat_ids, list) or not cat_ids:
             return Response({"error": "Select at least one test bank category"}, status=400)
-        n = max(8, min(200, int(d.get("bank_question_count") or 20)))
+        n = max(1, min(200, int(d.get("bank_question_count") or 20)))
         need_bank = n
         ok, pool_len = _bank_pool_check(cat_ids, need_bank)
         if not ok:
