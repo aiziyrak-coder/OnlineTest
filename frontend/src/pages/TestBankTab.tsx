@@ -54,7 +54,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
       const fd = new FormData();
       fd.append('file', smartFile);
       fd.append('collection_name', name);
-      fd.append('language', 'en');
+      fd.append('language', 'auto');
       const res = await fetch(apiUrl('/api/admin/test-bank/import-smart'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },

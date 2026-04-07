@@ -29,11 +29,12 @@ from apps.api.throttles import (
 from apps.api.certificate_pdf import build_certificate_pdf
 from apps.api.gemini_tools import (
     compare_faces,
+    detect_question_language,
     generate_bank_extension,
     generate_exam_ai_summary,
     parse_and_classify_questionnaire,
     paraphrase_medical_mcqs,
-    translate_en_questions_to_uz_ru,
+    translate_questions_to_other_languages,
 )
 from apps.api.services import (
     assert_safe_result_public_id,
@@ -442,13 +443,13 @@ def admin_test_bank_import_smart(request):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
     d = request.data or {}
-    language = d.get("language") or "en"
+    language = d.get("language") or "auto"
     if not isinstance(language, str) or len(language) > 10:
         language = "en"
     collection_name = (d.get("collection_name") or "").strip()[:300]
     single_cat = None
-    if collection_name:
-        language = "en"
+    if collection_name and language not in ("en", "uz", "ru", "auto"):
+        language = "auto"
         single_cat, _ = TestBankCategory.objects.get_or_create(
             name=collection_name,
             defaults={
@@ -479,8 +480,9 @@ def admin_test_bank_import_smart(request):
         return Response({"error": "raw_text yoki file kerak"}, status=400)
     if len(text) > 400_000:
         text = text[:400_000]
+    source_language = language if language in ("en", "uz", "ru") else detect_question_language(text)
     try:
-        items = parse_and_classify_questionnaire(text, language)
+        items = parse_and_classify_questionnaire(text, source_language)
     except RuntimeError as e:
         return Response({"error": str(e)}, status=503)
     except ValueError as e:
@@ -489,11 +491,8 @@ def admin_test_bank_import_smart(request):
         return Response({"error": "AI tahlil xatosi", "detail": str(e)[:500]}, status=502)
 
     translations: list[dict] = []
-    if language == "en":
-        payload = [
-            {"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items
-        ]
-        translations = translate_en_questions_to_uz_ru(payload)
+    payload = [{"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items]
+    translations = translate_questions_to_other_languages(payload, source_language)
 
     categories_touched: dict[str, int] = {}
     inserted = 0
@@ -515,7 +514,7 @@ def admin_test_bank_import_smart(request):
                     uf.append("academic_year")
                 except (TypeError, ValueError):
                     pass
-            fixed_cat.source_language = language
+                fixed_cat.source_language = source_language
             fixed_cat.save(update_fields=uf)
 
         for idx, it in enumerate(items):
@@ -525,7 +524,7 @@ def admin_test_bank_import_smart(request):
                 cat = fixed_cat
             else:
                 cat = _get_or_create_bank_category(it["categoryName"], it.get("categoryDescription") or "")
-                cat.source_language = language
+                cat.source_language = source_language
                 cat.save(update_fields=["source_language"])
             tr = translations[idx] if idx < len(translations) else {}
             ouz = tr.get("options_uz") if isinstance(tr.get("options_uz"), list) else []
@@ -535,7 +534,7 @@ def admin_test_bank_import_smart(request):
                 text=it["text"],
                 options_json=json.dumps(it["options"]),
                 correct_answer=it["correctAnswer"],
-                language="en" if language == "en" else language,
+                language=source_language,
                 text_uz=str(tr.get("text_uz") or "")[:50000],
                 text_ru=str(tr.get("text_ru") or "")[:50000],
                 options_uz_json=json.dumps(ouz) if ouz else "[]",

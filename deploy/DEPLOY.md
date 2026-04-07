@@ -62,7 +62,7 @@ python manage.py bootstrap_exam   # bir marta; keyin parolni o‘zgartiring
 deactivate
 ```
 
-`bootstrap_exam` standart `admin` / `admin123` — darhol admin panel orqali parolni almashtiring.
+`bootstrap_exam` admin yaratadi: ID `fjstiadmin`, parol `fjsti123` (yoki `ADMIN_BOOTSTRAP_ID` / `ADMIN_BOOTSTRAP_PASSWORD` muhit o‘zgaruvchilari). Demo talaba endi yaratilmaydi.
 
 ## 5) Frontend build (production)
 

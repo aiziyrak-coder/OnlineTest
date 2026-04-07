@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui';
 import { Button } from '../components/ui';
@@ -14,68 +14,83 @@ interface LoginProps {
   setLang: (l: Language) => void;
 }
 
-const DEMO_ADMIN_ID = 'admin';
-const DEMO_ADMIN_PASSWORD = 'admin123';
-const DEMO_STUDENT_ID = 'student';
-const DEMO_STUDENT_PASSWORD = 'student123';
+const LS_REMEMBER = 'fjsti_login_remember';
+const LS_ID = 'fjsti_login_saved_id';
+const LS_PW = 'fjsti_login_saved_password';
 
 export function Login({ onLogin, lang, setLang }: LoginProps) {
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
-  const [demoBusy, setDemoBusy] = useState<'admin' | 'student' | null>(null);
   const t = translations[lang];
 
-  const loginWithCredentials = async (loginId: string, loginPassword: string) => {
-    const res = await fetch(apiUrl('/api/auth/login'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: loginId, password: loginPassword }),
-    });
-    const data = await readJsonSafe<{ token?: string; user?: any; error?: string }>(res);
-    if (!res.ok) throw new Error(data?.error || 'Login failed');
-    if (!data?.token || !data?.user) throw new Error('Server did not return JSON (wrong URL or proxy?)');
-    onLogin(data.token, data.user);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(LS_REMEMBER) === '1') {
+        setRememberMe(true);
+        const sid = localStorage.getItem(LS_ID);
+        const sp = localStorage.getItem(LS_PW);
+        if (sid) setId(sid);
+        if (sp) setPassword(sp);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistRemember = (loginId: string, loginPassword: string, remember: boolean) => {
+    try {
+      if (remember) {
+        localStorage.setItem(LS_REMEMBER, '1');
+        localStorage.setItem(LS_ID, loginId);
+        localStorage.setItem(LS_PW, loginPassword);
+      } else {
+        localStorage.removeItem(LS_REMEMBER);
+        localStorage.removeItem(LS_ID);
+        localStorage.removeItem(LS_PW);
+      }
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
-      await loginWithCredentials(id, password);
+      const res = await fetch(apiUrl('/api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, password }),
+      });
+      const data = await readJsonSafe<{ token?: string; user?: any; error?: string }>(res);
+      if (!res.ok) throw new Error(data?.error || 'Login failed');
+      if (!data?.token || !data?.user) throw new Error('Server did not return JSON (wrong URL or proxy?)');
+      persistRemember(id, password, rememberMe);
+      onLogin(data.token, data.user);
     } catch (err: any) {
       setError(err.message);
-    }
-  };
-
-  const runDemoLogin = async (which: 'admin' | 'student') => {
-    setError('');
-    const loginId = which === 'admin' ? DEMO_ADMIN_ID : DEMO_STUDENT_ID;
-    const loginPassword = which === 'admin' ? DEMO_ADMIN_PASSWORD : DEMO_STUDENT_PASSWORD;
-    setId(loginId);
-    setPassword(loginPassword);
-    setDemoBusy(which);
-    try {
-      await loginWithCredentials(loginId, loginPassword);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setDemoBusy(null);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Decorative background orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-400/20 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-400/20 blur-[120px] pointer-events-none" />
-      
+
       <div className="absolute top-6 right-6 flex gap-2 z-10 bg-white/30 backdrop-blur-xl p-1.5 rounded-full border border-white/40 shadow-sm">
-        <Button size="sm" variant={lang === 'uz' ? 'default' : 'ghost'} onClick={() => setLang('uz')} className={lang === 'uz' ? '' : 'hover:bg-white/40'}>UZ</Button>
-        <Button size="sm" variant={lang === 'ru' ? 'default' : 'ghost'} onClick={() => setLang('ru')} className={lang === 'ru' ? '' : 'hover:bg-white/40'}>RU</Button>
-        <Button size="sm" variant={lang === 'en' ? 'default' : 'ghost'} onClick={() => setLang('en')} className={lang === 'en' ? '' : 'hover:bg-white/40'}>EN</Button>
+        <Button size="sm" variant={lang === 'uz' ? 'default' : 'ghost'} onClick={() => setLang('uz')} className={lang === 'uz' ? '' : 'hover:bg-white/40'}>
+          UZ
+        </Button>
+        <Button size="sm" variant={lang === 'ru' ? 'default' : 'ghost'} onClick={() => setLang('ru')} className={lang === 'ru' ? '' : 'hover:bg-white/40'}>
+          RU
+        </Button>
+        <Button size="sm" variant={lang === 'en' ? 'default' : 'ghost'} onClick={() => setLang('en')} className={lang === 'en' ? '' : 'hover:bg-white/40'}>
+          EN
+        </Button>
       </div>
-      
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -96,45 +111,41 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-gray-700 ml-1">{t.userId}</label>
-                <Input value={id} onChange={(e) => setId(e.target.value)} required placeholder="Enter your ID" />
+                <Input value={id} onChange={(e) => setId(e.target.value)} required placeholder="ID" autoComplete="username" />
               </div>
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-gray-700 ml-1">{t.password}</label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
               </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-gray-300 w-4 h-4"
+                />
+                {t.rememberLogin}
+              </label>
               {error && (
-                <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="text-red-500 text-sm font-medium text-center bg-red-50/50 py-2 rounded-xl border border-red-100">
+                <motion.p
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="text-red-500 text-sm font-medium text-center bg-red-50/50 py-2 rounded-xl border border-red-100"
+                >
                   {error}
                 </motion.p>
               )}
-              <Button type="submit" className="w-full mt-2 shadow-lg shadow-black/5">{t.loginBtn}</Button>
+              <Button type="submit" className="w-full mt-2 shadow-lg shadow-black/5">
+                {t.loginBtn}
+              </Button>
             </form>
-            
-            <div className="mt-8 pt-6 border-t border-black/5">
-              <p className="text-xs font-semibold text-gray-400 mb-4 text-center uppercase tracking-wider">Demo Accounts</p>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={demoBusy !== null}
-                  onClick={() => runDemoLogin('admin')}
-                  className="text-xs"
-                >
-                  {demoBusy === 'admin' ? t.loading : t.demoAdmin}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={demoBusy !== null}
-                  onClick={() => runDemoLogin('student')}
-                  className="text-xs"
-                >
-                  {demoBusy === 'student' ? t.loading : t.demoStudent}
-                </Button>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </motion.div>

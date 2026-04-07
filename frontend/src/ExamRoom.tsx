@@ -37,6 +37,22 @@ interface ExamRoomProps {
   onFinish: (submitPayload?: ExamResultPayload | null) => void;
 }
 
+function extractQuestionImages(text: string): { cleanText: string; images: string[] } {
+  const src = text || '';
+  const images: string[] = [];
+  const mdRe = /!\[[^\]]*\]\((https?:\/\/[^\s)]+\.(?:png|jpe?g|gif|webp))\)/gi;
+  let clean = src.replace(mdRe, (_, url: string) => {
+    images.push(url);
+    return '';
+  });
+  const rawRe = /(https?:\/\/[^\s]+?\.(?:png|jpe?g|gif|webp))/gi;
+  clean = clean.replace(rawRe, (url: string) => {
+    if (!images.includes(url)) images.push(url);
+    return '';
+  });
+  return { cleanText: clean.trim(), images };
+}
+
 function initialSecondsLeft(exam: ExamRoomProps['exam']) {
   if (exam.submission_deadline) {
     const end = new Date(exam.submission_deadline).getTime();
@@ -171,6 +187,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const totalQuestions = exam.questions.length;
   const progress = (answeredCount / totalQuestions) * 100;
   const currentQ = exam.questions[qIndex];
+  const currentQParsed = extractQuestionImages(currentQ?.text || '');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const bannedRef = useRef(banned);
@@ -721,7 +738,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                 <CardHeader className="bg-white/30 border-b border-white/20 pb-4 flex flex-row items-start justify-between">
                   <CardTitle className="text-lg font-medium leading-relaxed text-gray-800 flex-1">
                     <span className="text-gray-400 font-normal mr-2">{qIndex + 1}.</span>
-                    {currentQ.text}
+                    {currentQParsed.cleanText || currentQ.text}
                   </CardTitle>
                   <button
                     type="button"
@@ -733,6 +750,16 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                   </button>
                 </CardHeader>
                 <CardContent className="p-6 space-y-3">
+                  {currentQParsed.images.map((img, idx) => (
+                    <div key={`${currentQ.id}-img-${idx}`} className="mb-3">
+                      <img
+                        src={img}
+                        alt={`Question ${qIndex + 1} image ${idx + 1}`}
+                        className="max-h-72 w-auto rounded-xl border border-gray-200"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  ))}
                   {currentQ.options.map((opt: string, optIndex: number) => (
                     <label
                       key={optIndex}
