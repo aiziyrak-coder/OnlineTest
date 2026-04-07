@@ -81,6 +81,8 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
       } else {
         setMsg({ type: 'err', text: d?.error || d?.detail || 'Error' });
       }
+    } catch {
+      setMsg({ type: 'err', text: 'Tarmoq xatosi yoki timeout. API/Nginx logini tekshiring.' });
     } finally {
       setSmartBusy(false);
     }
