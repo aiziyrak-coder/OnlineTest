@@ -327,6 +327,34 @@ def parse_flexible_questionnaire(raw_text: str, language: str = "auto") -> list[
         )
     if out:
         return out
+    # Oxirgi fallback: global regex bilan A/B/C/D yoki 1/2/3/4 bloklarini ajratish.
+    compact = text
+    gpat = re.compile(
+        r"(?is)(?P<stem>.{10,260}?)\s*(?:A[).:-]\s*(?P<a>.+?)\s*B[).:-]\s*(?P<b>.+?)\s*C[).:-]\s*(?P<c>.+?)\s*D[).:-]\s*(?P<d>.+?))(?=(?:\n\s*\d+[).]|\n\s*(?:question|savol|вопрос|задание)\s*#?\s*\d+|$))"
+    )
+    idx = 0
+    for gm in gpat.finditer(compact):
+        idx += 1
+        stem = re.sub(r"\s+", " ", (gm.group("stem") or "").strip())
+        options = [
+            re.sub(r"\s+", " ", (gm.group("a") or "").strip()),
+            re.sub(r"\s+", " ", (gm.group("b") or "").strip()),
+            re.sub(r"\s+", " ", (gm.group("c") or "").strip()),
+            re.sub(r"\s+", " ", (gm.group("d") or "").strip()),
+        ]
+        if len(stem) < 8 or any(len(o) < 1 for o in options):
+            continue
+        out.append(
+            {
+                "text": stem,
+                "options": options,
+                "correctAnswer": options[0],
+                "categoryName": "General",
+                "categoryDescription": "",
+            }
+        )
+    if out:
+        return out
     raise ValueError("Savollarni avtomatik ajratib bo‘lmadi — fayl tuzilmasi juda notekis.")
 
 

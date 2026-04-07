@@ -30,9 +30,10 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
 
   const handleCreateExam = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formEl = e.currentTarget;
     setError('');
     setSuccess('');
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(formEl);
     
     // Collect selected groups
     const selectedGroups = Array.from(fd.getAll('group_ids')).map(Number);
@@ -81,7 +82,7 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
       }
       
       setSuccess('Exam created successfully!');
-      (e.target as HTMLFormElement).reset();
+      formEl.reset();
       setManualQuestions([{ text: '', options: ['', '', '', ''], correctAnswer: '' }]);
       onSuccess();
       setTimeout(() => {

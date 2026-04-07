@@ -347,7 +347,8 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
-                    const fd = new FormData(e.currentTarget);
+                    const formEl = e.currentTarget;
+                    const fd = new FormData(formEl);
                     const res = await fetch(apiUrl('/api/admin/users'), {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -363,7 +364,7 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                     const data = await res.json().catch(() => ({}));
                     if (res.ok) {
                       loadStats();
-                      (e.target as HTMLFormElement).reset();
+                      formEl.reset();
                     } else {
                       alert(data.error || 'Error');
                     }
