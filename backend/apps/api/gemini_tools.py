@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import re
+import zipfile
+from io import BytesIO
 from typing import Any
 
 from django.conf import settings
@@ -684,4 +686,86 @@ MATN:
         )
     if not out:
         raise ValueError("Hech qanday yaroqli savol topilmadi — matnni tekshiring yoki qisqaroq bo'limlarda yuklang")
+    return out
+
+
+def _normalize_parsed_items(arr: list, src_language: str) -> list[dict]:
+    out: list[dict] = []
+    for item in arr:
+        if not isinstance(item, dict):
+            continue
+        opts = [str(x).strip() for x in (item.get("options") or [])][:10]
+        opts = [x for x in opts if x]
+        if len(opts) < 2:
+            continue
+        ca = str(item.get("correctAnswer") or opts[0]).strip()
+        if ca not in opts:
+            ca = opts[0]
+        text = str(item.get("text") or "").strip()
+        if len(text) < 4:
+            continue
+        cat = str(item.get("categoryName") or "General").strip()[:300] or "General"
+        desc = str(item.get("categoryDescription") or "").strip()[:500]
+        out.append(
+            {
+                "text": text,
+                "options": opts,
+                "correctAnswer": ca,
+                "categoryName": cat,
+                "categoryDescription": desc,
+            }
+        )
+    return out
+
+
+def parse_and_classify_document_bytes(raw: bytes, filename: str, language: str) -> list[dict]:
+    """
+    Rasmli/skan hujjatlar uchun multimodal parsing:
+    - PDF: application/pdf sifatida to'g'ridan-to'g'ri modelga yuboriladi
+    - DOCX: ichidagi word/media rasmlari yuboriladi
+    """
+    client = _client()
+    if not client:
+        raise RuntimeError("GEMINI_API_KEY is not configured")
+    from google.genai import types
+
+    src_language = (language or "auto").lower()
+    if src_language == "auto":
+        src_language = "uz"
+    lang_name = "English" if src_language == "en" else "Russian" if src_language == "ru" else "Uzbek"
+    name = (filename or "").lower()
+    prompt = f"""Extract ALL MCQ questions from this document, including scanned/image-only content.
+Language context: {lang_name}.
+Return JSON array only. Each item:
+{{"text":"...","options":["..."],"correctAnswer":"...","categoryName":"...","categoryDescription":""}}
+Rules:
+- options length: 2..10
+- correctAnswer must exactly equal one option
+- include answer-key mapping if present anywhere in document.
+"""
+    contents: list[Any] = [prompt]
+    if name.endswith(".pdf"):
+        contents.append(types.Part.from_bytes(data=raw, mime_type="application/pdf"))
+    elif name.endswith(".docx"):
+        # DOCX ichidagi rasmlarni ajratib yuboramiz
+        with zipfile.ZipFile(BytesIO(raw)) as zf:
+            media_names = [n for n in zf.namelist() if n.startswith("word/media/")]
+            for n in media_names[:20]:
+                b = zf.read(n)
+                ext = n.rsplit(".", 1)[-1].lower() if "." in n else ""
+                mime = (
+                    "image/png" if ext == "png" else
+                    "image/gif" if ext == "gif" else
+                    "image/webp" if ext == "webp" else
+                    "image/jpeg"
+                )
+                contents.append(types.Part.from_bytes(data=b, mime_type=mime))
+    else:
+        raise ValueError("Unsupported document type for multimodal parse")
+
+    t = _generate(client, None, contents=contents).strip()
+    arr = _extract_json_array_from_model_text(t)
+    out = _normalize_parsed_items(arr, src_language)
+    if not out:
+        raise ValueError("Hujjatdan savollar ajratilmadi")
     return out

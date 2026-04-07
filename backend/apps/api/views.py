@@ -38,6 +38,7 @@ from apps.api.gemini_tools import (
     generate_bank_extension,
     generate_exam_ai_summary,
     parse_and_classify_questionnaire,
+    parse_and_classify_document_bytes,
     parse_flexible_questionnaire,
     parse_structured_questionnaire,
     paraphrase_medical_mcqs,
@@ -524,26 +525,39 @@ def admin_test_bank_import_smart(request):
     except (TypeError, ValueError):
         target_cat_id = None
     text = ""
+    raw_doc: bytes | None = None
+    safe_name = ""
     f = request.FILES.get("file")
     if f:
-        raw = f.read()
+        raw_doc = f.read()
         safe_name = os.path.basename(getattr(f, "name", "") or "")
         try:
-            text = extract_text_from_bank_upload(raw, safe_name)
+            text = extract_text_from_bank_upload(raw_doc, safe_name)
         except ValueError as e:
             return Response({"error": str(e)}, status=400)
     elif d.get("raw_text") is not None:
         text = str(d["raw_text"])
     text = (text or "").strip()
-    if not text:
+    if not text and not raw_doc:
         return Response({"error": "raw_text yoki file kerak"}, status=400)
     if len(text) > 400_000:
         text = text[:400_000]
     source_language = language if language in ("en", "uz", "ru") else detect_question_language(text)
-    chunks = _split_large_text(text)
+    # OCR/scan hujjatlar: matn juda kam bo'lsa multimodal parserga tushiramiz.
+    if raw_doc and safe_name and len(text) < 180:
+        try:
+            items = parse_and_classify_document_bytes(raw_doc, safe_name, source_language)
+            chunks = [text] if text else ["visual"]
+        except Exception:
+            items = []
+            chunks = []
+    else:
+        items = []
+        chunks = []
+    if not items:
+        chunks = _split_large_text(text)
     # Juda katta fayllarda AI chaqiruvlari worker timeout berishi mumkin.
     force_local_parse = len(text) > 180_000 or len(chunks) >= 3
-    items: list[dict] = []
     for chunk in chunks:
         if force_local_parse:
             try:
