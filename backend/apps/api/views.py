@@ -37,6 +37,7 @@ from apps.api.gemini_tools import (
     generate_bank_extension,
     generate_exam_ai_summary,
     parse_and_classify_questionnaire,
+    parse_flexible_questionnaire,
     parse_structured_questionnaire,
     paraphrase_medical_mcqs,
     translate_questions_to_other_languages,
@@ -524,26 +525,35 @@ def admin_test_bank_import_smart(request):
     except RuntimeError as e:
         # Gemini vaqtincha ishlamasa ham structured fallback bilan davom etamiz.
         try:
-            items = parse_structured_questionnaire(text, source_language)
+            items = parse_flexible_questionnaire(text, source_language)
         except Exception:
-            return Response({"error": str(e)}, status=503)
+            try:
+                items = parse_structured_questionnaire(text, source_language)
+            except Exception:
+                return Response({"error": str(e)}, status=503)
     except ValueError as e:
         # AI javobi yaroqsiz bo'lsa local structured parserga tushamiz.
         try:
-            items = parse_structured_questionnaire(text, source_language)
+            items = parse_flexible_questionnaire(text, source_language)
         except Exception:
-            return Response({"error": str(e)}, status=400)
+            try:
+                items = parse_structured_questionnaire(text, source_language)
+            except Exception:
+                return Response({"error": str(e)}, status=400)
     except Exception:
         # 502 o'rniga foydalanuvchi uchun tushunarli xato.
         try:
-            items = parse_structured_questionnaire(text, source_language)
+            items = parse_flexible_questionnaire(text, source_language)
         except Exception:
-            return Response(
-                {
-                    "error": "Savollarni avtomatik ajratib bo‘lmadi. Faylda savol/variant/to‘g‘ri javob formatini tekshiring.",
-                },
-                status=400,
-            )
+            try:
+                items = parse_structured_questionnaire(text, source_language)
+            except Exception:
+                return Response(
+                    {
+                        "error": "Savollarni avtomatik ajratib bo‘lmadi. Faylda savol/variant/to‘g‘ri javob formatini tekshiring.",
+                    },
+                    status=400,
+                )
 
     translations: list[dict] = []
     payload = [{"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items]

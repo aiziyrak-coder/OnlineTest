@@ -252,8 +252,8 @@ class ExamFlowApiTests(TestCase):
         "apps.api.views.parse_and_classify_questionnaire",
         side_effect=RuntimeError("GEMINI_API_KEY is not configured"),
     )
-    def test_admin_test_bank_import_smart_no_gemini_returns_503(self, _mock):
-        """Direct view call: APIClient can trigger Django debug logging bugs on some stacks."""
+    def test_admin_test_bank_import_smart_no_gemini_uses_fallback_parser(self, _mock):
+        """AI parser yiqilganda fallback parser bilan import davom etishi kerak."""
         from rest_framework.test import APIRequestFactory, force_authenticate
 
         from apps.api.authentication import JWTUser
@@ -268,7 +268,7 @@ class ExamFlowApiTests(TestCase):
         ju = JWTUser(self.admin.id, self.admin.role, self.admin.name, self.admin.group_id)
         force_authenticate(django_req, user=ju)
         resp = admin_test_bank_import_smart(django_req)
-        self.assertEqual(resp.status_code, 503)
+        self.assertEqual(resp.status_code, 200)
 
     def test_student_cannot_test_bank_import_smart(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")

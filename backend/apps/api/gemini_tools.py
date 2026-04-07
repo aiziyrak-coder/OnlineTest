@@ -208,6 +208,128 @@ def _parse_answer_indexes(answer_text: str, option_count: int) -> list[int]:
     return idxs
 
 
+def _extract_answer_key_map(raw_text: str) -> dict[int, list[str]]:
+    """
+    Matndan javob kalitini ajratadi.
+    Misollar:
+      1-A, 2:C, 3) 4, 4 - B,D
+      To'g'ri javoblar: 1-A; 2-C
+    """
+    m: dict[int, list[str]] = {}
+    text = raw_text or ""
+    # Pair-by-pair mapping
+    for qn, ans in re.findall(r"(?im)\b(\d{1,4})\s*[-:.)]\s*([A-Ja-j]|\d{1,2}(?:\s*[,;/]\s*\d{1,2})*)", text):
+        q = int(qn)
+        vals = [x.strip().upper() for x in re.split(r"[,;/]\s*", ans) if x.strip()]
+        if vals:
+            m[q] = vals
+    # Dense single-line answers like: 1-A 2-C 3-D
+    for line in text.splitlines():
+        pairs = re.findall(r"(\d{1,4})\s*[-:.)]\s*([A-Ja-j]|\d{1,2})", line, flags=re.IGNORECASE)
+        if len(pairs) >= 2:
+            for qn, ans in pairs:
+                q = int(qn)
+                m[q] = [ans.strip().upper()]
+    return m
+
+
+def parse_flexible_questionnaire(raw_text: str, language: str = "auto") -> list[dict]:
+    """
+    Juda erkin formatlar uchun parser:
+    - Savollar har xil prefiksda bo'lishi mumkin (1., Savol 1, Question 1, Вопрос 1 ...)
+    - Variantlar A)/B) yoki 1)/2) yoki a./b. bo'lishi mumkin
+    - Javob kaliti hujjat oxirida bo'lishi mumkin (1-A, 2-C ...)
+    """
+    src_lang = (language or "auto").lower()
+    if src_lang == "auto":
+        src_lang = detect_question_language(raw_text)
+    text = (raw_text or "").replace("\r\n", "\n")
+    answer_map = _extract_answer_key_map(text)
+
+    qsplit = re.split(
+        r"(?im)(?=^\s*(?:\d{1,4}[).]|question\s*#?\s*\d+|savol\s*#?\s*\d+|вопрос\s*#?\s*\d+|задание\s*#?\s*\d+))",
+        text,
+    )
+    out: list[dict] = []
+    for block in qsplit:
+        b = block.strip()
+        if len(b) < 12:
+            continue
+        hm = re.match(
+            r"(?im)^\s*(?:(\d{1,4})[).]|(?:question|savol|вопрос|задание)\s*#?\s*(\d{1,4}))\s*([\s\S]*)$",
+            b,
+        )
+        if not hm:
+            continue
+        qn = int(hm.group(1) or hm.group(2) or 0)
+        body = (hm.group(3) or "").strip()
+        lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+        if not lines:
+            continue
+
+        option_rows: list[tuple[str, str]] = []
+        stem_parts: list[str] = []
+        for ln in lines:
+            om = re.match(r"^\s*([A-Ja-j]|\d{1,2})[).:-]\s+(.+)$", ln)
+            if om:
+                option_rows.append((om.group(1).upper(), om.group(2).strip()))
+            else:
+                # answer markerlarni stemga qo'shmaymiz
+                if not re.match(r"(?im)^(to['’]?g['’]?ri\s+javob|правильн\w+\s+ответ|correct\s+answer)", ln):
+                    stem_parts.append(ln)
+
+        # Inline options (single-line cases) if line-based options topilmasa
+        if len(option_rows) < 2:
+            inline = re.findall(r"(?i)([A-Ja-j])[).]\s*([^A-Ja-j]{2,}?)(?=\s+[A-Ja-j][).]\s*|$)", body)
+            if len(inline) >= 2:
+                option_rows = [(k.upper(), v.strip()) for k, v in inline]
+
+        options = [v for _, v in option_rows][:10]
+        if len(options) < 2:
+            continue
+        stem = " ".join(stem_parts).strip() or f"Question {qn}"
+
+        # Correct answer resolution
+        ans_tokens = answer_map.get(qn, [])
+        if not ans_tokens:
+            local = re.search(
+                r"(?im)(?:to['’]?g['’]?ri\s+javob(?:lar)?|правильн\w+\s+ответ\w*|correct\s+answer(?:s)?)\s*:\s*(.+)$",
+                b,
+            )
+            if local:
+                ans_tokens = [x.strip().upper() for x in re.split(r"[,;/]\s*", local.group(1)) if x.strip()]
+
+        # token letter bo'lsa indexga o'girish
+        idxs: list[int] = []
+        for tok in ans_tokens:
+            if tok.isdigit():
+                n = int(tok)
+                if 1 <= n <= len(options):
+                    idxs.append(n)
+            elif re.match(r"^[A-J]$", tok):
+                n = ord(tok) - ord("A") + 1
+                if 1 <= n <= len(options):
+                    idxs.append(n)
+        if not idxs:
+            idxs = [1]
+        correct_values = [options[i - 1] for i in dict.fromkeys(idxs)]
+        if len(correct_values) > 1:
+            stem = f"{stem} ({len(correct_values)} correct answers)"
+
+        out.append(
+            {
+                "text": stem,
+                "options": options,
+                "correctAnswer": correct_values[0],
+                "categoryName": "General",
+                "categoryDescription": "",
+            }
+        )
+    if out:
+        return out
+    raise ValueError("Savollarni avtomatik ajratib bo‘lmadi — fayl tuzilmasi juda notekis.")
+
+
 def parse_structured_questionnaire(raw_text: str, language: str = "auto") -> list[dict]:
     """
     Regex parser: 1..10+ variantli, bir yoki ko'p to'g'ri javobli matnlarni ajratadi.
@@ -216,6 +338,11 @@ def parse_structured_questionnaire(raw_text: str, language: str = "auto") -> lis
     - "1) ..." varianti
     - "To'g'ri javoblar: 1,3" / "Правильные ответы: 2" / "Correct answer(s): 4"
     """
+    # Avval universal parserga urinib ko'ramiz.
+    try:
+        return parse_flexible_questionnaire(raw_text, language)
+    except Exception:
+        pass
     src_lang = (language or "auto").lower()
     if src_lang == "auto":
         src_lang = detect_question_language(raw_text)
