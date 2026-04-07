@@ -1031,7 +1031,11 @@ def _admin_exams_create_impl(request):
     questions: list = []
 
     if mode == "bank_mixed":
-        cat_ids = safe_json_loads(d.get("bank_category_ids") or "[]", [])
+        raw_cat_ids = d.get("bank_category_ids")
+        if isinstance(raw_cat_ids, list):
+            cat_ids = raw_cat_ids
+        else:
+            cat_ids = safe_json_loads(raw_cat_ids or "[]", [])
         if not isinstance(cat_ids, list) or not cat_ids:
             return Response({"error": "Select at least one test bank category"}, status=400)
         n = max(1, min(200, int(d.get("bank_question_count") or 20)))
