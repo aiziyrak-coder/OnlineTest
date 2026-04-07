@@ -64,6 +64,8 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
         error?: string;
         detail?: string;
         inserted?: number;
+        chunks?: number;
+        translation_limited?: boolean;
         categories?: { name: string; questions_added: number }[];
       }>(res);
       if (res.ok && d && typeof d.inserted === 'number') {
@@ -73,7 +75,7 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
             : '';
         setMsg({
           type: 'ok',
-          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${catLines}` : ''}`,
+          text: `${t.testBankAiResult.replace('{n}', String(d.inserted))}${catLines ? ` — ${catLines}` : ''}${d.chunks && d.chunks > 1 ? ` · chunks: ${d.chunks}` : ''}${d.translation_limited ? ' · tarjima qisman (katta fayl)' : ''}`,
         });
         setSmartFile(null);
         setFileKey((k) => k + 1);

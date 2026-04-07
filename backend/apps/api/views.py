@@ -6,6 +6,7 @@ import os
 import secrets
 import tempfile
 import base64
+import math
 from datetime import datetime
 from django.core import signing
 import jwt
@@ -474,6 +475,25 @@ def _get_or_create_bank_category(name: str, description: str) -> TestBankCategor
     )
 
 
+def _split_large_text(text: str, chunk_size: int = 95_000, max_chunks: int = 8) -> list[str]:
+    """Katta matnni AI uchun xavfsizroq bo'laklarga bo'ladi."""
+    t = (text or "").strip()
+    if len(t) <= chunk_size:
+        return [t]
+    chunks: list[str] = []
+    i = 0
+    while i < len(t) and len(chunks) < max_chunks:
+        j = min(len(t), i + chunk_size)
+        cut = t.rfind("\n", i + math.floor(chunk_size * 0.5), j)
+        if cut <= i:
+            cut = j
+        chunks.append(t[i:cut].strip())
+        i = cut
+    if i < len(t):
+        chunks.append(t[i:].strip())
+    return [c for c in chunks if c]
+
+
 @api_view(["POST"])
 @throttle_classes([BankAiImportThrottle])
 @permission_classes([IsAuthenticated])
@@ -520,44 +540,55 @@ def admin_test_bank_import_smart(request):
     if len(text) > 400_000:
         text = text[:400_000]
     source_language = language if language in ("en", "uz", "ru") else detect_question_language(text)
-    try:
-        items = parse_and_classify_questionnaire(text, source_language)
-    except RuntimeError as e:
-        # Gemini vaqtincha ishlamasa ham structured fallback bilan davom etamiz.
+    chunks = _split_large_text(text)
+    items: list[dict] = []
+    for chunk in chunks:
         try:
-            items = parse_flexible_questionnaire(text, source_language)
+            parsed = parse_and_classify_questionnaire(chunk, source_language)
+        except RuntimeError:
+            # Gemini vaqtincha ishlamasa ham structured fallback bilan davom etamiz.
+            try:
+                parsed = parse_flexible_questionnaire(chunk, source_language)
+            except Exception:
+                try:
+                    parsed = parse_structured_questionnaire(chunk, source_language)
+                except Exception:
+                    parsed = []
+        except ValueError:
+            # AI javobi yaroqsiz bo'lsa local parserlarga tushamiz.
+            try:
+                parsed = parse_flexible_questionnaire(chunk, source_language)
+            except Exception:
+                try:
+                    parsed = parse_structured_questionnaire(chunk, source_language)
+                except Exception:
+                    parsed = []
         except Exception:
             try:
-                items = parse_structured_questionnaire(text, source_language)
+                parsed = parse_flexible_questionnaire(chunk, source_language)
             except Exception:
-                return Response({"error": str(e)}, status=503)
-    except ValueError as e:
-        # AI javobi yaroqsiz bo'lsa local structured parserga tushamiz.
-        try:
-            items = parse_flexible_questionnaire(text, source_language)
-        except Exception:
-            try:
-                items = parse_structured_questionnaire(text, source_language)
-            except Exception:
-                return Response({"error": str(e)}, status=400)
-    except Exception:
-        # 502 o'rniga foydalanuvchi uchun tushunarli xato.
-        try:
-            items = parse_flexible_questionnaire(text, source_language)
-        except Exception:
-            try:
-                items = parse_structured_questionnaire(text, source_language)
-            except Exception:
-                return Response(
-                    {
-                        "error": "Savollarni avtomatik ajratib bo‘lmadi. Faylda savol/variant/to‘g‘ri javob formatini tekshiring.",
-                    },
-                    status=400,
-                )
+                try:
+                    parsed = parse_structured_questionnaire(chunk, source_language)
+                except Exception:
+                    parsed = []
+        items.extend(parsed or [])
+
+    if not items:
+        return Response(
+            {
+                "error": "Savollarni avtomatik ajratib bo‘lmadi. Fayl juda murakkab bo‘lsa uni 2-3 bo‘lak qilib import qiling.",
+            },
+            status=400,
+        )
 
     translations: list[dict] = []
     payload = [{"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items]
-    translations = translate_questions_to_other_languages(payload, source_language)
+    # Juda katta importlarda request timeout bo'lmasligi uchun tarjimani cheklaymiz.
+    if len(payload) <= 80:
+        translations = translate_questions_to_other_languages(payload, source_language)
+    else:
+        head = translate_questions_to_other_languages(payload[:80], source_language)
+        translations = head + ([{}] * max(0, len(payload) - len(head)))
 
     categories_touched: dict[str, int] = {}
     inserted = 0
@@ -614,6 +645,8 @@ def admin_test_bank_import_smart(request):
             "success": True,
             "inserted": inserted,
             "categories": [{"name": k, "questions_added": v} for k, v in sorted(categories_touched.items())],
+            "chunks": len(chunks),
+            "translation_limited": len(payload) > 80,
         }
     )
 
