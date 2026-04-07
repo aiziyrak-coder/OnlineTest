@@ -328,3 +328,16 @@ class ExamFlowApiTests(TestCase):
         self.student.refresh_from_db()
         self.assertEqual(self.student.status, "Active")
         self.assertTrue(UnbanEvidence.objects.filter(student_id=self.student.id, admin_id=self.admin.id).exists())
+
+    def test_banned_student_can_download_ban_report_pdf_and_verify_qr_token(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        AppUser.objects.filter(pk=self.student.id).update(status="Banned")
+        StudentExam.objects.create(student_id=self.student.id, exam_id=self.exam_a.id, status="Banned")
+        self.client.post(
+            "/api/student/violations",
+            {"exam_id": self.exam_a.id, "violation_type": "TAB_SWITCH_HARD", "screenshot_url": ""},
+            format="json",
+        )
+        r = self.client.get(f"/api/student/ban-report.pdf?exam_id={self.exam_a.id}")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("application/pdf", r["Content-Type"])

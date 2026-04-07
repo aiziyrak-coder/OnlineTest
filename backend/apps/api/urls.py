@@ -15,6 +15,7 @@ urlpatterns = [
     path("student/results", views.student_results),
     path("student/exams/<int:exam_id>/result-details", views.student_result_details),
     path("student/exams/<int:exam_id>/certificate.pdf", views.student_certificate_pdf),
+    path("student/ban-report.pdf", views.student_ban_report_pdf),
     path("student/violations", views.student_violations),
     path("admin/users", views.admin_users),
     path("admin/users/<str:user_id>/unban", views.admin_users_unban),
@@ -42,4 +43,5 @@ urlpatterns = [
         views.public_verify_certificate_pdf,
     ),
     path("public/verify-result/<str:result_id>", views.public_verify_result),
+    path("public/verify-ban-report", views.public_verify_ban_report),
 ]

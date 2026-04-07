@@ -7,13 +7,16 @@ import secrets
 import tempfile
 import base64
 from datetime import datetime
+from django.core import signing
+import jwt
 
 import bcrypt
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count
 from django.http import HttpResponse
 from django.utils import timezone as dj_tz
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
@@ -27,13 +30,14 @@ from apps.api.throttles import (
     LoginThrottle,
     PublicVerifyThrottle,
 )
-from apps.api.certificate_pdf import build_certificate_pdf
+from apps.api.certificate_pdf import build_ban_report_pdf, build_certificate_pdf
 from apps.api.gemini_tools import (
     compare_faces,
     detect_question_language,
     generate_bank_extension,
     generate_exam_ai_summary,
     parse_and_classify_questionnaire,
+    parse_structured_questionnaire,
     paraphrase_medical_mcqs,
     translate_questions_to_other_languages,
 )
@@ -518,11 +522,28 @@ def admin_test_bank_import_smart(request):
     try:
         items = parse_and_classify_questionnaire(text, source_language)
     except RuntimeError as e:
-        return Response({"error": str(e)}, status=503)
+        # Gemini vaqtincha ishlamasa ham structured fallback bilan davom etamiz.
+        try:
+            items = parse_structured_questionnaire(text, source_language)
+        except Exception:
+            return Response({"error": str(e)}, status=503)
     except ValueError as e:
-        return Response({"error": str(e)}, status=400)
-    except Exception as e:
-        return Response({"error": "AI tahlil xatosi", "detail": str(e)[:500]}, status=502)
+        # AI javobi yaroqsiz bo'lsa local structured parserga tushamiz.
+        try:
+            items = parse_structured_questionnaire(text, source_language)
+        except Exception:
+            return Response({"error": str(e)}, status=400)
+    except Exception:
+        # 502 o'rniga foydalanuvchi uchun tushunarli xato.
+        try:
+            items = parse_structured_questionnaire(text, source_language)
+        except Exception:
+            return Response(
+                {
+                    "error": "Savollarni avtomatik ajratib bo‘lmadi. Faylda savol/variant/to‘g‘ri javob formatini tekshiring.",
+                },
+                status=400,
+            )
 
     translations: list[dict] = []
     payload = [{"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items]
@@ -1717,6 +1738,100 @@ def public_verify_certificate_pdf(request, result_id: str):
     resp = HttpResponse(pdf, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{result_id}.pdf"'
     return resp
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def student_ban_report_pdf(request):
+    auth = request.META.get("HTTP_AUTHORIZATION", "")
+    if not auth.startswith("Bearer "):
+        return Response({"error": "Unauthorized"}, status=401)
+    token = auth[7:].strip()
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=["HS256"],
+            options={"require": ["exp"]},
+            leeway=60,
+        )
+    except jwt.PyJWTError:
+        return Response({"error": "Invalid token"}, status=401)
+    sid = (payload.get("id") or payload.get("sub") or "").strip()
+    if not sid:
+        return Response({"error": "Invalid token payload"}, status=401)
+    u = AppUser.objects.filter(pk=sid).first()
+    if not u or (u.role or "").strip().lower() != "student":
+        return Response({"error": "Forbidden"}, status=403)
+    exam_id = request.query_params.get("exam_id")
+    se = None
+    if exam_id:
+        try:
+            se = StudentExam.objects.filter(student_id=sid, exam_id=int(exam_id)).select_related("exam").first()
+        except (TypeError, ValueError):
+            se = None
+    if se is None:
+        se = (
+            StudentExam.objects.filter(student_id=sid, status="Banned")
+            .select_related("exam")
+            .order_by("-id")
+            .first()
+        )
+    if u.status != "Banned" and (not se or se.status != "Banned"):
+        return Response({"error": "Ban report mavjud emas"}, status=404)
+    ex_id = se.exam_id if se else 0
+    verify_token = signing.dumps({"sid": sid, "eid": ex_id}, salt="ban-report")
+    base = public_base_url(request)
+    verify_url = f"{base}/api/public/verify-ban-report?token={verify_token}"
+    violations = list(
+        ViolationLog.objects.filter(student_id=sid, exam_id=ex_id if ex_id else None)
+        .order_by("-timestamp")
+        .values("violation_type", "timestamp")[:60]
+    ) if ex_id else list(
+        ViolationLog.objects.filter(student_id=sid).order_by("-timestamp").values("violation_type", "timestamp")[:60]
+    )
+    pdf = build_ban_report_pdf(
+        student_id=sid,
+        student_name=u.name,
+        exam_title=se.exam.title if se else "N/A",
+        issued_at=dj_tz.now().isoformat(),
+        violations=violations,
+        verify_url=verify_url,
+    )
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="BAN_REPORT_{sid}.pdf"'
+    return resp
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_verify_ban_report(request):
+    token = (request.query_params.get("token") or "").strip()
+    if not token:
+        return Response({"valid": False, "error": "token required"}, status=400)
+    try:
+        data = signing.loads(token, salt="ban-report", max_age=60 * 60 * 24 * 365)
+    except signing.BadSignature:
+        return Response({"valid": False, "error": "invalid token"}, status=400)
+    sid = str(data.get("sid") or "")
+    eid = data.get("eid")
+    user = AppUser.objects.filter(pk=sid).first()
+    if not user:
+        return Response({"valid": False, "error": "student not found"}, status=404)
+    se = StudentExam.objects.filter(student_id=sid, exam_id=eid).select_related("exam").first()
+    violations_count = ViolationLog.objects.filter(student_id=sid, exam_id=eid).count() if eid else ViolationLog.objects.filter(student_id=sid).count()
+    return Response(
+        {
+            "valid": True,
+            "student_id": sid,
+            "student_name": user.name,
+            "student_status": user.status,
+            "exam_id": eid,
+            "exam_title": se.exam.title if se else None,
+            "violations_count": violations_count,
+        }
+    )
 
 
 @api_view(["POST"])

@@ -106,6 +106,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [warningMsg, setWarningMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [hardBlocked, setHardBlocked] = useState(false);
+  const [banPdfBusy, setBanPdfBusy] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -676,7 +677,38 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           <p className="text-gray-700 mb-8 leading-relaxed">
             {identityTerminated ? t.examTerminatedIdentity : t.examTerminatedWarnings}
           </p>
-          <Button className="w-full rounded-full" onClick={() => onFinish(null)}>Return to Dashboard</Button>
+          <div className="space-y-3">
+            <Button
+              className="w-full rounded-full"
+              disabled={banPdfBusy}
+              onClick={async () => {
+                try {
+                  setBanPdfBusy(true);
+                  const res = await fetch(apiUrl(`/api/student/ban-report.pdf?exam_id=${exam.id}`), {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (!res.ok) throw new Error('Ban report yuklab bo‘lmadi');
+                  const blob = await res.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `BAN_REPORT_${user.id}.pdf`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch (e) {
+                  console.error(e);
+                  alert('Ban report PDF yuklab bo‘lmadi');
+                } finally {
+                  setBanPdfBusy(false);
+                }
+              }}
+            >
+              {banPdfBusy ? 'PDF tayyorlanmoqda...' : 'Rasmiy BAN hujjatini yuklab olish'}
+            </Button>
+            <Button className="w-full rounded-full" variant="outline" onClick={() => onFinish(null)}>
+              Return to Dashboard
+            </Button>
+          </div>
         </Card>
       </motion.div>
     );
