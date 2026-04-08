@@ -50,50 +50,88 @@ export function PreExamCheck({
   const [verified, setVerified] = useState(false);
   const [livenessPassed, setLivenessPassed] = useState(false);
   const [livenessStep, setLivenessStep] = useState(0);
+  // livenessActive: tugma bosilganda "kutilmoqda" holati
+  const [livenessActive, setLivenessActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const t = translations[lang];
   const livenessSigRef = useRef<number>(0);
 
-  const captureMotionSignature = () => {
+  /**
+   * Kamera kadridan piksel yig'indisini hisoblaydi.
+   * Ko'z yumish yoki tabassum paytida yuz maydoni o'zgaradi — delta katta bo'ladi.
+   */
+  const captureFrame = (): number => {
     if (!videoRef.current || !canvasRef.current) return 0;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video.videoWidth || !video.videoHeight) return 0;
-    canvas.width = 96;
-    canvas.height = 72;
+    // Faqat yuz joylashgan markaziy qism (yuqori 60%)
+    canvas.width = 80;
+    canvas.height = 60;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return 0;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    // Markaziy yuz zonasini olish
+    const sw = video.videoWidth;
+    const sh = video.videoHeight * 0.6;
+    const sx = 0;
+    const sy = 0;
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
     let sum = 0;
-    for (let i = 0; i < frame.length; i += 16) {
-      sum += frame[i] + frame[i + 1] + frame[i + 2];
+    for (let i = 0; i < data.length; i += 4) {
+      // Yorug'lik intensivligi (grayscale)
+      sum += (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
     }
     return sum;
   };
 
+  /**
+   * Liveness bosqichini ishga tushiradi.
+   * Foydalanuvchi harakatini (ko'z yumish / tabassum) aniqlash uchun:
+   * - Boshlang'ich kadr olinadi
+   * - 2 soniya davomida bir necha kadr olinadi
+   * - Maksimal delta 4000+ bo'lsa harakat aniqlangan
+   */
   const runLivenessStep = (nextStep: number, hint: string) => {
-    const base = captureMotionSignature();
+    const base = captureFrame();
     if (!base) {
       setError(t.preExamLivenessFail);
       return;
     }
     livenessSigRef.current = base;
+    setLivenessActive(true);
     setError(hint);
-    window.setTimeout(() => {
-      const after = captureMotionSignature();
-      const delta = Math.abs(after - livenessSigRef.current);
-      if (delta < 7000) {
-        setError(t.preExamLivenessFail);
-        setLivenessPassed(false);
-        setLivenessStep(0);
-        return;
+
+    let maxDelta = 0;
+    let checks = 0;
+    const TOTAL_CHECKS = 8;
+    const INTERVAL = 250; // ms
+
+    const checkInterval = window.setInterval(() => {
+      const current = captureFrame();
+      const delta = Math.abs(current - livenessSigRef.current);
+      if (delta > maxDelta) maxDelta = delta;
+      checks++;
+
+      if (checks >= TOTAL_CHECKS) {
+        window.clearInterval(checkInterval);
+        setLivenessActive(false);
+
+        // Ko'z yumish: kichikroq delta yetarli (yuz maydonining bir qismi o'zgaradi)
+        // Tabassum: og'iz atrofida o'zgarish
+        const threshold = nextStep === 1 ? 3500 : 2500;
+
+        if (maxDelta < threshold) {
+          setError(t.preExamLivenessFail);
+          // Qayta urinish uchun bosqichni reset qilmaymiz
+          return;
+        }
+        setError('');
+        setLivenessStep(nextStep);
+        if (nextStep >= 2) setLivenessPassed(true);
       }
-      setError('');
-      setLivenessStep(nextStep);
-      if (nextStep >= 3) setLivenessPassed(true);
-    }, 1800);
+    }, INTERVAL);
   };
 
   useEffect(() => {
@@ -212,7 +250,7 @@ export function PreExamCheck({
     }
   };
 
-  const livenessStepLabel = t.preExamLivenessStep.replace('{step}', String(livenessStep));
+  // livenessStep: 0..2 (2 bosqich)
 
   return (
     <motion.div
@@ -347,44 +385,85 @@ export function PreExamCheck({
                   </Button>
 
                   {/* Jonlilik tekshiruvi */}
-                  <div className="space-y-2">
-                    <p className="text-xs text-gray-600 font-medium">{t.preExamLivenessTitle}</p>
-                    <div className="flex gap-2 flex-wrap">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={!verified || livenessStep > 0}
-                        onClick={() => runLivenessStep(1, t.preExamLivenessHint1)}
-                      >
-                        {t.preExamLiveness1}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={!verified || livenessStep !== 1}
-                        onClick={() => runLivenessStep(2, t.preExamLivenessHint2)}
-                      >
-                        {t.preExamLiveness2}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={!verified || livenessStep !== 2}
-                        onClick={() => runLivenessStep(3, t.preExamLivenessHint3)}
-                      >
-                        {t.preExamLiveness3}
-                      </Button>
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-700 font-semibold">{t.preExamLivenessTitle}</p>
+
+                    {/* Bosqich 1: Ko'z yumish */}
+                    <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
+                      livenessStep >= 1
+                        ? 'bg-green-50 border-green-200'
+                        : livenessActive && livenessStep === 0
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-white/50 border-gray-200'
+                    }`}>
+                      <span className={`text-xl flex-shrink-0 ${livenessStep >= 1 ? 'opacity-100' : 'opacity-50'}`}>
+                        {livenessStep >= 1 ? '✅' : livenessActive && livenessStep === 0 ? '👁️' : '👁️'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${livenessStep >= 1 ? 'text-green-700' : 'text-gray-700'}`}>
+                          {t.preExamLiveness1}
+                        </p>
+                        {livenessActive && livenessStep === 0 && (
+                          <p className="text-xs text-blue-600 mt-0.5 animate-pulse">{t.preExamLivenessHint1}</p>
+                        )}
+                      </div>
+                      {livenessStep === 0 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!verified || livenessActive}
+                          onClick={() => runLivenessStep(1, t.preExamLivenessHint1)}
+                          className="flex-shrink-0 rounded-xl"
+                        >
+                          {livenessActive ? t.preExamLivenessWaiting : t.preExamLivenessStep1Btn}
+                        </Button>
+                      )}
+                      {livenessStep >= 1 && (
+                        <span className="text-green-600 text-sm font-bold flex-shrink-0">✓</span>
+                      )}
                     </div>
-                    <p
-                      className={`text-xs font-medium ${
-                        livenessPassed ? 'text-green-700' : 'text-gray-500'
-                      }`}
-                    >
-                      {livenessPassed ? t.preExamLivenessPassed : livenessStepLabel}
-                    </p>
+
+                    {/* Bosqich 2: Tabassum */}
+                    <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
+                      livenessStep >= 2
+                        ? 'bg-green-50 border-green-200'
+                        : livenessActive && livenessStep === 1
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'bg-white/50 border-gray-200'
+                    }`}>
+                      <span className={`text-xl flex-shrink-0 ${livenessStep >= 2 ? 'opacity-100' : 'opacity-50'}`}>
+                        {livenessStep >= 2 ? '✅' : '😊'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${livenessStep >= 2 ? 'text-green-700' : 'text-gray-700'}`}>
+                          {t.preExamLiveness2}
+                        </p>
+                        {livenessActive && livenessStep === 1 && (
+                          <p className="text-xs text-blue-600 mt-0.5 animate-pulse">{t.preExamLivenessHint2}</p>
+                        )}
+                      </div>
+                      {livenessStep === 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!verified || livenessActive}
+                          onClick={() => runLivenessStep(2, t.preExamLivenessHint2)}
+                          className="flex-shrink-0 rounded-xl"
+                        >
+                          {livenessActive ? t.preExamLivenessWaiting : t.preExamLivenessStep2Btn}
+                        </Button>
+                      )}
+                      {livenessStep >= 2 && (
+                        <span className="text-green-600 text-sm font-bold flex-shrink-0">✓</span>
+                      )}
+                    </div>
+
+                    {/* Umumiy holat */}
+                    {livenessPassed && (
+                      <p className="text-sm font-semibold text-green-700 text-center py-1">
+                        {t.preExamLivenessPassed}
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -444,7 +523,8 @@ export function PreExamCheck({
                 (exam.has_pin && !pin) ||
                 !user.profile_image ||
                 !verified ||
-                !livenessPassed
+                !livenessPassed ||
+                livenessActive
               }
               className="px-8 rounded-full shadow-lg shadow-black/10"
             >
