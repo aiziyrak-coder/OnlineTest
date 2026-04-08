@@ -6,7 +6,7 @@ import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import { InstituteLogo } from './components/InstituteLogo';
 
-const VIRTUAL_CAMERA_LABEL_RE = /(droidcam|epoccam|iriun|ivcam|obs|virtual)/i;
+const VIRTUAL_CAMERA_LABEL_RE = /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
 
 async function getPreferredCameraStream(withAudio: boolean): Promise<MediaStream> {
   const initial = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
@@ -25,7 +25,21 @@ async function getPreferredCameraStream(withAudio: boolean): Promise<MediaStream
   });
 }
 
-export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: { exam: any, token: string, user: any, lang: Language, onComplete: (examData: any, seId: number) => void, onCancel: () => void }) {
+export function PreExamCheck({
+  exam,
+  token,
+  user,
+  lang,
+  onComplete,
+  onCancel,
+}: {
+  exam: any;
+  token: string;
+  user: any;
+  lang: Language;
+  onComplete: (examData: any, seId: number) => void;
+  onCancel: () => void;
+}) {
   const [cameraReady, setCameraReady] = useState(false);
   const [micReady, setMicReady] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -48,7 +62,7 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
     if (!video.videoWidth || !video.videoHeight) return 0;
     canvas.width = 96;
     canvas.height = 72;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return 0;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -62,7 +76,7 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
   const runLivenessStep = (nextStep: number, hint: string) => {
     const base = captureMotionSignature();
     if (!base) {
-      setError('Liveness check failed: camera frame not ready.');
+      setError(t.preExamLivenessFail);
       return;
     }
     livenessSigRef.current = base;
@@ -71,7 +85,7 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
       const after = captureMotionSignature();
       const delta = Math.abs(after - livenessSigRef.current);
       if (delta < 7000) {
-        setError('Liveness failed. Harakat aniq ko‘rinmadi, qayta urinib ko‘ring.');
+        setError(t.preExamLivenessFail);
         setLivenessPassed(false);
         setLivenessStep(0);
         return;
@@ -92,24 +106,20 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
-      } catch (err) {
-        setError('Camera or microphone access denied. Please allow permissions to continue.');
+      } catch {
+        setError(t.preExamCameraError);
       }
     };
     checkDevices();
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+      if (stream) stream.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [t.preExamCameraError]);
 
   const verifyIdentity = async () => {
     if (!videoRef.current || !canvasRef.current || !user.profile_image) return;
-    
     setVerifying(true);
     setError('');
-    
     try {
       const canvas = canvasRef.current;
       const video = videoRef.current;
@@ -117,12 +127,9 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      
-      // Mirror the capture to match the video display
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0);
-      
       const capturedImageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
       const profilePayload = String(user.profile_image).includes(',')
         ? user.profile_image
@@ -143,11 +150,9 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
       if (response.status === 503) {
         const code = data?.code || '';
         if (code === 'GEMINI_UNAVAILABLE') {
-          // Kalit sozlanmagan — ixtiyoriy, o'tkazib yuboramiz
           setVerified(true);
           setError('');
         } else {
-          // Texnik xato — qayta urinish imkoni
           setError(t.identityVerifyError);
         }
         return;
@@ -156,13 +161,12 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
         setError(t.identityVerifyError);
         return;
       }
-      if (data.match) {
+      if (data.match || data.skipped) {
         setVerified(true);
       } else {
         setError(t.identityVerifyFailed);
       }
-    } catch (err) {
-      console.error('Verification error:', err);
+    } catch {
       setError(t.identityVerifyError);
     } finally {
       setVerifying(false);
@@ -176,38 +180,42 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
     }
     setStarting(true);
     setError('');
-    
     try {
       const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/start`), {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ pin })
+        body: JSON.stringify({ pin }),
       });
-      const data = await readJsonSafe<{ error?: string; exam?: any; studentExamId?: number; startedAt?: string }>(res);
-      
+      const data = await readJsonSafe<{
+        error?: string;
+        exam?: any;
+        studentExamId?: number;
+        startedAt?: string;
+      }>(res);
       if (!res.ok) {
-        setError(data?.error || 'Failed to start exam');
+        setError(data?.error || t.preExamStartError);
         setStarting(false);
         return;
       }
-      
       if (!data?.exam || data.studentExamId == null) {
-        setError('Invalid server response');
+        setError(t.preExamServerError);
         setStarting(false);
         return;
       }
       onComplete({ ...data.exam, startedAt: data.startedAt }, data.studentExamId);
-    } catch (err) {
-      setError('Network error');
+    } catch {
+      setError(t.preExamNetworkError);
       setStarting(false);
     }
   };
 
+  const livenessStepLabel = t.preExamLivenessStep.replace('{step}', String(livenessStep));
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 1.05 }}
@@ -217,45 +225,67 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
       <Card className="max-w-3xl w-full">
         <CardHeader className="flex flex-col items-center gap-3">
           <InstituteLogo size="sm" />
-          <CardTitle className="text-3xl text-center font-bold tracking-tight text-gray-900">Pre-Exam Check</CardTitle>
+          <CardTitle className="text-3xl text-center font-bold tracking-tight text-gray-900">
+            {t.preExamTitle}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-8">
           {error && (
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-2xl text-sm backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-2xl text-sm backdrop-blur-md"
+            >
               {error}
             </motion.div>
           )}
+
           {exam.exam_mode === 'bank_mixed' && (
             <p className="text-xs text-indigo-800 bg-indigo-50/80 border border-indigo-100 rounded-xl px-4 py-3 leading-relaxed">
               {t.examModeBankHint}
             </p>
           )}
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Chap ustun: tizim talablari + qoidalar */}
             <div className="space-y-6">
+              {/* Tizim talablari */}
               <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
-                <h3 className="font-semibold text-lg text-gray-800 mb-4">System Requirements</h3>
+                <h3 className="font-semibold text-lg text-gray-800 mb-4">{t.preExamSysReq}</h3>
                 <ul className="space-y-3">
                   <li className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                    <span className={`w-3 h-3 rounded-full shadow-sm ${cameraReady ? 'bg-green-500 shadow-green-500/50' : 'bg-red-500 shadow-red-500/50'}`}></span>
-                    Camera Access
+                    <span
+                      className={`w-3 h-3 rounded-full shadow-sm flex-shrink-0 ${
+                        cameraReady
+                          ? 'bg-green-500 shadow-green-500/50'
+                          : 'bg-red-500 shadow-red-500/50'
+                      }`}
+                    />
+                    {t.preExamCamera}
                   </li>
                   <li className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                    <span className={`w-3 h-3 rounded-full shadow-sm ${micReady ? 'bg-green-500 shadow-green-500/50' : 'bg-red-500 shadow-red-500/50'}`}></span>
-                    Microphone Access
+                    <span
+                      className={`w-3 h-3 rounded-full shadow-sm flex-shrink-0 ${
+                        micReady
+                          ? 'bg-green-500 shadow-green-500/50'
+                          : 'bg-red-500 shadow-red-500/50'
+                      }`}
+                    />
+                    {t.preExamMic}
                   </li>
                 </ul>
               </div>
-              
+
+              {/* Qoidalar */}
               <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
                 <h3 className="font-semibold text-lg text-gray-800 mb-3">{t.rules}</h3>
                 <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
-                  <li>You must remain in full view of the camera.</li>
-                  <li>No other people are allowed in the room.</li>
-                  <li>No talking or background noise.</li>
-                  <li>Do not use phones, books, or other devices.</li>
-                  <li>Do not leave the browser window or exit fullscreen.</li>
-                  <li className="text-red-600 font-medium">3 warnings will result in an automatic ban.</li>
+                  <li>{t.preExamRule1}</li>
+                  <li>{t.preExamRule2}</li>
+                  <li>{t.preExamRule3}</li>
+                  <li>{t.preExamRule4}</li>
+                  <li>{t.preExamRule5}</li>
+                  <li className="text-red-600 font-medium">{t.preExamRule6}</li>
                 </ul>
                 {exam.custom_rules && (
                   <div className="mt-4 pt-4 border-t border-black/5">
@@ -265,8 +295,10 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
                 )}
               </div>
             </div>
-            
+
+            {/* O'ng ustun: kamera + shaxs tekshiruvi */}
             <div className="flex flex-col justify-center space-y-6">
+              {/* Kamera ko'rinishi */}
               <div className="aspect-video bg-black/5 rounded-3xl overflow-hidden relative border-4 border-white/50 shadow-lg">
                 <video
                   ref={videoRef}
@@ -279,42 +311,79 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
                 <canvas ref={canvasRef} className="hidden" />
                 {!cameraReady && (
                   <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-medium bg-white/50 backdrop-blur-sm">
-                    Waiting for camera...
+                    {t.preExamWaitCamera}
                   </div>
                 )}
               </div>
 
+              {/* Shaxs tasdiqlash */}
               {user.profile_image ? (
                 <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm space-y-4">
                   <div className="flex items-center gap-4">
-                    <img src={user.profile_image} alt="Profile" className="w-16 h-16 rounded-2xl object-cover border-2 border-white" referrerPolicy="no-referrer" />
+                    <img
+                      src={user.profile_image}
+                      alt={t.profilePhotoLabel}
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-white"
+                      referrerPolicy="no-referrer"
+                    />
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-800">{t.identityVerification}</h4>
                       <p className="text-xs text-gray-500">{t.identityVerificationHint}</p>
                     </div>
                   </div>
-                  <Button 
-                    onClick={verifyIdentity} 
+
+                  <Button
+                    onClick={verifyIdentity}
                     disabled={!cameraReady || verifying || verified}
-                    className={`w-full rounded-2xl h-12 ${verified ? 'bg-green-500 hover:bg-green-600' : ''}`}
+                    className={`w-full rounded-2xl h-12 ${
+                      verified ? 'bg-green-500 hover:bg-green-600' : ''
+                    }`}
                   >
-                    {verifying ? t.identityVerifying : verified ? t.identityVerified : t.identityVerifyBtn}
+                    {verifying
+                      ? t.identityVerifying
+                      : verified
+                      ? t.identityVerified
+                      : t.identityVerifyBtn}
                   </Button>
+
+                  {/* Jonlilik tekshiruvi */}
                   <div className="space-y-2">
-                    <p className="text-xs text-gray-600">Liveness challenge: 3 bosqich (majburiy)</p>
-                    <div className="flex gap-2">
-                      <Button type="button" size="sm" variant="outline" disabled={!verified || livenessStep > 0} onClick={() => runLivenessStep(1, 'Boshingizni chapga buring')}>
-                        1) Turn left
+                    <p className="text-xs text-gray-600 font-medium">{t.preExamLivenessTitle}</p>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!verified || livenessStep > 0}
+                        onClick={() => runLivenessStep(1, t.preExamLivenessHint1)}
+                      >
+                        {t.preExamLiveness1}
                       </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={!verified || livenessStep !== 1} onClick={() => runLivenessStep(2, 'Boshingizni o‘ngga buring')}>
-                        2) Turn right
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!verified || livenessStep !== 1}
+                        onClick={() => runLivenessStep(2, t.preExamLivenessHint2)}
+                      >
+                        {t.preExamLiveness2}
                       </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={!verified || livenessStep !== 2} onClick={() => runLivenessStep(3, 'Kameraga yaqinlashib qayting')}>
-                        3) Move close
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!verified || livenessStep !== 2}
+                        onClick={() => runLivenessStep(3, t.preExamLivenessHint3)}
+                      >
+                        {t.preExamLiveness3}
                       </Button>
                     </div>
-                    <p className={`text-xs ${livenessPassed ? 'text-green-700' : 'text-gray-500'}`}>
-                      {livenessPassed ? 'Liveness: PASSED' : `Liveness step: ${livenessStep}/3`}
+                    <p
+                      className={`text-xs font-medium ${
+                        livenessPassed ? 'text-green-700' : 'text-gray-500'
+                      }`}
+                    >
+                      {livenessPassed ? t.preExamLivenessPassed : livenessStepLabel}
                     </p>
                   </div>
                 </div>
@@ -323,15 +392,18 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
                   {t.profilePhotoMissingExam}
                 </div>
               )}
-              
+
+              {/* PIN kodi */}
               {exam.has_pin && (
                 <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t.enterPin}</label>
-                  <Input 
-                    type="password" 
-                    value={pin} 
-                    onChange={(e) => setPin(e.target.value)} 
-                    placeholder="***" 
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t.enterPin}
+                  </label>
+                  <Input
+                    type="password"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    placeholder="• • •"
                     className="text-center tracking-widest text-lg"
                   />
                 </div>
@@ -339,11 +411,12 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
             </div>
           </div>
 
+          {/* Rozilik */}
           <div className="pt-6 border-t border-gray-200/50">
             <label className="flex items-center gap-3 cursor-pointer p-4 hover:bg-white/50 rounded-2xl transition-colors">
-              <input 
-                type="checkbox" 
-                checked={agreed} 
+              <input
+                type="checkbox"
+                checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
                 className="w-5 h-5 text-black rounded border-gray-300 focus:ring-black transition-all"
               />
@@ -351,14 +424,31 @@ export function PreExamCheck({ exam, token, user, lang, onComplete, onCancel }: 
             </label>
           </div>
 
+          {/* Tugmalar */}
           <div className="flex justify-end gap-4 pt-2">
-            <Button variant="outline" onClick={onCancel} className="px-8 rounded-full" disabled={starting}>Cancel</Button>
-            <Button 
-              onClick={handleStart} 
-              disabled={!cameraReady || !micReady || !agreed || starting || (exam.has_pin && !pin) || !user.profile_image || !verified || !livenessPassed}
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              className="px-8 rounded-full"
+              disabled={starting}
+            >
+              {t.cancel}
+            </Button>
+            <Button
+              onClick={handleStart}
+              disabled={
+                !cameraReady ||
+                !micReady ||
+                !agreed ||
+                starting ||
+                (exam.has_pin && !pin) ||
+                !user.profile_image ||
+                !verified ||
+                !livenessPassed
+              }
               className="px-8 rounded-full shadow-lg shadow-black/10"
             >
-              {starting ? 'Starting...' : t.takeExam}
+              {starting ? t.preExamStarting : t.takeExam}
             </Button>
           </div>
         </CardContent>
