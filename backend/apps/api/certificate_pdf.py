@@ -1,8 +1,167 @@
-"""Sertifikat PDF (reportlab + QR)."""
+"""Sertifikat va BAN hisobot PDF (reportlab + QR)."""
 from io import BytesIO
+from pathlib import Path
 
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas as rl_canvas
+
+# Institut logosi — frontend dist papkasida
+_BASE = Path(__file__).resolve().parent.parent.parent.parent
+_LOGO_CANDIDATES = [
+    _BASE / "frontend" / "dist" / "institute-logo.png",
+    _BASE / "frontend" / "public" / "institute-logo.png",
+    _BASE / "frontend" / "src" / "assets" / "institute-logo.png",
+]
+
+# Violation type larni o'zbek tiliga tarjima
+VIOLATION_LABELS: dict[str, str] = {
+    "TAB_SWITCH_HARD":              "Boshqa oynaga/varaqqa o'tish (qat'iy)",
+    "FULLSCREEN_EXIT_HARD":         "To'liq ekrandan chiqish (qat'iy)",
+    "IDENTITY_SUBSTITUTION":        "Boshqa shaxs aniqlandi (yuz almashtirildi)",
+    "REMOTE_CONTROL_SUSPECTED":     "Masofadan boshqarish dasturi aniqlandi",
+    "FACE_NOT_VISIBLE":             "Yuz kamerada ko'rinmadi",
+    "MULTIPLE_FACES":               "Kadrda bir nechta shaxs aniqlandi",
+    "SUSPICIOUS_AUDIO":             "Shubhali ovoz/shovqin aniqlandi",
+    "FORBIDDEN_OBJECT_CELL_PHONE":  "Telefon aniqlandi",
+    "FORBIDDEN_OBJECT_LAPTOP":      "Noutbuk aniqlandi",
+    "FORBIDDEN_OBJECT_BOOK":        "Kitob aniqlandi",
+    "FORBIDDEN_OBJECT_CELL_PHONE_DETECTED": "Telefon aniqlandi",
+    "COPY_PASTE_ATTEMPT":           "Nusxa ko'chirish urinishi",
+    "PRINT_SCREEN_ATTEMPT":         "Ekran suratga olish urinishi",
+    "DEVTOOLS_OPEN":                "Dasturchi vositalari ochildi",
+    "CLIPBOARD_ACCESS":             "Bufer xotirasiga kirish",
+}
+
+# Ban sabablari — violation type bo'yicha
+BAN_REASONS: dict[str, str] = {
+    "TAB_SWITCH_HARD":              "Imtihon davomida boshqa brauzer oynasiga yoki varaqqa o'tildi. Bu qoidabuzarlik hisoblanadi va imtihon darhol to'xtatildi.",
+    "FULLSCREEN_EXIT_HARD":         "Imtihon davomida to'liq ekran rejimidan chiqildi. Bu qoidabuzarlik hisoblanadi va imtihon darhol to'xtatildi.",
+    "IDENTITY_SUBSTITUTION":        "Kamera orqali amalga oshirilgan yuz taqqoslashida profil rasmi bilan mos kelmaydigan shaxs aniqlandi. Imtihon darhol to'xtatildi.",
+    "REMOTE_CONTROL_SUSPECTED":     "Kompyuterda masofadan boshqarish dasturi (AnyDesk, TeamViewer va boshqalar) aniqlandi. Bu qoidabuzarlik hisoblanadi.",
+    "FACE_NOT_VISIBLE":             "Talaba kamera oldidan uzoq vaqt ketdi yoki yuzini yashirdi.",
+    "MULTIPLE_FACES":               "Imtihon davomida kadrda bir nechta shaxs aniqlandi.",
+}
+
+DEFAULT_BAN_REASON = (
+    "Imtihon qoidalari bir necha marta buzildi. "
+    "Tizim tomonidan avtomatik ravishda bloklanish amalga oshirildi."
+)
+
+
+def _get_logo_path() -> str | None:
+    for p in _LOGO_CANDIDATES:
+        if p.exists():
+            return str(p)
+    return None
+
+
+def _violation_label(vtype: str) -> str:
+    """Violation type ni o'zbek tiliga tarjima qiladi."""
+    return VIOLATION_LABELS.get(vtype, vtype.replace("_", " ").capitalize())
+
+
+def _ban_reason_text(violations: list[dict]) -> str:
+    """Asosiy ban sababini aniqlaydi."""
+    if not violations:
+        return DEFAULT_BAN_REASON
+    # Eng og'ir violation ni topish
+    priority = [
+        "IDENTITY_SUBSTITUTION",
+        "REMOTE_CONTROL_SUSPECTED",
+        "TAB_SWITCH_HARD",
+        "FULLSCREEN_EXIT_HARD",
+        "MULTIPLE_FACES",
+        "FACE_NOT_VISIBLE",
+    ]
+    vtypes = [str(v.get("violation_type") or "") for v in violations]
+    for p in priority:
+        if p in vtypes:
+            return BAN_REASONS.get(p, DEFAULT_BAN_REASON)
+    # Eng ko'p takrorlangan violation
+    from collections import Counter
+    most_common = Counter(vtypes).most_common(1)
+    if most_common:
+        return BAN_REASONS.get(most_common[0][0], DEFAULT_BAN_REASON)
+    return DEFAULT_BAN_REASON
+
+
+def _draw_header(c, w: float, h: float, title: str, subtitle: str, hint: str):
+    """Institut logosi va sarlavha chizish."""
+    logo_path = _get_logo_path()
+    logo_x = 40
+    logo_y = h - 95
+    logo_size = 55
+
+    if logo_path:
+        try:
+            from reportlab.lib.utils import ImageReader
+            c.drawImage(
+                ImageReader(logo_path),
+                logo_x, logo_y,
+                width=logo_size, height=logo_size,
+                preserveAspectRatio=True, mask="auto",
+            )
+        except Exception:
+            _draw_logo_placeholder(c, logo_x + logo_size // 2, logo_y + logo_size // 2, logo_size // 2)
+    else:
+        _draw_logo_placeholder(c, logo_x + logo_size // 2, logo_y + logo_size // 2, logo_size // 2)
+
+    text_x = logo_x + logo_size + 12
+    c.setFont("Helvetica-Bold", 13)
+    c.setFillColor(colors.HexColor("#1a1a2e"))
+    c.drawString(text_x, h - 55, "Farg\u2019ona jamoat salomatligi tibbiyot instituti")
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(colors.HexColor("#c0392b"))
+    c.drawString(text_x, h - 72, title)
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#555555"))
+    c.drawString(text_x, h - 86, subtitle)
+    if hint:
+        c.setFont("Helvetica-Oblique", 8)
+        c.setFillColor(colors.HexColor("#888888"))
+        c.drawString(text_x, h - 98, hint)
+
+    # Ajratuvchi chiziq
+    c.setStrokeColor(colors.HexColor("#c0392b"))
+    c.setLineWidth(1.5)
+    c.line(40, h - 108, w - 40, h - 108)
+    c.setFillColor(colors.black)
+
+
+def _draw_logo_placeholder(c, cx: float, cy: float, r: float):
+    """Logo topilmasa doira ichida FJSTI yozuvi."""
+    c.setStrokeColor(colors.HexColor("#1a1a2e"))
+    c.setLineWidth(1.5)
+    c.circle(cx, cy, r, stroke=1, fill=0)
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(colors.HexColor("#1a1a2e"))
+    c.drawCentredString(cx, cy - 4, "FJSTI")
+
+
+def _draw_qr(c, verify_url: str, w: float, h: float):
+    """QR kod chizish."""
+    try:
+        import qrcode
+        from reportlab.lib.utils import ImageReader
+
+        qr = qrcode.QRCode(version=2, box_size=3, border=1,
+                           error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(verify_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        qbuf = BytesIO()
+        img.save(qbuf, format="PNG")
+        qbuf.seek(0)
+        qr_size = 85
+        c.drawImage(ImageReader(qbuf), w - qr_size - 35, h - qr_size - 35,
+                    width=qr_size, height=qr_size)
+        c.setFont("Helvetica", 6)
+        c.setFillColor(colors.HexColor("#888888"))
+        c.drawCentredString(w - 35 - qr_size // 2, h - qr_size - 42, "QR tekshiruv")
+    except Exception:
+        pass
 
 
 def build_certificate_pdf(
@@ -19,60 +178,62 @@ def build_certificate_pdf(
     rows: list[dict],
 ) -> bytes:
     buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
+    c = rl_canvas.Canvas(buf, pagesize=A4)
     w, h = A4
-    try:
-        import qrcode
-        from reportlab.lib.utils import ImageReader
 
-        qr = qrcode.QRCode(version=1, box_size=3, border=1)
-        qr.add_data(verify_url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        qbuf = BytesIO()
-        img.save(qbuf, format="PNG")
-        qbuf.seek(0)
-        c.drawImage(ImageReader(qbuf), w - 120, h - 120, width=90, height=90)
-    except Exception:
-        pass
-    y = h - 50
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, y, "FJSTI — Onlayn imtihon sertifikati")
-    y -= 36
+    _draw_qr(c, verify_url, w, h)
+    _draw_header(c, w, h,
+                 title="Onlayn imtihon sertifikati",
+                 subtitle="Hujjat raqamli QR orqali tekshiriladi",
+                 hint="")
+
+    y = h - 128
     c.setFont("Helvetica", 10)
-    for line in [
-        f"Natija ID: {result_id}",
-        f"Talaba: {student_name}",
-        f"Imtihon: {exam_title}",
-        f"Sana: {completed_at}",
-        f"Ball: {score} / {total}",
-        f"Tekshiruv: {verify_url[:80]}...",
-        f"Yaxlitlik kodi: {integrity_code}",
-    ]:
-        c.drawString(50, y, line[:120])
+    c.setFillColor(colors.HexColor("#1a1a2e"))
+
+    pct = round((score / total) * 100) if total else 0
+    fields = [
+        ("Natija ID",        result_id),
+        ("Talaba",           student_name),
+        ("Imtihon",          exam_title),
+        ("Yakunlangan sana", completed_at[:19].replace("T", " ")),
+        ("Ball",             f"{score} / {total}  ({pct}%)"),
+        ("Yaxlitlik kodi",   integrity_code),
+        ("Tekshiruv havolasi", verify_url[:80] + ("..." if len(verify_url) > 80 else "")),
+    ]
+    for label, val in fields:
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(50, y, f"{label}:")
+        c.setFont("Helvetica", 9)
+        c.drawString(160, y, str(val)[:100])
         y -= 14
-    y -= 10
+
+    y -= 6
+    c.setFont("Helvetica-Bold", 10)
     c.drawString(50, y, "Xulosa:")
     y -= 14
     c.setFont("Helvetica", 9)
     for para in (overview or "")[:2000].split("\n")[:8]:
-        c.drawString(50, y, para[:100])
+        c.drawString(50, y, para[:110])
         y -= 12
         if y < 100:
             c.showPage()
             y = h - 50
-    y -= 10
+
+    y -= 6
     c.setFont("Helvetica-Bold", 9)
     c.drawString(50, y, "Savollar:")
-    y -= 14
+    y -= 12
     c.setFont("Helvetica", 8)
     for r in rows[:40]:
-        txt = f"{r.get('index')}. {str(r.get('text',''))[:60]}... — {'✓' if r.get('isCorrect') else '✗'}"
-        c.drawString(50, y, txt[:100])
+        mark = "\u2713" if r.get("isCorrect") else "\u2717"
+        txt = f"{r.get('index')}. {str(r.get('text',''))[:70]}  [{mark}]"
+        c.drawString(50, y, txt[:110])
         y -= 10
         if y < 60:
             c.showPage()
             y = h - 50
+
     c.showPage()
     c.save()
     return buf.getvalue()
@@ -88,71 +249,105 @@ def build_ban_report_pdf(
     verify_url: str,
 ) -> bytes:
     buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
+    c = rl_canvas.Canvas(buf, pagesize=A4)
     w, h = A4
-    try:
-        import qrcode
-        from reportlab.lib.utils import ImageReader
 
-        qr = qrcode.QRCode(version=1, box_size=3, border=1)
-        qr.add_data(verify_url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        qbuf = BytesIO()
-        img.save(qbuf, format="PNG")
-        qbuf.seek(0)
-        c.drawImage(ImageReader(qbuf), w - 120, h - 120, width=90, height=90)
-    except Exception:
-        pass
+    _draw_qr(c, verify_url, w, h)
+    _draw_header(c, w, h,
+                 title="Rasmiy intizomiy bayonnoma (BAN hisobot)",
+                 subtitle="Hujjat raqamli QR orqali tekshiriladi",
+                 hint="Ushbu hujjat instituting ichki nazorat tizimi tomonidan avtomatik shakllantirildi")
 
-    # Simple official-looking header + emblem placeholder
-    c.circle(70, h - 72, 24, stroke=1, fill=0)
-    c.setFont("Helvetica-Bold", 9)
-    c.drawCentredString(70, h - 75, "FJSTI")
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(110, h - 52, "Farg'ona jamoat salomatligi tibbiyot instituti")
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(110, h - 70, "Rasmiy intizomiy bayonnoma (BAN hisobot)")
-    c.setFont("Helvetica", 9)
-    c.drawString(110, h - 86, "Hujjat raqamli QR orqali tekshiriladi")
-
-    y = h - 120
+    y = h - 128
     c.setFont("Helvetica", 10)
-    lines = [
-        f"Talaba ID: {student_id}",
-        f"Talaba F.I.Sh.: {student_name}",
-        f"Imtihon: {exam_title}",
-        f"Berilgan sana: {issued_at}",
-        f"QR tekshiruv havolasi: {verify_url[:95]}",
+    c.setFillColor(colors.HexColor("#1a1a2e"))
+
+    fields = [
+        ("Talaba ID",        student_id),
+        ("Talaba F.I.Sh.",   student_name),
+        ("Imtihon",          exam_title),
+        ("Berilgan sana",    issued_at[:19].replace("T", " ")),
+        ("QR tekshiruv",     verify_url[:85] + ("..." if len(verify_url) > 85 else "")),
     ]
-    for line in lines:
-        c.drawString(50, y, line)
+    for label, val in fields:
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(50, y, f"{label}:")
+        c.setFont("Helvetica", 9)
+        c.drawString(160, y, str(val)[:100])
         y -= 14
 
-    y -= 6
+    # Ban sababi — muhim qism
+    y -= 8
+    c.setStrokeColor(colors.HexColor("#e74c3c"))
+    c.setLineWidth(0.5)
+    c.rect(40, y - 42, w - 80, 52, stroke=1, fill=0)
+
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(colors.HexColor("#c0392b"))
+    c.drawString(50, y, "Bloklash sababi:")
+    y -= 14
+
+    ban_reason = _ban_reason_text(violations)
+    c.setFont("Helvetica", 9)
+    c.setFillColor(colors.HexColor("#1a1a2e"))
+    # Uzun matnni qatorlarga bo'lish
+    words = ban_reason.split()
+    line = ""
+    for word in words:
+        test = (line + " " + word).strip()
+        if len(test) > 90:
+            c.drawString(50, y, line)
+            y -= 12
+            line = word
+        else:
+            line = test
+    if line:
+        c.drawString(50, y, line)
+        y -= 12
+
+    y -= 18
+    c.setFillColor(colors.HexColor("#1a1a2e"))
+
+    # Qoidabuzarliklar ro'yxati
     c.setFont("Helvetica-Bold", 10)
     c.drawString(50, y, "Qayd etilgan qoidabuzarliklar:")
     y -= 14
+
     c.setFont("Helvetica", 9)
     if not violations:
         c.drawString(50, y, "- Qoidabuzarlik loglari topilmadi.")
         y -= 12
     else:
         for idx, v in enumerate(violations[:60], start=1):
-            t = str(v.get("timestamp") or "")[:25]
-            vt = str(v.get("violation_type") or "UNKNOWN")[:60]
-            c.drawString(50, y, f"{idx}) [{t}] {vt}")
+            ts = str(v.get("timestamp") or "")[:19].replace("T", " ")
+            vtype = str(v.get("violation_type") or "UNKNOWN")
+            label = _violation_label(vtype)
+            line_txt = f"{idx}) [{ts}]  {label}"
+            c.drawString(50, y, line_txt[:110])
             y -= 11
-            if y < 60:
+            if y < 80:
                 c.showPage()
                 y = h - 50
                 c.setFont("Helvetica", 9)
 
-    y -= 8
-    c.setFont("Helvetica", 9)
-    c.drawString(50, y, "Ushbu hujjat instituting ichki nazorat siyosati asosida avtomatik shakllantirildi.")
-    y -= 12
-    c.drawString(50, y, "Mas'ul shaxs imzosi: ____________________")
+    # Pastki qism
+    y -= 16
+    c.setStrokeColor(colors.HexColor("#cccccc"))
+    c.setLineWidth(0.5)
+    c.line(40, y + 4, w - 40, y + 4)
+
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#555555"))
+    c.drawString(50, y - 8,
+                 "Ushbu hujjat Farg\u2019ona jamoat salomatligi tibbiyot instituti")
+    c.drawString(50, y - 20,
+                 "ichki nazorat siyosati asosida avtomatik shakllantirildi.")
+
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(colors.HexColor("#1a1a2e"))
+    c.drawString(50, y - 38, "Mas\u2019ul shaxs imzosi: ____________________________")
+    c.drawString(320, y - 38, "Sana: _______________")
+
     c.showPage()
     c.save()
     return buf.getvalue()
