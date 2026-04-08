@@ -234,22 +234,51 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     return () => window.removeEventListener('beforeunload', h);
   }, [t.leaveExamWarning]);
 
+  // Fullscreen kirish vaqtini kuzatish (blur/fullscreenchange false positive oldini olish)
+  const fullscreenRequestedRef = useRef(false);
+  const fullscreenEnteredRef = useRef(false);
+  const blurIgnoreUntilRef = useRef(0); // timestamp: shu vaqtgacha blur ignore qilinadi
+
   useEffect(() => {
     const ua = navigator.userAgent || '';
     if (/anydesk|teamviewer|rustdesk|splashtop/i.test(ua)) {
       void logViolationRef.current('REMOTE_CONTROL_SUSPECTED');
-      setHardBlocked(true);
     }
+
+    // Blur: faqat fullscreen rejimida va fullscreen so'ralayotgan paytda emas
     const onBlur = () => {
-      void logViolationRef.current('TAB_SWITCH_HARD');
-      setHardBlocked(true);
-    };
-    const onFs = () => {
+      if (bannedRef.current) return;
+      const now = Date.now();
+      // Fullscreen so'ralayotgan paytda (2 soniya) blur ignore
+      if (now < blurIgnoreUntilRef.current) return;
+      // Fullscreen rejimida emas bo'lsa — tab almashtirish (ogohlantirish, darhol ban emas)
       if (!document.fullscreenElement) {
-        void logViolationRef.current('FULLSCREEN_EXIT_HARD');
-        setHardBlocked(true);
+        void logViolationRef.current('TAB_SWITCH_HARD');
+        return;
       }
+      // Fullscreen rejimida blur — boshqa dastur focus oldi, lekin biz hali fullscreendamiz
+      // Bu hard block emas — soft violation
+      void logViolationRef.current('TAB_SWITCH_SOFT');
     };
+
+    // Fullscreen o'zgarishi
+    const onFs = () => {
+      if (bannedRef.current) return;
+      if (document.fullscreenElement) {
+        // Fullscreen kirildi — bu yaxshi
+        fullscreenEnteredRef.current = true;
+        fullscreenRequestedRef.current = false;
+        return;
+      }
+      // Fullscreen chiqildi
+      if (!fullscreenEnteredRef.current) {
+        // Hali fullscreanga kirmagan — ignore (boshlang'ich holat)
+        return;
+      }
+      // Foydalanuvchi fullscreendan chiqdi — ogohlantirish, darhol ban emas
+      void logViolationRef.current('FULLSCREEN_EXIT_HARD');
+    };
+
     window.addEventListener('blur', onBlur);
     document.addEventListener('fullscreenchange', onFs);
     return () => {
@@ -325,10 +354,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     document.addEventListener('paste', handleCopyPaste);
     document.addEventListener('keydown', handleKeyDown);
 
-    // Force fullscreen
+    // Force fullscreen — blur ignore 3 soniya (fullscreen dialog paytida)
     const enterFullscreen = () => {
       if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
+        fullscreenRequestedRef.current = true;
+        blurIgnoreUntilRef.current = Date.now() + 3000;
+        document.documentElement.requestFullscreen().catch(() => {
+          fullscreenRequestedRef.current = false;
+        });
       }
     };
     enterFullscreen();
@@ -521,14 +554,16 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const logViolation = async (type: string) => {
     if (bannedRef.current) return;
 
-    // Dedup: hard violation larni har doim yuborish, softlarni 10s da bir marta
-    const hardTypes = new Set(['IDENTITY_SUBSTITUTION', 'TAB_SWITCH_HARD', 'FULLSCREEN_EXIT_HARD', 'REMOTE_CONTROL_SUSPECTED']);
+    // Dedup: bir xil violation tipini ma'lum vaqt ichida bir marta yuborish
+    // TAB_SWITCH va FULLSCREEN bir vaqtda kelishi mumkin — 30s dedupe
+    const INSTANT_BAN_TYPES = new Set(['IDENTITY_SUBSTITUTION', 'REMOTE_CONTROL_SUSPECTED']);
     const dedupeKey = `viol_last_${type}`;
     const lastSent = parseInt(sessionStorage.getItem(dedupeKey) || '0', 10);
     const now = Date.now();
-    const MIN_INTERVAL = 10_000;
-    if (!hardTypes.has(type) && now - lastSent < MIN_INTERVAL) {
-      // Faqat UI ga ko'rsatish, serverga yubormaslik
+    // Instant ban turlari har doim yuboriladi
+    // Qolganlar: 30 soniyada bir marta (TAB_SWITCH + FULLSCREEN bir vaqtda kelmasin)
+    const MIN_INTERVAL = INSTANT_BAN_TYPES.has(type) ? 0 : 30_000;
+    if (MIN_INTERVAL > 0 && now - lastSent < MIN_INTERVAL) {
       setWarningMsg(type);
       setTimeout(() => setWarningMsg(''), 3000);
       return;
@@ -656,12 +691,13 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState === 'hidden') {
-        void logViolationRef.current(t.switchedTab);
+        // TAB_SWITCH_SOFT — ogohlantirish, darhol ban emas
+        void logViolationRef.current('TAB_SWITCH_SOFT');
       }
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, [t.switchedTab]);
+  }, []);
 
   const runSubmitCore = useCallback(
     async (ans: Record<string, string>, fl: number[]) => {

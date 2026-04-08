@@ -2015,30 +2015,25 @@ def student_violations(request):
         screenshot_url=screenshot,
     )
     # Violation turlari
-    hard_types = {
+    # Faqat shu 2 ta darhol ban beradi (shaxs almashinuvi va masofaviy boshqaruv)
+    instant_ban_types = {
         "IDENTITY_SUBSTITUTION",
         "REMOTE_CONTROL_SUSPECTED",
-        "TAB_SWITCH_HARD",
-        "FULLSCREEN_EXIT_HARD",
     }
-    # Soft violation — ogohlantirish beriladi lekin darhol ban emas
-    soft_types = {
+    # Ogohlantirish uchun hisoblanadigan violation lar (3 ta = ban)
+    warn_types = {
+        "TAB_SWITCH_HARD",
+        "TAB_SWITCH_SOFT",
+        "FULLSCREEN_EXIT_HARD",
         "SUSPICIOUS_AUDIO",
         "FACE_NOT_VISIBLE",
         "MULTIPLE_FACES",
         "FORBIDDEN_OBJECT_CELL_PHONE",
         "FORBIDDEN_OBJECT_LAPTOP",
         "FORBIDDEN_OBJECT_BOOK",
+        "CLIPBOARD_ATTEMPT",
+        "PRINT_SCREEN",
     }
-    # Ogohlantirish uchun hisoblanadigan violation lar (soft + medium)
-    warn_types = list(soft_types) + ["TAB_SWITCH_SOFT", "CLIPBOARD_ATTEMPT", "PRINT_SCREEN"]
-
-    # Barcha violation soni
-    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
-    # Ogohlantirishga kiruvchi violation soni (soft)
-    cnt_warn = ViolationLog.objects.filter(
-        student_id=u.id, exam_id=exam_id, violation_type__in=warn_types
-    ).count()
 
     # Violation sababini matn sifatida qaytarish
     violation_reason_map = {
@@ -2049,29 +2044,47 @@ def student_violations(request):
         "FORBIDDEN_OBJECT_LAPTOP": "Noutbuk aniqlandi",
         "FORBIDDEN_OBJECT_BOOK": "Kitob aniqlandi",
         "TAB_SWITCH_SOFT": "Boshqa oynaga o'tildi",
+        "TAB_SWITCH_HARD": "Imtihon oynasidan chiqib ketildi",
         "CLIPBOARD_ATTEMPT": "Nusxa ko'chirish urinishi",
         "PRINT_SCREEN": "Ekran surati urinishi",
-        "TAB_SWITCH_HARD": "Imtihon oynasidan chiqib ketildi",
         "FULLSCREEN_EXIT_HARD": "To'liq ekrandan chiqildi",
         "REMOTE_CONTROL_SUSPECTED": "Masofaviy boshqaruv aniqlandi",
         "IDENTITY_SUBSTITUTION": "Boshqa shaxs aniqlandi",
     }
     reason_text = violation_reason_map.get(vtype, vtype)
 
-    # Hard violation — darhol ban
-    if vtype in hard_types:
+    # Barcha violation soni
+    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
+
+    # Darhol ban (faqat shaxs almashinuvi va masofaviy boshqaruv)
+    if vtype in instant_ban_types:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
             StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")
         return Response({
             "banned": True,
             "violationsCount": cnt_all,
-            "warningNumber": cnt_warn,
+            "warningNumber": 3,
             "violationReason": reason_text,
             "isFinalWarning": False,
         })
 
-    # Soft violation — 3 ta ogohlantirishdan keyin ban
+    # Ogohlantirish tizimi — faqat warn_types uchun hisoblaymiz
+    if vtype not in warn_types:
+        # Noma'lum violation — faqat log, ogohlantirish yo'q
+        return Response({
+            "banned": False,
+            "violationsCount": cnt_all,
+            "warningNumber": 0,
+            "violationReason": reason_text,
+            "isFinalWarning": False,
+        })
+
+    # Ogohlantirishga kiruvchi violation soni
+    cnt_warn = ViolationLog.objects.filter(
+        student_id=u.id, exam_id=exam_id, violation_type__in=list(warn_types)
+    ).count()
+
     MAX_WARNINGS = 3
     if cnt_warn >= MAX_WARNINGS:
         with transaction.atomic():
@@ -2085,7 +2098,7 @@ def student_violations(request):
             "isFinalWarning": False,
         })
 
-    is_final = cnt_warn == MAX_WARNINGS - 1  # 3-ogohlantirish = oxirgi
+    is_final = cnt_warn == MAX_WARNINGS - 1
     return Response({
         "banned": False,
         "violationsCount": cnt_all,
