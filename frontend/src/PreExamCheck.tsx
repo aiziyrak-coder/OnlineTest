@@ -260,14 +260,14 @@ export function PreExamCheck({
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       className="min-h-[80vh] flex items-center justify-center p-6"
     >
-      <Card className="max-w-3xl w-full">
+      <Card className="max-w-4xl w-full">
         <CardHeader className="flex flex-col items-center gap-3">
           <InstituteLogo size="sm" />
           <CardTitle className="text-3xl text-center font-bold tracking-tight text-gray-900">
             {t.preExamTitle}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-8">
+        <CardContent className="space-y-6">
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -278,42 +278,47 @@ export function PreExamCheck({
             </motion.div>
           )}
 
-          {/* examModeBankHint: foydalanuvchiga ichki ma'lumot kerak emas */}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Chap ustun: tizim talablari + qoidalar */}
-            <div className="space-y-6">
-              {/* Tizim talablari */}
-              <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
-                <h3 className="font-semibold text-lg text-gray-800 mb-4">{t.preExamSysReq}</h3>
-                <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                    <span
-                      className={`w-3 h-3 rounded-full shadow-sm flex-shrink-0 ${
-                        cameraReady
-                          ? 'bg-green-500 shadow-green-500/50'
-                          : 'bg-red-500 shadow-red-500/50'
-                      }`}
-                    />
-                    {t.preExamCamera}
-                  </li>
-                  <li className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                    <span
-                      className={`w-3 h-3 rounded-full shadow-sm flex-shrink-0 ${
-                        micReady
-                          ? 'bg-green-500 shadow-green-500/50'
-                          : 'bg-red-500 shadow-red-500/50'
-                      }`}
-                    />
-                    {t.preExamMic}
-                  </li>
-                </ul>
+          {/* Kamera — yuqorida katta, to'liq kenglikda */}
+          <div className="relative w-full rounded-3xl overflow-hidden border-4 border-white/60 shadow-xl bg-black"
+               style={{ aspectRatio: '16/9', maxHeight: '420px' }}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+              style={{ transform: 'scaleX(-1)' }}
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            {!cameraReady && (
+              <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-medium bg-white/50 backdrop-blur-sm">
+                {t.preExamWaitCamera}
               </div>
+            )}
+            {/* Kamera holati badge */}
+            <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1.5">
+              <span className={`w-2.5 h-2.5 rounded-full ${cameraReady ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+              <span className="text-white text-xs font-medium">
+                {cameraReady ? (lang === 'ru' ? 'Камера активна' : lang === 'en' ? 'Camera active' : 'Kamera yoqilgan') : t.preExamWaitCamera}
+              </span>
+            </div>
+            {/* Mikrofon holati badge */}
+            <div className="absolute top-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1.5">
+              <span className={`w-2.5 h-2.5 rounded-full ${micReady ? 'bg-green-400' : 'bg-red-400'}`} />
+              <span className="text-white text-xs font-medium">
+                {micReady ? (lang === 'ru' ? 'Микрофон' : lang === 'en' ? 'Mic' : 'Mikrofon') : (lang === 'ru' ? 'Нет микрофона' : lang === 'en' ? 'No mic' : 'Mikrofon yo\'q')}
+              </span>
+            </div>
+          </div>
 
+          {/* Pastki qism: 2 ustun */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Chap: qoidalar + tizim talablari */}
+            <div className="space-y-4">
               {/* Qoidalar */}
-              <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
-                <h3 className="font-semibold text-lg text-gray-800 mb-3">{t.rules}</h3>
-                <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
+              <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
+                <h3 className="font-semibold text-base text-gray-800 mb-2">{t.rules}</h3>
+                <ul className="list-disc pl-5 space-y-1.5 text-sm text-gray-600">
                   <li>{t.preExamRule1}</li>
                   <li>{t.preExamRule2}</li>
                   <li>{t.preExamRule3}</li>
@@ -322,46 +327,28 @@ export function PreExamCheck({
                   <li className="text-red-600 font-medium">{t.preExamRule6}</li>
                 </ul>
                 {exam.custom_rules && (
-                  <div className="mt-4 pt-4 border-t border-black/5">
-                    <h4 className="font-semibold text-sm text-gray-800 mb-2">{t.customRules}:</h4>
+                  <div className="mt-3 pt-3 border-t border-black/5">
+                    <h4 className="font-semibold text-sm text-gray-800 mb-1">{t.customRules}:</h4>
                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{exam.custom_rules}</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* O'ng ustun: kamera + shaxs tekshiruvi */}
-            <div className="flex flex-col justify-center space-y-6">
-              {/* Kamera ko'rinishi */}
-              <div className="aspect-video bg-black/5 rounded-3xl overflow-hidden relative border-4 border-white/50 shadow-lg">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                  style={{ transform: 'scaleX(-1)' }}
-                />
-                <canvas ref={canvasRef} className="hidden" />
-                {!cameraReady && (
-                  <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-medium bg-white/50 backdrop-blur-sm">
-                    {t.preExamWaitCamera}
-                  </div>
-                )}
-              </div>
-
+            {/* O'ng: shaxs tasdiqlash + liveness */}
+            <div className="space-y-4">
               {/* Shaxs tasdiqlash */}
               {user.profile_image ? (
-                <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm space-y-4">
-                  <div className="flex items-center gap-4">
+                <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm space-y-4">
+                  <div className="flex items-center gap-3">
                     <img
                       src={user.profile_image}
                       alt={t.profilePhotoLabel}
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-white"
+                      className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow"
                       referrerPolicy="no-referrer"
                     />
                     <div className="flex-1">
-                      <h4 className="font-semibold text-gray-800">{t.identityVerification}</h4>
+                      <h4 className="font-semibold text-gray-800 text-sm">{t.identityVerification}</h4>
                       <p className="text-xs text-gray-500">{t.identityVerificationHint}</p>
                     </div>
                   </div>
@@ -463,14 +450,14 @@ export function PreExamCheck({
                   </div>
                 </div>
               ) : (
-                <div className="p-5 border border-red-500/30 bg-red-50/80 rounded-3xl backdrop-blur-md text-red-800 text-sm">
+                <div className="p-4 border border-red-500/30 bg-red-50/80 rounded-3xl backdrop-blur-md text-red-800 text-sm">
                   {t.profilePhotoMissingExam}
                 </div>
               )}
 
               {/* PIN kodi */}
               {exam.has_pin && (
-                <div className="p-5 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
+                <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     {t.enterPin}
                   </label>
@@ -486,46 +473,44 @@ export function PreExamCheck({
             </div>
           </div>
 
-          {/* Rozilik */}
-          <div className="pt-6 border-t border-gray-200/50">
-            <label className="flex items-center gap-3 cursor-pointer p-4 hover:bg-white/50 rounded-2xl transition-colors">
+          {/* Rozilik + tugmalar */}
+          <div className="pt-4 border-t border-gray-200/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-white/50 rounded-2xl transition-colors flex-1">
               <input
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
                 className="w-5 h-5 text-black rounded border-gray-300 focus:ring-black transition-all"
               />
-              <span className="font-medium text-gray-800">{t.agree}</span>
+              <span className="font-medium text-gray-800 text-sm">{t.agree}</span>
             </label>
-          </div>
-
-          {/* Tugmalar */}
-          <div className="flex justify-end gap-4 pt-2">
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              className="px-8 rounded-full"
-              disabled={starting}
-            >
-              {t.cancel}
-            </Button>
-            <Button
-              onClick={handleStart}
-              disabled={
-                !cameraReady ||
-                !micReady ||
-                !agreed ||
-                starting ||
-                (exam.has_pin && !pin) ||
-                !user.profile_image ||
-                !verified ||
-                !livenessPassed ||
-                livenessActive
-              }
-              className="px-8 rounded-full shadow-lg shadow-black/10"
-            >
-              {starting ? t.preExamStarting : t.takeExam}
-            </Button>
+            <div className="flex gap-3 shrink-0">
+              <Button
+                variant="outline"
+                onClick={onCancel}
+                className="px-6 rounded-full"
+                disabled={starting}
+              >
+                {t.cancel}
+              </Button>
+              <Button
+                onClick={handleStart}
+                disabled={
+                  !cameraReady ||
+                  !micReady ||
+                  !agreed ||
+                  starting ||
+                  (exam.has_pin && !pin) ||
+                  !user.profile_image ||
+                  !verified ||
+                  !livenessPassed ||
+                  livenessActive
+                }
+                className="px-8 rounded-full shadow-lg shadow-black/10"
+              >
+                {starting ? t.preExamStarting : t.takeExam}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
