@@ -849,13 +849,20 @@ def admin_test_bank_questions(request):
     n = 0
     for q in questions:
         opts = [str(x) for x in (q.get("options") or [])]
-        if len(opts) < 4:
+        # Texnik talabga mos: 2-10 ta variant
+        if len(opts) < 2:
             continue
+        opts = opts[:10]
         ca = str(q.get("correctAnswer") or opts[0])
+        if ca not in opts:
+            ca = opts[0]
+        text = str(q.get("text") or "").strip()
+        if not text:
+            continue
         TestBankQuestion.objects.create(
             category_id=category_id,
-            text=str(q.get("text") or ""),
-            options_json=json.dumps(opts[:4]),
+            text=text,
+            options_json=json.dumps(opts),
             correct_answer=ca,
             language=language,
         )
@@ -1662,7 +1669,10 @@ def _result_details_bundle(se: StudentExam, request, for_pdf: bool = False):
     answers = norm_answers(safe_json_loads(se.answers_json, {}))
     ai = safe_json_loads(se.ai_summary_json, {})
     if not ai.get("items"):
-        return "corrupt"
+        # Fallback: eski yoki buzilgan summary — hisoblash
+        ai = build_fallback_ai_summary(questions, answers)
+        if not ai.get("items"):
+            return "corrupt"
     total = len(questions)
     completed_iso = se.completed_at.isoformat() if se.completed_at else ""
     icode = integrity_code(se.result_public_id, completed_iso, se.score, total, se.result_verify_secret)
@@ -1716,7 +1726,16 @@ def student_result_details(request, exam_id: int):
         return Response({"error": "Result not found"}, status=404)
     b = _result_details_bundle(se, request)
     if b == "corrupt":
-        return Response({"error": "Corrupt summary"}, status=500)
+        # Eski natija — AI summary yo'q, fallback bilan qayta hisoblash
+        if se.session_questions_json:
+            questions = safe_json_loads(se.session_questions_json, [])
+        else:
+            questions = safe_json_loads(se.exam.questions_json, [])
+        answers = norm_answers(safe_json_loads(se.answers_json, {}))
+        fallback_ai = build_fallback_ai_summary(questions, answers)
+        se.ai_summary_json = json.dumps(fallback_ai)
+        se.save(update_fields=["ai_summary_json"])
+        b = _result_details_bundle(se, request)
     if not b:
         return Response({"error": "Certificate not available for this attempt"}, status=404)
     return Response(b)
@@ -1992,21 +2011,42 @@ def student_violations(request):
         timestamp=dj_tz.now(),
         screenshot_url=screenshot,
     )
-    cnt = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
+    # Hard violation turlari — darhol ban
     hard_types = {
         "IDENTITY_SUBSTITUTION",
         "REMOTE_CONTROL_SUSPECTED",
         "TAB_SWITCH_HARD",
         "FULLSCREEN_EXIT_HARD",
     }
+    # Soft violation turlari — hisobga olinadi lekin darhol ban qilmaydi
+    soft_types = {
+        "SUSPICIOUS_AUDIO",
+        "FACE_NOT_VISIBLE",
+        "MULTIPLE_FACES",
+    }
+    # Faqat hard va medium violation larni sanash (audio/face kabi kichik xatolar hisobga olinmaydi)
+    cnt_hard = ViolationLog.objects.filter(
+        student_id=u.id,
+        exam_id=exam_id,
+        violation_type__in=list(hard_types) + [
+            "FORBIDDEN_OBJECT_CELL_PHONE",
+            "FORBIDDEN_OBJECT_LAPTOP",
+            "FORBIDDEN_OBJECT_BOOK",
+        ]
+    ).count()
+    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
+
     if vtype in hard_types:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
             StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")
-        return Response({"banned": True, "violationsCount": cnt})
-    if cnt >= 3:
+        return Response({"banned": True, "violationsCount": cnt_all})
+
+    # Soft violation lar: 10 ta yig'ilsa ban (avval 3 ta edi — juda qattiq)
+    if vtype not in soft_types and cnt_hard >= 5:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
             StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")
-        return Response({"banned": True, "violationsCount": cnt})
-    return Response({"banned": False, "violationsCount": cnt})
+        return Response({"banned": True, "violationsCount": cnt_all})
+
+    return Response({"banned": False, "violationsCount": cnt_all})
