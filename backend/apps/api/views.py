@@ -194,6 +194,8 @@ def admin_users(request):
             qs = qs.filter(status=status_f)
         rows = []
         for u in qs.order_by("name"):
+            # profile_image: ro'yxatda to'liq base64 yubormaslik (JSON hajmini kamaytirish)
+            # has_photo flag yetarli — to'liq rasm faqat login/identity-compare da kerak
             rows.append(
                 {
                     "id": u.id,
@@ -201,7 +203,8 @@ def admin_users(request):
                     "name": u.name,
                     "status": u.status,
                     "group_id": u.group_id,
-                    "profile_image": u.profile_image,
+                    "has_photo": bool(u.profile_image and len(u.profile_image) > 50),
+                    "profile_image": None,  # ro'yxatda kerak emas, JSON hajmini kamaytiradi
                     "group_name": u.group.name if u.group_id else None,
                 }
             )

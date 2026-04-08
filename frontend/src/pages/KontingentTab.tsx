@@ -20,7 +20,8 @@ type StudentRow = {
   role: string;
   status: string;
   group_id: number | null;
-  profile_image?: string;
+  profile_image?: string | null;
+  has_photo?: boolean;
   group_name?: string | null;
 };
 
@@ -585,15 +586,15 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                           <tr key={u.id} className="border-b border-red-100/50 hover:bg-red-50/30 transition">
                             <td className="p-3">
                               <div className="flex items-center gap-3">
-                                {u.profile_image ? (
-                                  <img src={u.profile_image} alt={u.name}
-                                    className="w-9 h-9 rounded-full object-cover border-2 border-red-200 flex-shrink-0"
-                                    referrerPolicy="no-referrer" />
-                                ) : (
-                                  <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-red-600 font-bold text-sm">{u.name.charAt(0)}</span>
-                                  </div>
-                                )}
+                                <div className="w-9 h-9 rounded-full bg-red-100 border-2 border-red-200 flex items-center justify-center flex-shrink-0">
+                                  {u.has_photo ? (
+                                    <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                                    </svg>
+                                  ) : (
+                                    <span className="text-red-600 font-bold text-sm">{u.name.charAt(0).toUpperCase()}</span>
+                                  )}
+                                </div>
                                 <div>
                                   <p className="font-semibold text-gray-900">{u.name}</p>
                                   <span className="inline-block text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full mt-0.5">
@@ -712,11 +713,9 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                 <CardHeader>
                   <CardTitle className="text-green-700">{t.unban}</CardTitle>
                   <div className="flex items-center gap-3 mt-2">
-                    {unbanUser.profile_image && (
-                      <img src={unbanUser.profile_image} alt={unbanUser.name}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
-                        referrerPolicy="no-referrer" />
-                    )}
+                    <div className="w-12 h-12 rounded-full bg-red-100 border-2 border-red-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-red-600 font-bold text-lg">{unbanUser.name.charAt(0).toUpperCase()}</span>
+                    </div>
                     <div>
                       <p className="font-semibold text-gray-900">{unbanUser.name}</p>
                       <p className="text-xs text-gray-500">ID: {unbanUser.id}</p>
@@ -817,15 +816,17 @@ function StudentTable({
           <tr key={u.id} className={`border-b border-black/5 hover:bg-white/40 transition ${u.status === 'Banned' ? 'bg-red-50/30' : ''}`}>
             <td className="p-3">
               <div className="flex items-center gap-3">
-                {u.profile_image ? (
-                  <img src={u.profile_image} alt={u.name}
-                    className="w-9 h-9 rounded-full object-cover border border-gray-200 flex-shrink-0"
-                    referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-gray-500 font-bold text-sm">{u.name.charAt(0)}</span>
-                  </div>
-                )}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 border ${
+                  u.has_photo ? 'bg-blue-100 border-blue-200' : 'bg-gray-100 border-gray-200'
+                }`}>
+                  {u.has_photo ? (
+                    <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+                    </svg>
+                  ) : (
+                    <span className="text-gray-500 font-bold text-sm">{u.name.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
                 <span className="font-medium text-gray-900">{u.name}</span>
               </div>
             </td>
