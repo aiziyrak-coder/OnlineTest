@@ -42,6 +42,7 @@ from apps.api.gemini_tools import (
     parse_flexible_questionnaire,
     parse_structured_questionnaire,
     paraphrase_medical_mcqs,
+    translate_questions_batch,
     translate_questions_to_other_languages,
 )
 from apps.api.services import (
@@ -620,14 +621,19 @@ def admin_test_bank_import_smart(request):
             status=400,
         )
 
+    # --- Tarjima (yangi: bitta API call da barcha tillar, chunk size=8) ---
     translations: list[dict] = []
-    payload = [{"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]} for x in items]
-    # Juda katta importlarda request timeout bo'lmasligi uchun tarjimani cheklaymiz.
+    payload = [
+        {"text": x["text"], "options": x["options"], "correctAnswer": x["correctAnswer"]}
+        for x in items
+    ]
+    # Max 120 ta savol uchun tarjima qilamiz (timeout oldini olish)
+    translate_limit = 120
     try:
-        if len(payload) <= 80:
-            translations = translate_questions_to_other_languages(payload, source_language)
+        if len(payload) <= translate_limit:
+            translations = translate_questions_batch(payload, source_language)
         else:
-            head = translate_questions_to_other_languages(payload[:80], source_language)
+            head = translate_questions_batch(payload[:translate_limit], source_language)
             translations = head + ([{}] * max(0, len(payload) - len(head)))
     except Exception:
         translations = [{} for _ in payload]
@@ -652,7 +658,7 @@ def admin_test_bank_import_smart(request):
                     uf.append("academic_year")
                 except (TypeError, ValueError):
                     pass
-                fixed_cat.source_language = source_language
+            fixed_cat.source_language = source_language
             fixed_cat.save(update_fields=uf)
 
         for idx, it in enumerate(items):
@@ -664,32 +670,73 @@ def admin_test_bank_import_smart(request):
                 cat = _get_or_create_bank_category(it["categoryName"], it.get("categoryDescription") or "")
                 cat.source_language = source_language
                 cat.save(update_fields=["source_language"])
+
             tr = translations[idx] if idx < len(translations) else {}
-            ouz = tr.get("options_uz") if isinstance(tr.get("options_uz"), list) else []
-            oru = tr.get("options_ru") if isinstance(tr.get("options_ru"), list) else []
+
+            # Manba tiliga qarab to'g'ri maydonlarni olish
+            def _tr_str(key: str) -> str:
+                return str(tr.get(key) or "")[:50000]
+
+            def _tr_list(key: str) -> list:
+                v = tr.get(key)
+                return v if isinstance(v, list) else []
+
+            # text: manba tilida original, qolganlar tarjima
+            # DB: text (asosiy), text_uz, text_ru, options_uz_json, options_ru_json
+            text_main = it["text"]
+            opts_main = it["options"]
+            ca_main = it["correctAnswer"]
+
+            if source_language == "en":
+                # EN asl matn, UZ/RU tarjima
+                text_uz = _tr_str("text_uz")
+                text_ru = _tr_str("text_ru")
+                opts_uz = _tr_list("options_uz")
+                opts_ru = _tr_list("options_ru")
+                ca_uz = _tr_str("correct_answer_uz")
+                ca_ru = _tr_str("correct_answer_ru")
+            elif source_language == "ru":
+                # RU asl matn → text_ru = asl, text_uz = tarjima
+                text_uz = _tr_str("text_uz")
+                text_ru = text_main  # asl
+                opts_uz = _tr_list("options_uz")
+                opts_ru = opts_main  # asl
+                ca_uz = _tr_str("correct_answer_uz")
+                ca_ru = ca_main  # asl
+            else:
+                # UZ yoki other → text_uz = asl, text_ru = tarjima
+                text_uz = text_main  # asl
+                text_ru = _tr_str("text_ru")
+                opts_uz = opts_main  # asl
+                opts_ru = _tr_list("options_ru")
+                ca_uz = ca_main  # asl
+                ca_ru = _tr_str("correct_answer_ru")
+
             TestBankQuestion.objects.create(
                 category=cat,
-                text=it["text"],
-                options_json=json.dumps(it["options"]),
-                correct_answer=it["correctAnswer"],
+                text=text_main,
+                options_json=json.dumps(opts_main),
+                correct_answer=ca_main,
                 language=source_language,
-                text_uz=str(tr.get("text_uz") or "")[:50000],
-                text_ru=str(tr.get("text_ru") or "")[:50000],
-                options_uz_json=json.dumps(ouz) if ouz else "[]",
-                options_ru_json=json.dumps(oru) if oru else "[]",
-                correct_answer_uz=str(tr.get("correct_answer_uz") or "")[:500],
-                correct_answer_ru=str(tr.get("correct_answer_ru") or "")[:500],
+                text_uz=text_uz[:50000],
+                text_ru=text_ru[:50000],
+                options_uz_json=json.dumps(opts_uz) if opts_uz else "[]",
+                options_ru_json=json.dumps(opts_ru) if opts_ru else "[]",
+                correct_answer_uz=ca_uz[:500],
+                correct_answer_ru=ca_ru[:500],
             )
             inserted += 1
             categories_touched[cat.name] = categories_touched.get(cat.name, 0) + 1
+
     return Response(
         {
             "success": True,
             "inserted": inserted,
             "detected": len(items),
+            "source_language": source_language,
             "categories": [{"name": k, "questions_added": v} for k, v in sorted(categories_touched.items())],
             "chunks": len(chunks),
-            "translation_limited": len(payload) > 80,
+            "translation_limited": len(payload) > translate_limit,
             "ai_skipped_for_size": force_local_parse,
         }
     )

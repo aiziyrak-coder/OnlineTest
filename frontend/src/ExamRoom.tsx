@@ -11,8 +11,23 @@ import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import type { ExamResultPayload } from './components/ExamResultSummary';
 
-const IDENTITY_CHECK_MS = 45000;
-const VIRTUAL_CAMERA_LABEL_RE = /(droidcam|epoccam|iriun|ivcam|obs|virtual)/i;
+// Identity check: har 90 soniyada (45s → 90s: Gemini token tejash)
+const IDENTITY_CHECK_MS = 90_000;
+const VIRTUAL_CAMERA_LABEL_RE = /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
+
+// Rasm hajmini kamaytirish uchun (Gemini ga yuborishdan oldin)
+function compressToJpeg(video: HTMLVideoElement, quality = 0.55, maxW = 320): string {
+  const scale = maxW / (video.videoWidth || maxW);
+  const w = Math.round((video.videoWidth || maxW) * Math.min(scale, 1));
+  const h = Math.round((video.videoHeight || 240) * Math.min(scale, 1));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  ctx.drawImage(video, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
 
 const container = {
   hidden: { opacity: 0 },
@@ -418,117 +433,136 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     };
   }, [banned, exam.id, token, user.id]);
 
+  // Frame counter — object detection ni kamroq chaqirish uchun
+  const frameCountRef = useRef(0);
+
   // --- AI Processing Loop ---
+  // OPTIMALLASHTIRISH:
+  // - Face detection: har 1.5 soniyada (lokal model, API yo'q)
+  // - Object detection: har 6 soniyada (og'ir model, CPU tejash)
+  // - Audio: har 2 soniyada
+  // - Violation dedup: logViolation ichida 10s minimum interval
   const processFrame = async () => {
     if (bannedRef.current || !videoRef.current || isProcessingRef.current) return;
-    
+
     isProcessingRef.current = true;
     const video = videoRef.current;
+    frameCountRef.current += 1;
+    const frame = frameCountRef.current;
 
     try {
-      if (video.readyState >= 2) {
-        // 1. Audio Check
-        if (analyserRef.current) {
-          const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-          if (average > 50) { // Threshold for talking/noise
-            logViolation("Suspicious audio detected");
-          }
-        }
+      if (video.readyState < 2) return;
 
-        // 2. Face Detection
-        if (faceDetectorRef.current) {
-          const faceResult = faceDetectorRef.current.detectForVideo(video, performance.now());
-          singleFaceRef.current = faceResult.detections.length === 1;
-          if (faceResult.detections.length === 0) {
-            if (Date.now() - lastFaceTimeRef.current > 5000) { // 5 seconds without face
-              logViolation("Face not visible");
-              lastFaceTimeRef.current = Date.now(); // Reset to avoid spamming
-            }
-          } else if (faceResult.detections.length > 1) {
-            logViolation("Multiple faces detected");
-          } else {
-            lastFaceTimeRef.current = Date.now();
-          }
-        }
-
-        // 3. Object Detection (Phones, books, etc.)
-        if (objectDetectorRef.current) {
-          const predictions = await objectDetectorRef.current.detect(video);
-          const forbiddenObjects = ['cell phone', 'book', 'laptop'];
-          const detectedForbidden = predictions.find(p => forbiddenObjects.includes(p.class));
-          if (detectedForbidden) {
-            logViolation(`Forbidden object detected: ${detectedForbidden.class}`);
-          }
+      // 1. Audio tekshiruvi (har 2 soniyada: frame % 2 == 0, ~1.5s interval)
+      if (frame % 2 === 0 && analyserRef.current) {
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        if (avg > 55) {
+          void logViolation('SUSPICIOUS_AUDIO');
         }
       }
-    } catch (err) {
-      console.error("Processing error:", err);
+
+      // 2. Yuz aniqlash (har frame: tez lokal model)
+      if (faceDetectorRef.current) {
+        const faceResult = faceDetectorRef.current.detectForVideo(video, performance.now());
+        const faceCount = faceResult.detections.length;
+        singleFaceRef.current = faceCount === 1;
+
+        if (faceCount === 0) {
+          if (Date.now() - lastFaceTimeRef.current > 6000) {
+            void logViolation('FACE_NOT_VISIBLE');
+            lastFaceTimeRef.current = Date.now();
+          }
+        } else if (faceCount > 1) {
+          void logViolation('MULTIPLE_FACES');
+        } else {
+          lastFaceTimeRef.current = Date.now();
+        }
+      }
+
+      // 3. Ob'ekt aniqlash (har 4-frame: ~6 soniyada) — og'ir model
+      if (frame % 4 === 0 && objectDetectorRef.current) {
+        const predictions = await objectDetectorRef.current.detect(video);
+        const forbidden = ['cell phone', 'book', 'laptop'];
+        const found = predictions.find(
+          (p) => forbidden.includes(p.class) && p.score > 0.65
+        );
+        if (found) {
+          void logViolation(`FORBIDDEN_OBJECT_${found.class.replace(' ', '_').toUpperCase()}`);
+        }
+      }
+    } catch {
+      // Silent — loop to'xtamasin
     } finally {
       isProcessingRef.current = false;
       if (!bannedRef.current) {
+        // Face: ~1.5s, Object: ~6s (4 * 1.5s)
         loopTimeoutRef.current = setTimeout(() => {
           animationFrameRef.current = requestAnimationFrame(processFrame);
-        }, 1000); // Process every 1 second to save CPU
+        }, 1500);
       }
     }
   };
 
   const [identityTerminated, setIdentityTerminated] = useState(false);
 
-  // --- Violation Logging ---
+  // --- Violation logging ---
+  // TOKEN TEJASH: Screenshot base64 serverga yuborilmaydi (har bir rasm ~15KB+).
+  // Faqat violation type va metadata. Bir xil tip 10 soniyada bir marta yuboriladi.
   const logViolation = async (type: string) => {
     if (bannedRef.current) return;
-    
-    // Capture screenshot
-    let screenshotUrl = '';
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0);
-        screenshotUrl = canvas.toDataURL('image/jpeg', 0.5); // Compress
-      }
-    }
 
     setWarningMsg(type);
-    setTimeout(() => setWarningMsg(''), 3000);
+    setTimeout(() => setWarningMsg(''), 3500);
+
+    // Bir xil violation tipini 10 soniyada bir marta yuborish (spam oldini olish)
+    const dedupeKey = `viol_last_${type}`;
+    const lastSent = parseInt(sessionStorage.getItem(dedupeKey) || '0', 10);
+    const now = Date.now();
+    const MIN_INTERVAL = 10_000;
+    if (now - lastSent < MIN_INTERVAL && type !== 'IDENTITY_SUBSTITUTION' && type !== 'TAB_SWITCH_HARD') {
+      return;
+    }
+    sessionStorage.setItem(dedupeKey, String(now));
 
     try {
       const res = await fetch(apiUrl('/api/student/violations'), {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokenRef.current}`
+          Authorization: `Bearer ${tokenRef.current}`,
         },
         body: JSON.stringify({
           exam_id: examIdRef.current,
           violation_type: type,
-          screenshot_url: screenshotUrl
-        })
+          // screenshot_url: null — intentionally not sending large base64 data
+        }),
       });
       const data = (await readJsonSafe<{ violationsCount?: number; banned?: boolean }>(res)) || {};
-      if (data.violationsCount !== undefined) {
+      if (typeof data.violationsCount === 'number') {
         setWarnings(data.violationsCount);
       }
       if (data.banned) {
         if (type === 'IDENTITY_SUBSTITUTION') setIdentityTerminated(true);
         setBanned(true);
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
+        streamRef.current?.getTracks().forEach((t) => t.stop());
       }
-    } catch (err) {
-      console.error("Failed to log violation", err);
+    } catch {
+      // Tarmoq xatosi — muhim emas, local state saqlanadi
     }
   };
 
   logViolationRef.current = logViolation;
 
-  // --- Periodic identity match (profile vs live video) — Gemini faqat serverda ---
+  // --- Periodic identity match (Gemini serverda) ---
+  // TOKEN TEJASH:
+  // - 90 soniyada bir marta (avval 45s edi)
+  // - Rasm: 280x210, quality=0.55 (avval full res, quality=0.85 edi)
+  // - Faqat yuz aniqlanganida (singleFace=true)
+  // - Ketma-ket 3 ta muvaffaqiyatsiz bo'lsa blok (yolg'on positive kamaytirish)
+  const identityFailCountRef = useRef(0);
+
   useEffect(() => {
     if (banned || !user.profile_image) return;
 
@@ -539,15 +573,12 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
       identityCheckBusyRef.current = true;
       try {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, 0, 0);
-        const liveB64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        // Kichik rasm: 280x210 (token tejash uchun)
+        const liveDataUrl = compressToJpeg(video, 0.55, 280);
+        if (!liveDataUrl) return;
+        const liveB64 = liveDataUrl.split(',')[1];
+
+        // Profile image: agar allaqachon kichik bo'lsa to'g'ridan yuboramiz
         const prof = String(user.profile_image);
 
         const res = await fetch(apiUrl('/api/student/identity-compare'), {
@@ -561,14 +592,26 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             live_capture_base64: liveB64,
           }),
         });
-        if (res.status === 503) return;
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) return;
-        if (!data.match) {
-          await logViolationRef.current('IDENTITY_SUBSTITUTION');
+
+        if (res.status === 503 || res.status === 429) {
+          // Rate limit yoki Gemini yetmaydi — skip
+          identityFailCountRef.current = 0;
+          return;
         }
-      } catch (e) {
-        console.error('Identity check failed:', e);
+        if (!res.ok) return;
+
+        const data = await res.json().catch(() => ({}));
+        if (!data.match) {
+          identityFailCountRef.current += 1;
+          // 3 ta ketma-ket muvaffaqiyatsiz → blok (yolg'on positive oldini olish)
+          if (identityFailCountRef.current >= 3) {
+            await logViolationRef.current('IDENTITY_SUBSTITUTION');
+          }
+        } else {
+          identityFailCountRef.current = 0;
+        }
+      } catch {
+        // Tarmoq xatosi — skip
       } finally {
         identityCheckBusyRef.current = false;
       }

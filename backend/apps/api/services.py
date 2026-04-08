@@ -94,39 +94,69 @@ def public_base_url(request) -> str:
 
 
 def parse_pdf_questions(file_obj) -> list[dict]:
+    """
+    PDF dan savollarni ajratadi.
+    Qo'llab-quvvatlangan formatlar:
+    - 1. Savol / 1) Savol
+    - Variantlar: A) B) C) D) yoki a. b. c. d. yoki 1) 2) 3) 4)
+    - Javob kaliti hujjat oxirida ham bo'lishi mumkin
+    """
     from pypdf import PdfReader
     from io import BytesIO
+    from apps.api.gemini_tools import parse_flexible_questionnaire, detect_question_language
 
     raw = file_obj.read()
     reader = PdfReader(BytesIO(raw))
     text = ""
     for page in reader.pages:
-        text += page.extract_text() or ""
-    blocks = re.split(r"(?=\d+\.)", text)
+        text += (page.extract_text() or "") + "\n"
+
+    if not text.strip():
+        return []
+
+    # Aqlli parser ishlatamiz (zero token cost)
+    try:
+        src_lang = detect_question_language(text)
+        parsed = parse_flexible_questionnaire(text, src_lang)
+        return [
+            {
+                "id": i + 1,
+                "text": q["text"],
+                "options": q["options"],
+                "correctAnswer": q["correctAnswer"],
+            }
+            for i, q in enumerate(parsed)
+        ]
+    except Exception:
+        pass
+
+    # Oddiy fallback
     questions = []
-    for idx, block in enumerate(blocks):
+    blocks = re.split(r"(?m)(?=^\s*\d{1,3}[.)]\s+\S)", text)
+    for block in blocks:
         b = block.strip()
-        if not b:
+        if not b or len(b) < 15:
             continue
         lines = [x.strip() for x in b.split("\n") if x.strip()]
         if not lines:
             continue
-        q_text = re.sub(r"^\d+\.\s*", "", lines[0])
-        options = []
+        q_text = re.sub(r"^\d+[.)]\s*", "", lines[0]).strip()
+        options: list[str] = []
         for line in lines[1:]:
-            m = re.match(r"^[A-D]\)\s*(.+)", line)
+            # A) / a) / A. / 1) / 1. formatlar
+            m = re.match(r"^([A-Ja-j]|\d{1,2})[).:\-]\s+(.+)$", line)
             if m:
-                options.append(m.group(1).strip())
+                options.append(m.group(2).strip())
+        if len(options) < 2:
+            continue
         while len(options) < 4:
             options.append(f"Variant {len(options) + 1}")
-        questions.append(
-            {
-                "id": len(questions) + 1,
-                "text": q_text or f"Savol {len(questions) + 1}",
-                "options": options[:4],
-                "correctAnswer": options[0],
-            }
-        )
+        questions.append({
+            "id": len(questions) + 1,
+            "text": q_text or f"Savol {len(questions) + 1}",
+            "options": options[:10],
+            "correctAnswer": options[0],
+        })
     return questions
 
 

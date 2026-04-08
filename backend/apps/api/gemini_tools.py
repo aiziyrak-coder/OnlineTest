@@ -1,4 +1,12 @@
-"""Google Gemini (ixtiyoriy). Kalit bo'lmasa fallback. google-genai SDK."""
+"""Google Gemini (ixtiyoriy). Kalit bo'lmasa fallback. google-genai SDK.
+
+TOKEN TEJASH STRATEGIYASI:
+- Har bir prompt minimal, aniq strukturali
+- Tarjima: bitta promptda barcha tillar (uz+ru bir vaqtda)
+- OCR/multimodal faqat zarur bo'lganda
+- Snippet: faqat kerakli qism, ortiqcha context yo'q
+- Temperatura: 0 (deterministic, kamroq retry)
+"""
 from __future__ import annotations
 
 import json
@@ -10,6 +18,10 @@ from typing import Any
 from django.conf import settings
 
 
+# ---------------------------------------------------------------------------
+# Client helpers
+# ---------------------------------------------------------------------------
+
 def _client():
     key = settings.GEMINI_API_KEY
     if not key:
@@ -18,19 +30,21 @@ def _client():
     return genai.Client(api_key=key)
 
 
-def _generate(client, prompt, contents=None) -> str:
+def _generate(client, prompt: str | None, contents=None, temperature: float = 0.0) -> str:
     """Matn yoki multimodal so'rov yuboradi, javob matnini qaytaradi."""
     from google import genai as _genai
+    from google.genai import types as _types
     model = settings.GEMINI_MODEL
+    config = _types.GenerateContentConfig(temperature=temperature)
     resp = client.models.generate_content(
         model=model,
         contents=contents if contents is not None else prompt,
+        config=config,
     )
     return resp.text or ""
 
 
 def _detect_image_mime(data: bytes) -> str:
-    """Rasm bytes dan MIME tur aniqlash."""
     if data[:8] == b'\x89PNG\r\n\x1a\n':
         return "image/png"
     if data[:3] == b'\xff\xd8\xff':
@@ -42,8 +56,12 @@ def _detect_image_mime(data: bytes) -> str:
     return "image/jpeg"
 
 
+# ---------------------------------------------------------------------------
+# Face compare — minimal prompt
+# ---------------------------------------------------------------------------
+
 def compare_faces(profile_b64: str, live_b64: str) -> dict:
-    """Express compareFacePairWithGemini bilan mos: success, match?, code."""
+    """Profile va live yuzni solishtiradi. Minimal token: faqat MATCH/NO_MATCH."""
     import logging
     logger = logging.getLogger(__name__)
 
@@ -58,7 +76,6 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
             s = s.strip()
             if "," in s:
                 s = s.split(",", 1)[1].strip()
-            # Padding to'g'rilash
             pad = len(s) % 4
             if pad:
                 s += "=" * (4 - pad)
@@ -67,13 +84,16 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
         p_bytes = _decode(profile_b64)
         l_bytes = _decode(live_b64)
 
+        # Rasmlarni kichiklashtirish (agar PIL mavjud bo'lsa)
+        p_bytes = _resize_image_if_large(p_bytes, max_kb=80)
+        l_bytes = _resize_image_if_large(l_bytes, max_kb=80)
+
         p_mime = _detect_image_mime(p_bytes)
         l_mime = _detect_image_mime(l_bytes)
 
+        # Minimal prompt — faqat ikki so'z javob
         contents = [
-            "Compare these two face images. First image: reference profile photo. "
-            "Second image: live camera capture. Are they the same person? "
-            "Reply ONLY with MATCH or NO_MATCH.",
+            "Same person? Image1=profile, Image2=live. Reply: MATCH or NO_MATCH only.",
             types.Part.from_bytes(data=p_bytes, mime_type=p_mime),
             types.Part.from_bytes(data=l_bytes, mime_type=l_mime),
         ]
@@ -81,37 +101,75 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
         ok = raw == "MATCH" or ("MATCH" in raw and "NO_MATCH" not in raw)
         return {"success": True, "match": ok}
     except Exception as exc:
-        logger.warning("compare_faces Gemini error: %s", exc)
+        logger.warning("compare_faces error: %s", exc)
         return {"success": False, "code": "GEMINI_ERROR", "detail": str(exc)[:200]}
 
 
+def _resize_image_if_large(data: bytes, max_kb: int = 100) -> bytes:
+    """Rasm hajmini kamaytiradi (PIL mavjud bo'lsa). Token tejash uchun."""
+    if len(data) <= max_kb * 1024:
+        return data
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(data))
+        # Max 320x240 — yuz tanish uchun yetarli
+        img.thumbnail((320, 240), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=70, optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return data
+
+
+# ---------------------------------------------------------------------------
+# Exam AI summary — minimal token, faqat xato savollar uchun tafsilot
+# ---------------------------------------------------------------------------
+
 def generate_exam_ai_summary(questions: list[dict], answers: dict[str, str], language: str) -> dict:
+    """
+    Imtihon natijalari tahlili.
+    TOKEN TEJASH: faqat xato javoblarni AI ga yuboramiz, to'g'rilar uchun fallback.
+    """
     from apps.api.services import build_fallback_ai_summary
 
     client = _client()
     if not client:
         return build_fallback_ai_summary(questions, answers)
-    payload = []
+
+    # Faqat xato javoblarni ajratib olamiz
+    wrong_questions = []
+    correct_map: dict[int, bool] = {}
     for q in questions:
-        st = answers.get(str(q["id"]), "") or ""
-        payload.append(
-            {
-                "questionId": q["id"],
-                "text": q["text"],
-                "options": q.get("options", []),
-                "correctAnswer": q.get("correctAnswer"),
-                "studentAnswer": st or None,
-                "isCorrect": st == q.get("correctAnswer"),
-            }
-        )
-    lang = "O'zbek" if language == "uz" else "Russian" if language == "ru" else "English"
-    prompt = f"""FJSTI tibbiyot testlari. Savollar va javoblar:
-{json.dumps(payload, ensure_ascii=False)}
-Til: {lang}.
-Qoidalar: overview qisqa va aniq bo‘lsin. To‘g‘ri javoblar uchun commentCorrect — qisqa ijobiy tafsilot.
-Xato javoblar uchun whyStudentWrong — qaysi xato mantiq yoki tushuncha (tibbiy jihatdan); whyCorrectIsRight — to‘g‘ri variantni qisqa klinik/asos bilan isbotlang (fantaziya qo‘shmang, savol matniga tayaning).
-Faqat bitta JSON obyekt: {{"overview":"...","items":[{{"questionId":n,"isCorrect":bool,"commentCorrect":"","whyStudentWrong":"","whyCorrectIsRight":""}}]}}
-Har bir savol uchun bitta item."""
+        qid = q["id"]
+        st = answers.get(str(qid), "") or ""
+        is_correct = st == q.get("correctAnswer")
+        correct_map[qid] = is_correct
+        if not is_correct:
+            wrong_questions.append({
+                "id": qid,
+                "q": q["text"][:200],  # Uzun savollarni qisqartirish
+                "correct": q.get("correctAnswer", "")[:100],
+                "student": st[:100] or "blank",
+            })
+
+    # Agar hammasi to'g'ri bo'lsa — AI kerak emas
+    if not wrong_questions:
+        return build_fallback_ai_summary(questions, answers)
+
+    lang_code = "uz" if language == "uz" else "ru" if language == "ru" else "en"
+    lang_name = {"uz": "O'zbek", "ru": "Russian", "en": "English"}[lang_code]
+
+    # Minimal structured prompt — faqat xato savollar
+    wrong_json = json.dumps(wrong_questions[:30], ensure_ascii=False)  # Max 30 xato
+    prompt = (
+        f"Medical exam errors analysis. Language: {lang_name}.\n"
+        f"Wrong answers (id,q,correct,student):\n{wrong_json}\n"
+        f"Return JSON only: {{\"overview\":\"1 sentence\","
+        f"\"items\":[{{\"questionId\":N,\"whyStudentWrong\":\"<20 words\","
+        f"\"whyCorrectIsRight\":\"<20 words\"}}]}}"
+    )
+
     try:
         t = _generate(client, prompt).strip()
         fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", t)
@@ -119,11 +177,40 @@ Har bir savol uchun bitta item."""
             t = fence.group(1).strip()
         obj = json.loads(t)
         if not isinstance(obj.get("items"), list):
-            raise ValueError("items")
-        return {"overview": obj.get("overview", ""), "items": obj["items"]}
+            raise ValueError("items missing")
+
+        # Xato va to'g'rilarni birlashtirish
+        ai_items_map = {item["questionId"]: item for item in obj["items"] if isinstance(item, dict)}
+        full_items = []
+        for q in questions:
+            qid = q["id"]
+            is_correct = correct_map.get(qid, False)
+            if is_correct:
+                full_items.append({
+                    "questionId": qid,
+                    "isCorrect": True,
+                    "commentCorrect": "✓",
+                    "whyStudentWrong": "",
+                    "whyCorrectIsRight": "",
+                })
+            else:
+                ai = ai_items_map.get(qid, {})
+                full_items.append({
+                    "questionId": qid,
+                    "isCorrect": False,
+                    "commentCorrect": "",
+                    "whyStudentWrong": ai.get("whyStudentWrong", ""),
+                    "whyCorrectIsRight": ai.get("whyCorrectIsRight", ""),
+                })
+
+        return {"overview": obj.get("overview", ""), "items": full_items}
     except Exception:
         return build_fallback_ai_summary(questions, answers)
 
+
+# ---------------------------------------------------------------------------
+# Bank extension — yangi savollar generatsiya
+# ---------------------------------------------------------------------------
 
 def generate_bank_extension(
     samples: list[dict], count: int, language: str, category_names: list[str]
@@ -131,14 +218,17 @@ def generate_bank_extension(
     client = _client()
     if not client:
         raise RuntimeError("GEMINI_API_KEY is not configured")
-    sample_block = json.dumps(samples[:14], ensure_ascii=False)
-    lang = "O'zbek" if language == "uz" else "Russian" if language == "ru" else "English"
-    prompt = f"""Medical education expert FJSTI. Generate exactly {count} NEW MCQ questions.
-Language: {lang}. Categories: {', '.join(category_names)}.
-Each: "text", "options" (4 strings), "correctAnswer" (one of options).
-Output ONLY JSON array, no markdown.
-Samples for style:
-{sample_block}"""
+
+    # Faqat 3 ta namuna yetarli (ko'p namuna = ko'p token)
+    sample_block = json.dumps(samples[:3], ensure_ascii=False)
+    lang = "Uzbek" if language == "uz" else "Russian" if language == "ru" else "English"
+    cats = ", ".join(category_names[:5])
+
+    prompt = (
+        f"Generate {count} medical MCQs. Lang:{lang}. Topics:{cats}.\n"
+        f"Format:[{{\"text\":\"...\",\"options\":[\"A\",\"B\",\"C\",\"D\"],\"correctAnswer\":\"A\"}}]\n"
+        f"JSON array only. Style sample:\n{sample_block}"
+    )
     t = _generate(client, prompt).strip()
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", t)
     if fence:
@@ -153,13 +243,17 @@ Samples for style:
             raise ValueError("fewer questions")
         opts = [str(x) for x in (q.get("options") or [])][:4]
         while len(opts) < 4:
-            opts.append(f"Variant {len(opts) + 1}")
+            opts.append(f"Option {len(opts) + 1}")
         cor = str(q.get("correctAnswer") or opts[0])
         if cor not in opts:
             cor = opts[0]
-        out.append({"text": str(q.get("text") or f"Savol {i+1}"), "options": opts, "correctAnswer": cor})
+        out.append({"text": str(q.get("text") or f"Question {i+1}"), "options": opts, "correctAnswer": cor})
     return out
 
+
+# ---------------------------------------------------------------------------
+# JSON extraction helper
+# ---------------------------------------------------------------------------
 
 def _extract_json_array_from_model_text(t: str) -> list:
     t = (t or "").strip()
@@ -174,34 +268,63 @@ def _extract_json_array_from_model_text(t: str) -> list:
         pass
     i, j = t.find("["), t.rfind("]")
     if i >= 0 and j > i:
-        arr = json.loads(t[i : j + 1])
-        if isinstance(arr, list):
-            return arr
+        try:
+            arr = json.loads(t[i: j + 1])
+            if isinstance(arr, list):
+                return arr
+        except json.JSONDecodeError:
+            pass
     raise ValueError("Model javobi JSON massiv emas")
 
 
+# ---------------------------------------------------------------------------
+# Language detection (heuristic, AI sarflamaydi)
+# ---------------------------------------------------------------------------
+
 def detect_question_language(raw_text: str) -> str:
-    """Heuristic til aniqlash: uz / ru / en / other."""
+    """Heuristic til aniqlash: uz / ru / en / other. AI ishlatilmaydi."""
     t = (raw_text or "").lower()
     if not t:
-        return "en"
-    cyr = len(re.findall(r"[а-яё]", t, flags=re.IGNORECASE))
-    uz = len(
-        re.findall(
-            r"(to'g'ri|javob|savol|variant|quyidagilardan|qaysi|kasalligi|bo'lishi|o'zbek)",
-            t,
-            flags=re.IGNORECASE,
-        )
-    )
-    eng = len(re.findall(r"\b(question|answer|choose|which|following|disease|patient)\b", t))
-    if cyr > 12:
-        return "ru"
-    if cyr < 5 and uz < 2 and eng < 2:
-        return "other"
-    if uz >= eng:
         return "uz"
-    return "en"
 
+    # Kirill harflari soni
+    cyr = len(re.findall(r"[а-яёА-ЯЁ]", raw_text))
+    total_alpha = len(re.findall(r"[a-zA-Zа-яёА-ЯЁ]", raw_text)) or 1
+    cyr_ratio = cyr / total_alpha
+
+    # O'zbek lotin so'zlari
+    uz_words = len(re.findall(
+        r"\b(to['']?g['']?ri|javob|savol|variant|quyidagi|qaysi|kasallik|bo['']lishi|"
+        r"o['']zbek|hamma|qon|bemor|davo|shifo|tibbiy|davolash|tekshiruv)\b",
+        t, flags=re.IGNORECASE,
+    ))
+    # Ingliz tibbiy so'zlari
+    eng_words = len(re.findall(
+        r"\b(question|answer|choose|which|following|disease|patient|treatment|"
+        r"diagnosis|clinical|drug|therapy|symptom|correct)\b",
+        t
+    ))
+    # Rus tibbiy so'zlari
+    ru_words = len(re.findall(
+        r"\b(вопрос|ответ|задание|правильн|пациент|лечение|диагноз|болезнь|симптом)\b",
+        t, flags=re.IGNORECASE,
+    ))
+
+    if cyr_ratio > 0.35 or ru_words >= 3:
+        return "ru"
+    if uz_words >= 2:
+        return "uz"
+    if eng_words >= 2:
+        return "en"
+    if cyr_ratio > 0.1:
+        return "ru"
+    # Lotin alifbosi lekin hech narsa yo'q — o'zbek deb qabul qilamiz
+    return "uz"
+
+
+# ---------------------------------------------------------------------------
+# Answer key extraction
+# ---------------------------------------------------------------------------
 
 def _parse_answer_indexes(answer_text: str, option_count: int) -> list[int]:
     idxs: list[int] = []
@@ -214,57 +337,94 @@ def _parse_answer_indexes(answer_text: str, option_count: int) -> list[int]:
 
 def _extract_answer_key_map(raw_text: str) -> dict[int, list[str]]:
     """
-    Matndan javob kalitini ajratadi.
-    Misollar:
-      1-A, 2:C, 3) 4, 4 - B,D
-      To'g'ri javoblar: 1-A; 2-C
+    Javob kalitini ajratadi. Formatlar:
+      1-A, 2:C, 3) 4, 4-B,D
+      1. B  2. C  3. D  (bir qatorda)
+      Answers: 1-A; 2-C
     """
     m: dict[int, list[str]] = {}
     text = raw_text or ""
-    # Pair-by-pair mapping
-    for qn, ans in re.findall(r"(?im)\b(\d{1,4})\s*[-:.)]\s*([A-Ja-j]|\d{1,2}(?:\s*[,;/]\s*\d{1,2})*)", text):
-        q = int(qn)
-        vals = [x.strip().upper() for x in re.split(r"[,;/]\s*", ans) if x.strip()]
-        if vals:
-            m[q] = vals
-    # Dense single-line answers like: 1-A 2-C 3-D
-    for line in text.splitlines():
-        pairs = re.findall(r"(\d{1,4})\s*[-:.)]\s*([A-Ja-j]|\d{1,2})", line, flags=re.IGNORECASE)
-        if len(pairs) >= 2:
-            for qn, ans in pairs:
-                q = int(qn)
-                m[q] = [ans.strip().upper()]
+
+    # Oxirgi 30% dan javob kalitini qidirish (ko'pincha oxirida bo'ladi)
+    tail_start = max(0, int(len(text) * 0.7))
+    tail = text[tail_start:]
+
+    for region in [tail, text]:
+        for qn, ans in re.findall(
+            r"(?im)\b(\d{1,4})\s*[-:.)\s]\s*([A-Ja-j](?:\s*[,;/]\s*[A-Ja-j])*|\d{1,2}(?:\s*[,;/]\s*\d{1,2})*)",
+            region
+        ):
+            q = int(qn)
+            if q in m:
+                continue
+            vals = [x.strip().upper() for x in re.split(r"[,;/\s]+", ans) if x.strip()]
+            if vals:
+                m[q] = vals
+
+        # Dense single-line: "1-A 2-C 3-D 4-B"
+        for line in region.splitlines():
+            pairs = re.findall(r"(\d{1,4})\s*[-:.]\s*([A-Ja-j]|\d{1,2})", line, flags=re.IGNORECASE)
+            if len(pairs) >= 3:
+                for qn, ans in pairs:
+                    q = int(qn)
+                    if q not in m:
+                        m[q] = [ans.strip().upper()]
+
     return m
 
 
+# ---------------------------------------------------------------------------
+# Flexible question parser (regex, AI ishlatilmaydi)
+# ---------------------------------------------------------------------------
+
 def parse_flexible_questionnaire(raw_text: str, language: str = "auto") -> list[dict]:
     """
-    Juda erkin formatlar uchun parser:
-    - Savollar har xil prefiksda bo'lishi mumkin (1., Savol 1, Question 1, Вопрос 1 ...)
-    - Variantlar A)/B) yoki 1)/2) yoki a./b. bo'lishi mumkin
-    - Javob kaliti hujjat oxirida bo'lishi mumkin (1-A, 2-C ...)
+    Erkin formatli savol-javoblarni regex bilan ajratadi.
+    AI ishlatilmaydi — zero token cost.
+    Qo'llab-quvvatlangan formatlar:
+    - 1. Savol matni / 1) Savol / Question 1: ...
+    - Variantlar: A) B) C) D) yoki a. b. c. d. yoki 1) 2) 3) 4)
+    - Javob kaliti: hujjat oxirida yoki inline
     """
     src_lang = (language or "auto").lower()
     if src_lang == "auto":
         src_lang = detect_question_language(raw_text)
-    text = (raw_text or "").replace("\r\n", "\n")
+
+    text = (raw_text or "").replace("\r\n", "\n").replace("\r", "\n")
     answer_map = _extract_answer_key_map(text)
 
+    # Savol bloklarini ajratish.
+    # "1) variant" ni savol boshidan ajratish uchun — faqat harfli prefiksli variantlar
+    # yoki kalit so'zli (savol/вопрос/question) savollar bo'yicha split qilamiz.
+    # Raqamli variant (1) 2) 3) 4)) bo'lgan bloklar `parse_structured_questionnaire` orqali.
     qsplit = re.split(
-        r"(?im)(?=^\s*(?:\d{1,4}[).]|question\s*#?\s*\d+|savol\s*#?\s*\d+|вопрос\s*#?\s*\d+|задание\s*#?\s*\d+))",
+        r"(?im)(?=^\s*(?:"
+        r"\d{1,4}[.]\s+"                    # 1. (nuqta bilan — savol)
+        r"|question\s*#?\s*\d+[:\s]?"       # Question 1
+        r"|savol\s*#?\s*\d+[:\s]?"          # Savol 1
+        r"|вопрос\s*#?\s*\d+[:\s]?"         # Вопрос 1
+        r"|задание\s*#?\s*\d+[:\s]?"        # Задание 1
+        r"))",
         text,
     )
+
     out: list[dict] = []
     for block in qsplit:
         b = block.strip()
-        if len(b) < 12:
+        if len(b) < 10:
             continue
+
+        # Savol raqami va tanasini ajratish
         hm = re.match(
-            r"(?im)^\s*(?:(\d{1,4})[).]|(?:question|savol|вопрос|задание)\s*#?\s*(\d{1,4}))\s*([\s\S]*)$",
+            r"(?im)^\s*(?:"
+            r"(\d{1,4})[).]\s*"                                                    # 1. yoki 1)
+            r"|(?:question|savol|вопрос|задание)\s*#?\s*(\d{1,4})\s*[:.)\-]?\s*"  # Savol 1: / Задание 1
+            r")\s*([\s\S]*)$",
             b,
         )
         if not hm:
             continue
+
         qn = int(hm.group(1) or hm.group(2) or 0)
         body = (hm.group(3) or "").strip()
         lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
@@ -273,111 +433,145 @@ def parse_flexible_questionnaire(raw_text: str, language: str = "auto") -> list[
 
         option_rows: list[tuple[str, str]] = []
         stem_parts: list[str] = []
+        inline_answer = ""
+
         for ln in lines:
-            om = re.match(r"^\s*([A-Ja-j]|\d{1,2})[).:-]\s+(.+)$", ln)
+            # Inline javob kaliti
+            ans_m = re.match(
+                r"(?im)^(to['']?g['']?ri\s+javob(?:lar)?|правильн\w+\s+ответ\w*|correct\s+answer(?:s)?)\s*[:\-]\s*(.+)$",
+                ln
+            )
+            if ans_m:
+                inline_answer = ans_m.group(2).strip()
+                continue
+
+            # Variant satri — keng format: A) B) / a. b. / 1) 2) 3) 4)
+            om = re.match(
+                r"^\s*([A-Ja-j]|\d{1,2})[).:\-]\s+(.+)$",
+                ln
+            )
             if om:
                 option_rows.append((om.group(1).upper(), om.group(2).strip()))
             else:
-                # answer markerlarni stemga qo'shmaymiz
-                if not re.match(r"(?im)^(to['’]?g['’]?ri\s+javob|правильн\w+\s+ответ|correct\s+answer)", ln):
+                # Savol matni qatoriga qo'shamiz — lekin "To'g'ri javob" kabi satrlarni emas
+                if not re.match(
+                    r"(?im)^(to['']?g['']?ri|правильн|correct\s+answer)",
+                    ln
+                ):
                     stem_parts.append(ln)
 
-        # Inline options (single-line cases) if line-based options topilmasa
+        # Inline variantlar (bir qatorda: A) ... B) ... C) ...)
         if len(option_rows) < 2:
-            inline = re.findall(r"(?i)([A-Ja-j])[).]\s*([^A-Ja-j]{2,}?)(?=\s+[A-Ja-j][).]\s*|$)", body)
-            if len(inline) >= 2:
-                option_rows = [(k.upper(), v.strip()) for k, v in inline]
+            inline_opts = re.findall(
+                r"(?i)([A-Ja-j])[).]\s*([^A-Ja-j\n]{2,60}?)(?=\s+[A-Ja-j][).]\s*|\s*$)",
+                body
+            )
+            if len(inline_opts) >= 2:
+                option_rows = [(k.upper(), v.strip()) for k, v in inline_opts]
 
         options = [v for _, v in option_rows][:10]
         if len(options) < 2:
             continue
-        stem = " ".join(stem_parts).strip() or f"Question {qn}"
 
-        # Correct answer resolution
-        ans_tokens = answer_map.get(qn, [])
-        if not ans_tokens:
-            local = re.search(
-                r"(?im)(?:to['’]?g['’]?ri\s+javob(?:lar)?|правильн\w+\s+ответ\w*|correct\s+answer(?:s)?)\s*:\s*(.+)$",
-                b,
-            )
-            if local:
-                ans_tokens = [x.strip().upper() for x in re.split(r"[,;/]\s*", local.group(1)) if x.strip()]
+        stem = " ".join(stem_parts).strip()
+        # Stem oxiridan "To'g'ri javob:" kabi narsalarni olib tashlaymiz
+        stem = re.sub(
+            r"(?im)\s*(to['']?g['']?ri\s+javob(?:lar)?|правильн\w+\s+ответ\w*|correct\s+answer(?:s)?)\s*[:\-].*$",
+            "", stem
+        ).strip()
+        if not stem or len(stem) < 3:
+            stem = f"Question {qn}"
 
-        # token letter bo'lsa indexga o'girish
+        # Javobni aniqlash
+        ans_tokens: list[str] = []
+        if inline_answer:
+            ans_tokens = [x.strip().upper() for x in re.split(r"[,;/\s]+", inline_answer) if x.strip()]
+        elif qn in answer_map:
+            ans_tokens = answer_map[qn]
+
+        # Token → index
         idxs: list[int] = []
         for tok in ans_tokens:
-            if tok.isdigit():
+            tok = tok.strip()
+            if re.match(r"^\d+$", tok):
                 n = int(tok)
                 if 1 <= n <= len(options):
                     idxs.append(n)
             elif re.match(r"^[A-J]$", tok):
-                n = ord(tok) - ord("A") + 1
+                n = ord(tok.upper()) - ord("A") + 1
                 if 1 <= n <= len(options):
                     idxs.append(n)
-        if not idxs:
-            idxs = [1]
-        correct_values = [options[i - 1] for i in dict.fromkeys(idxs)]
-        if len(correct_values) > 1:
-            stem = f"{stem} ({len(correct_values)} correct answers)"
 
-        out.append(
-            {
-                "text": stem,
-                "options": options,
-                "correctAnswer": correct_values[0],
-                "categoryName": "General",
-                "categoryDescription": "",
-            }
-        )
+        if not idxs:
+            idxs = [1]  # Fallback: birinchi variant
+
+        correct_values = list(dict.fromkeys(options[i - 1] for i in idxs if i <= len(options)))
+        if not correct_values:
+            correct_values = [options[0]]
+
+        # Ko'p to'g'ri javob — stemga yozamiz
+        extra = f" [to'g'ri: {len(correct_values)} ta]" if len(correct_values) > 1 else ""
+
+        out.append({
+            "text": stem + extra,
+            "options": options,
+            "correctAnswer": correct_values[0],
+            "categoryName": "Umumiy",
+            "categoryDescription": "",
+        })
+
     if out:
         return out
-    # Oxirgi fallback: global regex bilan A/B/C/D yoki 1/2/3/4 bloklarini ajratish.
-    compact = text
+
+    # Oxirgi fallback: A/B/C/D inline format
+    return _parse_abcd_inline(text)
+
+
+def _parse_abcd_inline(text: str) -> list[dict]:
+    """A) ... B) ... C) ... D) ... formatini ajratadi."""
     gpat = re.compile(
-        r"(?is)(?P<stem>.{10,260}?)\s*(?:A[).:-]\s*(?P<a>.+?)\s*B[).:-]\s*(?P<b>.+?)\s*C[).:-]\s*(?P<c>.+?)\s*D[).:-]\s*(?P<d>.+?))(?=(?:\n\s*\d+[).]|\n\s*(?:question|savol|вопрос|задание)\s*#?\s*\d+|$))"
+        r"(?is)(?P<stem>.{8,300}?)\s+"
+        r"A[).:\-]\s*(?P<a>.{2,200}?)\s+"
+        r"B[).:\-]\s*(?P<b>.{2,200}?)\s+"
+        r"C[).:\-]\s*(?P<c>.{2,200}?)\s+"
+        r"D[).:\-]\s*(?P<d>.{2,100}?)"
+        r"(?=\s*(?:\n\s*\d+[).:]|\n\s*(?:question|savol|вопрос)\s*#?\s*\d+|$))"
     )
-    idx = 0
-    for gm in gpat.finditer(compact):
-        idx += 1
+    out: list[dict] = []
+    for gm in gpat.finditer(text):
         stem = re.sub(r"\s+", " ", (gm.group("stem") or "").strip())
+        # Stem boshidagi raqamni olib tashlaymiz
+        stem = re.sub(r"^\d{1,4}[).:\-\s]+", "", stem).strip()
         options = [
-            re.sub(r"\s+", " ", (gm.group("a") or "").strip()),
-            re.sub(r"\s+", " ", (gm.group("b") or "").strip()),
-            re.sub(r"\s+", " ", (gm.group("c") or "").strip()),
-            re.sub(r"\s+", " ", (gm.group("d") or "").strip()),
+            re.sub(r"\s+", " ", (gm.group(k) or "").strip())
+            for k in ("a", "b", "c", "d")
         ]
-        if len(stem) < 8 or any(len(o) < 1 for o in options):
+        if len(stem) < 5 or any(len(o) < 1 for o in options):
             continue
-        out.append(
-            {
-                "text": stem,
-                "options": options,
-                "correctAnswer": options[0],
-                "categoryName": "General",
-                "categoryDescription": "",
-            }
-        )
-    if out:
-        return out
-    raise ValueError("Savollarni avtomatik ajratib bo‘lmadi — fayl tuzilmasi juda notekis.")
+        out.append({
+            "text": stem,
+            "options": options,
+            "correctAnswer": options[0],
+            "categoryName": "Umumiy",
+            "categoryDescription": "",
+        })
+    return out
 
 
 def parse_structured_questionnaire(raw_text: str, language: str = "auto") -> list[dict]:
     """
-    Regex parser: 1..10+ variantli, bir yoki ko'p to'g'ri javobli matnlarni ajratadi.
-    Kutilgan formatlar:
-    - "Задание #1" / "Savol 1" / "Question 1"
-    - "1) ..." varianti
-    - "To'g'ri javoblar: 1,3" / "Правильные ответы: 2" / "Correct answer(s): 4"
+    Qat'iy strukturali parser (Задание #N / Savol N / Question N formatlar).
+    AI ishlatilmaydi.
     """
-    # Avval universal parserga urinib ko'ramiz.
     try:
         return parse_flexible_questionnaire(raw_text, language)
     except Exception:
         pass
+
     src_lang = (language or "auto").lower()
     if src_lang == "auto":
         src_lang = detect_question_language(raw_text)
+
     lines = [ln.strip() for ln in (raw_text or "").splitlines()]
     out: list[dict] = []
     i = 0
@@ -387,7 +581,10 @@ def parse_structured_questionnaire(raw_text: str, language: str = "auto") -> lis
         if not ln:
             i += 1
             continue
-        if not re.match(r"^(задание\s*#?\d+|savol\s*#?\d+|question\s*#?\d+)", ln, flags=re.IGNORECASE):
+        if not re.match(
+            r"^(задание\s*#?\d+|savol\s*#?\d+|question\s*#?\d+)",
+            ln, flags=re.IGNORECASE
+        ):
             i += 1
             continue
         q_no += 1
@@ -398,15 +595,17 @@ def parse_structured_questionnaire(raw_text: str, language: str = "auto") -> lis
         i += 1
         while i < len(lines):
             cur = lines[i]
-            if re.match(r"^(задание\s*#?\d+|savol\s*#?\d+|question\s*#?\d+)", cur, flags=re.IGNORECASE):
+            if re.match(
+                r"^(задание\s*#?\d+|savol\s*#?\d+|question\s*#?\d+)",
+                cur, flags=re.IGNORECASE
+            ):
                 break
             if not cur:
                 i += 1
                 continue
             if re.match(
-                r"^(to['’]?g['’]?ri\s+javoblar?|правильн\w+\s+ответ\w*|correct\s+answer[s]?)\s*:",
-                cur,
-                flags=re.IGNORECASE,
+                r"^(to['']?g['']?ri\s+javoblar?|правильн\w+\s+ответ\w*|correct\s+answer[s]?)\s*:",
+                cur, flags=re.IGNORECASE,
             ):
                 answer_line = cur
                 i += 1
@@ -416,278 +615,249 @@ def parse_structured_questionnaire(raw_text: str, language: str = "auto") -> lis
                 options.append(om.group(2).strip())
                 i += 1
                 continue
+            letter_om = re.match(r"^\s*([A-Ja-j])[).]\s*(.+)$", cur)
+            if letter_om:
+                options.append(letter_om.group(2).strip())
+                i += 1
+                continue
             um = re.search(r"(https?://\S+\.(?:png|jpe?g|gif|webp))", cur, flags=re.IGNORECASE)
             if um:
                 image_url = um.group(1)
-            if not question_text and re.search(r"(вопрос|savol|question)\s*:", cur, flags=re.IGNORECASE):
-                question_text = re.sub(r"^(вопрос|savol|question)\s*:\s*", "", cur, flags=re.IGNORECASE).strip()
-            elif not question_text:
-                question_text = cur
+            if not question_text:
+                question_text = re.sub(
+                    r"^(вопрос|savol|question)\s*:\s*", "", cur, flags=re.IGNORECASE
+                ).strip()
+            elif not re.match(r"^(to['']?g['']?ri|правильн|correct)", cur, flags=re.IGNORECASE):
+                question_text = question_text + " " + cur
             i += 1
+
         if len(options) < 2:
             continue
         ans_ids = _parse_answer_indexes(answer_line, len(options))
         if not ans_ids:
             ans_ids = [1]
         correct_values = [options[x - 1] for x in ans_ids]
-        if len(correct_values) > 1:
-            question_text = f"{question_text} ({len(correct_values)} correct answers)"
         if image_url:
             question_text = f"{question_text}\n![question-image]({image_url})"
-        out.append(
-            {
-                "text": question_text or f"Question {q_no}",
-                "options": options[:10],
-                "correctAnswer": correct_values[0],
-                "categoryName": "General",
-                "categoryDescription": "",
-            }
-        )
+        out.append({
+            "text": question_text or f"Question {q_no}",
+            "options": options[:10],
+            "correctAnswer": correct_values[0],
+            "categoryName": "Umumiy",
+            "categoryDescription": "",
+        })
+
     if out:
         return out
-    raise ValueError("Savol formati o‘qilmadi: faylda savol/variant/to‘g‘ri javob satrlarini tekshiring.")
+    raise ValueError("Savol formati o'qilmadi: faylda savol/variant/to'g'ri javob satrlarini tekshiring.")
 
 
-def translate_en_questions_to_uz_ru(questions: list[dict]) -> list[dict]:
-    """Inglizcha savollarni tibbiy terminologiya bilan O‘zbek (lotin) va Ruschaga tarjima qiladi."""
+# ---------------------------------------------------------------------------
+# Translation — bitta call da uz+ru (token tejash: 2x o'rniga 1x)
+# ---------------------------------------------------------------------------
+
+def translate_questions_batch(questions: list[dict], source_language: str) -> list[dict]:
+    """
+    Savollarni manba tilidan UZ+RU+EN ga tarjima qiladi.
+    TOKEN TEJASH:
+    - Bitta API call da 3 til (avval 2 alohida call bor edi)
+    - Chunk size: 8 (5 dan ko'paytirildi — kamroq call)
+    - Faqat kerakli maydonlar yuboriladi
+    - Prompt juda qisqa va aniq
+    """
     if not questions:
         return []
     client = _client()
     if not client:
         return [{} for _ in questions]
-    import json
+
+    src = (source_language or "uz").lower()
+    src_name = {
+        "uz": "Uzbek(Latin)",
+        "ru": "Russian",
+        "en": "English",
+        "other": "Unknown"
+    }.get(src, "Uzbek(Latin)")
 
     out_all: list[dict] = []
-    chunk_size = 5
+    chunk_size = 8  # 5 → 8: kamroq API call
+
     for i in range(0, len(questions), chunk_size):
-        chunk = questions[i : i + chunk_size]
+        chunk = questions[i: i + chunk_size]
+
+        # Faqat kerakli maydonlar — kamroq token
         batch = [
-            {"text": q["text"], "options": q.get("options", []), "correctAnswer": q.get("correctAnswer")}
-            for q in chunk
+            {
+                "i": j,  # Index — javobda moslashtirish uchun
+                "t": q["text"][:300],  # Max 300 belgi
+                "o": [str(x)[:150] for x in (q.get("options") or [])[:5]],
+                "ca": str(q.get("correctAnswer") or "")[:150],
+            }
+            for j, q in enumerate(chunk)
         ]
-        prompt = f"""You are an expert medical translator for Central Asian medical schools. Translate each MCQ from English to Uzbek (Latin script) and Russian. Use correct clinical terminology (anatomy, pharmacology, pathophysiology); avoid literal machine translation where a standard medical term exists in the target language.
 
-INPUT JSON array (length {len(batch)}):
-{json.dumps(batch, ensure_ascii=False)}
+        # Qaysi tillar kerak?
+        if src == "en":
+            targets = "Uzbek(Latin) as uz, Russian as ru"
+            out_schema = '{"i":N,"t_uz":"...","t_ru":"...","o_uz":["..."],"o_ru":["..."],"ca_uz":"...","ca_ru":"..."}'
+            lang_note = "Source is English, translate to UZ and RU only."
+        elif src == "ru":
+            targets = "Uzbek(Latin) as uz, English as en"
+            out_schema = '{"i":N,"t_uz":"...","t_en":"...","o_uz":["..."],"o_en":["..."],"ca_uz":"...","ca_en":"..."}'
+            lang_note = "Source is Russian, translate to UZ and EN only."
+        elif src == "uz":
+            targets = "Russian as ru, English as en"
+            out_schema = '{"i":N,"t_ru":"...","t_en":"...","o_ru":["..."],"o_en":["..."],"ca_ru":"...","ca_en":"..."}'
+            lang_note = "Source is Uzbek(Latin), translate to RU and EN only."
+        else:
+            # Unknown → translate to all 3
+            targets = "Uzbek(Latin) as uz, Russian as ru, English as en"
+            out_schema = '{"i":N,"t_uz":"...","t_ru":"...","t_en":"...","o_uz":["..."],"o_ru":["..."],"o_en":["..."],"ca_uz":"...","ca_ru":"...","ca_en":"..."}'
+            lang_note = f"Source language: {src_name}. Translate to UZ, RU, EN."
 
-OUTPUT: JSON array ONLY, same length. Each object:
-{{"text_uz":"...","text_ru":"...","options_uz":["..."],"options_ru":["..."],"correct_answer_uz":"exact copy of one element of options_uz","correct_answer_ru":"exact copy of one element of options_ru"}}
+        prompt = (
+            f"Medical MCQ translator. {lang_note}\n"
+            f"Targets: {targets}.\n"
+            f"RULES: Keep option count/order. ca_* must exactly match one option in that lang.\n"
+            f"Input JSON:\n{json.dumps(batch, ensure_ascii=False)}\n"
+            f"Output: JSON array only. Each item: {out_schema}"
+        )
 
-Rules:
-- options_uz and options_ru must have the SAME length and order as English options (parallel translation).
-- correct_answer_uz must equal options_uz[k] for the same k as the correct English option.
-- correct_answer_ru must equal options_ru[k] likewise.
-"""
         try:
             t = _generate(client, prompt).strip()
             arr = _extract_json_array_from_model_text(t)
         except Exception:
             arr = []
-        for j in range(len(chunk)):
-            row = arr[j] if j < len(arr) and isinstance(arr[j], dict) else {}
-            out_all.append(row)
+
+        # Index bo'yicha moslashtirish
+        idx_map = {item["i"]: item for item in arr if isinstance(item, dict) and "i" in item}
+
+        for j, q in enumerate(chunk):
+            raw = idx_map.get(j, {})
+            result: dict = {}
+
+            # Manba tilini original sifatida saqlash
+            opts_src = [str(x) for x in (q.get("options") or [])]
+            if src == "en":
+                result = {
+                    "text_en": q["text"],
+                    "text_uz": str(raw.get("t_uz") or ""),
+                    "text_ru": str(raw.get("t_ru") or ""),
+                    "options_en": opts_src,
+                    "options_uz": _safe_list(raw.get("o_uz"), len(opts_src)),
+                    "options_ru": _safe_list(raw.get("o_ru"), len(opts_src)),
+                    "correct_answer_en": q.get("correctAnswer", ""),
+                    "correct_answer_uz": str(raw.get("ca_uz") or ""),
+                    "correct_answer_ru": str(raw.get("ca_ru") or ""),
+                }
+            elif src == "ru":
+                result = {
+                    "text_ru": q["text"],
+                    "text_uz": str(raw.get("t_uz") or ""),
+                    "text_en": str(raw.get("t_en") or ""),
+                    "options_ru": opts_src,
+                    "options_uz": _safe_list(raw.get("o_uz"), len(opts_src)),
+                    "options_en": _safe_list(raw.get("o_en"), len(opts_src)),
+                    "correct_answer_ru": q.get("correctAnswer", ""),
+                    "correct_answer_uz": str(raw.get("ca_uz") or ""),
+                    "correct_answer_en": str(raw.get("ca_en") or ""),
+                }
+            elif src == "uz":
+                result = {
+                    "text_uz": q["text"],
+                    "text_ru": str(raw.get("t_ru") or ""),
+                    "text_en": str(raw.get("t_en") or ""),
+                    "options_uz": opts_src,
+                    "options_ru": _safe_list(raw.get("o_ru"), len(opts_src)),
+                    "options_en": _safe_list(raw.get("o_en"), len(opts_src)),
+                    "correct_answer_uz": q.get("correctAnswer", ""),
+                    "correct_answer_ru": str(raw.get("ca_ru") or ""),
+                    "correct_answer_en": str(raw.get("ca_en") or ""),
+                }
+            else:
+                result = {
+                    "text_uz": str(raw.get("t_uz") or ""),
+                    "text_ru": str(raw.get("t_ru") or ""),
+                    "text_en": str(raw.get("t_en") or ""),
+                    "options_uz": _safe_list(raw.get("o_uz"), len(opts_src)),
+                    "options_ru": _safe_list(raw.get("o_ru"), len(opts_src)),
+                    "options_en": _safe_list(raw.get("o_en"), len(opts_src)),
+                    "correct_answer_uz": str(raw.get("ca_uz") or ""),
+                    "correct_answer_ru": str(raw.get("ca_ru") or ""),
+                    "correct_answer_en": str(raw.get("ca_en") or ""),
+                }
+
+            out_all.append(result)
+
     return out_all[: len(questions)]
+
+
+def _safe_list(val: Any, expected_len: int) -> list:
+    """Ro'yxatni xavfsiz tekshiradi, kerak bo'lsa bo'sh stringlar bilan to'ldiradi."""
+    if not isinstance(val, list):
+        return [""] * expected_len
+    result = [str(x) for x in val]
+    while len(result) < expected_len:
+        result.append("")
+    return result[:expected_len]
+
+
+# Legacy compat: eski nomlar bilan chaqirilgan kodlar uchun
+def translate_en_questions_to_uz_ru(questions: list[dict]) -> list[dict]:
+    """Legacy. translate_questions_batch ga yo'naltiradi."""
+    return translate_questions_batch(questions, "en")
 
 
 def translate_questions_to_other_languages(questions: list[dict], source_language: str) -> list[dict]:
-    """Savollarni manba tilidan kerakli tillarga tarjima qilish."""
-    if not questions:
-        return []
-    src = (source_language or "en").lower()
-    if src not in ("en", "uz", "ru", "other"):
-        src = detect_question_language("\n".join(str(q.get("text") or "") for q in questions[:8]))
-    if src == "en":
-        return translate_en_questions_to_uz_ru(questions)
-    client = _client()
-    if not client:
-        return [{} for _ in questions]
-    out_all: list[dict] = []
-    chunk_size = 5
-    src_name = "Uzbek (Latin)" if src == "uz" else "Russian" if src == "ru" else "Original language"
-    for i in range(0, len(questions), chunk_size):
-        chunk = questions[i : i + chunk_size]
-        batch = [
-            {"text": q["text"], "options": q.get("options", []), "correctAnswer": q.get("correctAnswer")}
-            for q in chunk
-        ]
-        prompt = f"""Translate medical MCQs from {src_name} into English, Uzbek (Latin), and Russian.
-INPUT JSON:
-{json.dumps(batch, ensure_ascii=False)}
-
-OUTPUT JSON array only, same length. Each object:
-{{"text_en":"...","text_uz":"...","text_ru":"...","options_en":["..."],"options_uz":["..."],"options_ru":["..."],"correct_answer_en":"...","correct_answer_uz":"...","correct_answer_ru":"..."}}
-
-Rules:
-- Keep option count and order exactly same.
-- Each correct_answer_* must be exact one option in corresponding language.
-"""
-        try:
-            t = _generate(client, prompt).strip()
-            arr = _extract_json_array_from_model_text(t)
-        except Exception:
-            arr = []
-        for j in range(len(chunk)):
-            out_all.append(arr[j] if j < len(arr) and isinstance(arr[j], dict) else {})
-    return out_all[: len(questions)]
+    """Legacy. translate_questions_batch ga yo'naltiradi."""
+    return translate_questions_batch(questions, source_language)
 
 
-def paraphrase_medical_mcqs(questions: list[dict], exam_language: str) -> list[dict]:
-    """So‘zlarni/sinonimlarni o‘zgartirib savollarni yangilash; qiyinlik va mazmun saqlanadi."""
-    if not questions:
-        return []
-    client = _client()
-    if not client:
-        return questions
-    import json
-
-    lang = (
-        "English"
-        if exam_language == "en"
-        else "O'zbek (Latin)"
-        if exam_language == "uz"
-        else "Russian"
-    )
-    batch = [
-        {"text": q["text"], "options": q.get("options", []), "correctAnswer": q.get("correctAnswer")}
-        for q in questions
-    ]
-    prompt = f"""You rewrite medical multiple-choice questions for exam security (students may have memorized exact wording).
-
-STRICT RULES:
-- Output language for every field: {lang}.
-- Preserve difficulty level and clinical topic; do not make questions easier or harder.
-- Rephrase the stem using synonyms and sentence restructuring.
-- Rephrase each option similarly. Use 3 to 5 options (same count as input).
-- You may change trivial numbers ONLY if the scenario remains medically realistic and difficulty unchanged.
-- correctAnswer must be EXACTLY one full string from the new options array (same meaning as input correct answer).
-
-INPUT JSON:
-{json.dumps(batch, ensure_ascii=False)}
-
-OUTPUT: JSON array only, same length as input. Each item: {{"text":"...","options":[...],"correctAnswer":"..."}}
-"""
-    try:
-        t = _generate(client, prompt).strip()
-        arr = _extract_json_array_from_model_text(t)
-    except Exception:
-        return questions
-    out: list[dict] = []
-    for j, q in enumerate(questions):
-        if j < len(arr) and isinstance(arr[j], dict):
-            opts = [str(x) for x in (arr[j].get("options") or [])][:5]
-            while len(opts) < 3:
-                opts.append(f"Option {len(opts) + 1}")
-            ca = str(arr[j].get("correctAnswer") or opts[0])
-            if ca not in opts and opts:
-                ca = opts[0]
-            out.append(
-                {
-                    "text": str(arr[j].get("text") or q["text"]),
-                    "options": opts,
-                    "correctAnswer": ca,
-                }
-            )
-        else:
-            out.append(dict(q))
-    return out if out else questions
-
+# ---------------------------------------------------------------------------
+# AI-assisted question parsing + classification
+# ---------------------------------------------------------------------------
 
 def parse_and_classify_questionnaire(raw_text: str, language: str) -> list[dict]:
     """
-    Namunaviy savolnoma matnidan MCQ ajratish va har biriga mavzu (kategoriya) berish.
-    Qaytadi: [{"text","options","correctAnswer","categoryName","categoryDescription?"}, ...]
+    AI yordamida savol ajratish va kategoriyalash.
+    TOKEN TEJASH:
+    - Matn 120k belgidan kesiladi (avval 220k edi)
+    - Prompt ancha qisqa va strukturali
+    - Temperatura: 0 (kamroq hallucination)
     """
     src_language = (language or "auto").lower()
     if src_language == "auto":
         src_language = detect_question_language(raw_text)
+
     client = _client()
     if not client:
         return parse_structured_questionnaire(raw_text, src_language)
-    lang = "O'zbek" if src_language == "uz" else "Russian" if src_language == "ru" else "English"
-    snippet = (
-        raw_text
-        if len(raw_text) <= 220_000
-        else raw_text[:220_000] + "\n\n[...matn qisqartirildi — qolgan sahifalarni alohida PDF sifatida yuklang...]"
+
+    lang = "Uzbek" if src_language == "uz" else "Russian" if src_language == "ru" else "English"
+
+    # Token tejash: max 120k belgi (avval 220k edi — ~40% kamayish)
+    snippet = raw_text if len(raw_text) <= 120_000 else raw_text[:120_000]
+
+    # Qisqa, aniq prompt
+    prompt = (
+        f"Extract ALL MCQs from this {lang} document text. Include answer key if present.\n"
+        f"Output: JSON array only.\n"
+        f"Schema: [{{\"text\":\"stem\",\"options\":[\"opt1\",...],\"correctAnswer\":\"opt1\","
+        f"\"categoryName\":\"topic\",\"categoryDescription\":\"\"}}]\n"
+        f"Rules:\n"
+        f"- options: 2-5 items, full text (no letter prefix)\n"
+        f"- correctAnswer must exactly match one option\n"
+        f"- categoryName: short medical topic in {lang}\n"
+        f"- skip incomplete questions\n"
+        f"- use answer key at end of doc if present\n\n"
+        f"TEXT:\n{snippet}"
     )
-    if src_language == "en":
-        prompt = f"""You are a medical education expert. Extract ALL multiple-choice questions from the document text (PDF/OCR). Do not skip pages.
 
-The document may use:
-- Question numbers: 1. or 1) or Q1
-- Options labeled A) B) C) D) E) OR 1) 2) 3) 4) 5) OR a. b. c.
-- An ANSWER KEY at the end (e.g. "Answers:", "Key:", "1-B", "1. B", "Answer: 1-3" mapping question number to option letter or number). Use the key to set correctAnswer.
-
-For EACH valid MCQ output one JSON object in a JSON ARRAY (no markdown):
-- "text": question stem ONLY (no option letters in stem if possible)
-- "options": array of 3 to 5 option texts (full text, no "A)" prefix)
-- "correctAnswer": must be EXACTLY equal to one string in "options" (the correct choice)
-- "categoryName": short English topic e.g. "Cardiology", "Pharmacology" — group similar questions
-- "categoryDescription": optional one line
-
-Skip incomplete or ambiguous items. If answer key conflicts with text, prefer the answer key section at the end of the document.
-
-OUTPUT: JSON array only.
-
-TEXT:
----
-{snippet}
----
-"""
-    else:
-        prompt = f"""Sen tibbiyot/ta'lim testlarini tahlil qiluvchi mutaxassissan.
-Quyidagi matn butun hujjatdan (masalan PDF dan chiqarilgan) bo'lishi mumkin — boshidan oxirigacha BARCHA ko'p tanlovli (MCQ) savollarni top va ajratib ol. Hech bir sahifani o'tkazma.
-Matn tartibsiz bo'lishi mumkin: raqamlar 1. yoki 1), variantlar A) B) yoki a) b), to'g'ri javob oxirida yoki kalitda.
-
-Har bir savol uchun bitta obyekt (faqat JSON massiv, markdown yo'q):
-- "text": savol matni (faqat savol, variantlarsiz)
-- "options": aniq 4 ta variant matni (qisqa, tushunarli)
-- "correctAnswer": to'g'ri variant — "options" ichidagi satrlardan biri bilan AYNAN bir xil
-- "categoryName": mavzu nomi ({lang}, qisqa: masalan "Yurak kasalliklari", "Anatomiya") — o'xshash fan bo'yicha savollarni bir xil categoryName bilan guruhla
-- "categoryDescription": ixtiyoriy, bir qator izoh
-
-Agar 4 ta variant bo'lmasa yoki savol shubhali bo'lsa, o'tkazib yubor.
-Til: savollar qaysi tilda bo'lsa ham, categoryName va categoryDescription {lang} da yozilsin yoki savol tili bilan mos.
-
-OUTPUT: faqat JSON massiv.
-
-MATN:
----
-{snippet}
----
-"""
     t = _generate(client, prompt)
     arr = _extract_json_array_from_model_text(t)
-    out: list[dict] = []
-    for item in arr:
-        if not isinstance(item, dict):
-            continue
-        if src_language == "en":
-            opts = [str(x).strip() for x in (item.get("options") or [])][:5]
-            while len(opts) < 3:
-                opts.append(f"Option {len(opts) + 1}")
-        else:
-            opts = [str(x).strip() for x in (item.get("options") or [])][:4]
-            while len(opts) < 4:
-                opts.append(f"Variant {len(opts) + 1}")
-        ca = str(item.get("correctAnswer") or opts[0]).strip()
-        if ca not in opts:
-            ca = opts[0]
-        text = str(item.get("text") or "").strip()
-        if len(text) < 4:
-            continue
-        cat = str(item.get("categoryName") or "Umumiy").strip()[:300] or "Umumiy"
-        desc = str(item.get("categoryDescription") or "").strip()[:500]
-        out.append(
-            {
-                "text": text,
-                "options": opts,
-                "correctAnswer": ca,
-                "categoryName": cat,
-                "categoryDescription": desc,
-            }
-        )
+    out = _normalize_parsed_items(arr, src_language)
     if not out:
-        raise ValueError("Hech qanday yaroqli savol topilmadi — matnni tekshiring yoki qisqaroq bo'limlarda yuklang")
+        raise ValueError("AI hech qanday yaroqli savol topmadi")
     return out
 
 
@@ -702,29 +872,39 @@ def _normalize_parsed_items(arr: list, src_language: str) -> list[dict]:
             continue
         ca = str(item.get("correctAnswer") or opts[0]).strip()
         if ca not in opts:
-            ca = opts[0]
+            # Harfdan indeksga o'girish urinishi
+            ca_letter = ca.upper()
+            if re.match(r"^[A-J]$", ca_letter):
+                idx = ord(ca_letter) - ord("A")
+                ca = opts[idx] if idx < len(opts) else opts[0]
+            else:
+                ca = opts[0]
         text = str(item.get("text") or "").strip()
         if len(text) < 4:
             continue
-        cat = str(item.get("categoryName") or "General").strip()[:300] or "General"
+        cat = str(item.get("categoryName") or "Umumiy").strip()[:300] or "Umumiy"
         desc = str(item.get("categoryDescription") or "").strip()[:500]
-        out.append(
-            {
-                "text": text,
-                "options": opts,
-                "correctAnswer": ca,
-                "categoryName": cat,
-                "categoryDescription": desc,
-            }
-        )
+        out.append({
+            "text": text,
+            "options": opts,
+            "correctAnswer": ca,
+            "categoryName": cat,
+            "categoryDescription": desc,
+        })
     return out
 
 
+# ---------------------------------------------------------------------------
+# Multimodal (scan/rasm) parsing
+# ---------------------------------------------------------------------------
+
 def parse_and_classify_document_bytes(raw: bytes, filename: str, language: str) -> list[dict]:
     """
-    Rasmli/skan hujjatlar uchun multimodal parsing:
-    - PDF: application/pdf sifatida to'g'ridan-to'g'ri modelga yuboriladi
-    - DOCX: ichidagi word/media rasmlari yuboriladi
+    Skanerlangan/rasmli hujjatlar uchun multimodal parsing.
+    TOKEN TEJASH:
+    - PDF to'g'ridan-to'g'ri (eng samarali)
+    - DOCX: faqat dastlabki 15 ta rasm
+    - Minimal prompt
     """
     client = _client()
     if not client:
@@ -734,25 +914,24 @@ def parse_and_classify_document_bytes(raw: bytes, filename: str, language: str) 
     src_language = (language or "auto").lower()
     if src_language == "auto":
         src_language = "uz"
+
     lang_name = "English" if src_language == "en" else "Russian" if src_language == "ru" else "Uzbek"
     name = (filename or "").lower()
-    prompt = f"""Extract ALL MCQ questions from this document, including scanned/image-only content.
-Language context: {lang_name}.
-Return JSON array only. Each item:
-{{"text":"...","options":["..."],"correctAnswer":"...","categoryName":"...","categoryDescription":""}}
-Rules:
-- options length: 2..10
-- correctAnswer must exactly equal one option
-- include answer-key mapping if present anywhere in document.
-"""
+
+    prompt = (
+        f"Extract ALL MCQs from this document. Language hint: {lang_name}.\n"
+        f"JSON array only: [{{\"text\":\"...\",\"options\":[...],\"correctAnswer\":\"...\","
+        f"\"categoryName\":\"...\",\"categoryDescription\":\"\"}}]\n"
+        f"Rules: options 2-10 items; correctAnswer=exact option; include answer key."
+    )
+
     contents: list[Any] = [prompt]
     if name.endswith(".pdf"):
         contents.append(types.Part.from_bytes(data=raw, mime_type="application/pdf"))
     elif name.endswith(".docx"):
-        # DOCX ichidagi rasmlarni ajratib yuboramiz
         with zipfile.ZipFile(BytesIO(raw)) as zf:
             media_names = [n for n in zf.namelist() if n.startswith("word/media/")]
-            for n in media_names[:20]:
+            for n in media_names[:15]:  # 20 → 15: kamroq token
                 b = zf.read(n)
                 ext = n.rsplit(".", 1)[-1].lower() if "." in n else ""
                 mime = (
@@ -771,3 +950,63 @@ Rules:
     if not out:
         raise ValueError("Hujjatdan savollar ajratilmadi")
     return out
+
+
+# ---------------------------------------------------------------------------
+# Paraphrase (exam security)
+# ---------------------------------------------------------------------------
+
+def paraphrase_medical_mcqs(questions: list[dict], exam_language: str) -> list[dict]:
+    """Savollarni qayta shakllantirish. Minimal prompt."""
+    if not questions:
+        return []
+    client = _client()
+    if not client:
+        return questions
+
+    lang = (
+        "Uzbek(Latin)" if exam_language == "uz" else
+        "Russian" if exam_language == "ru" else
+        "English"
+    )
+
+    batch = [
+        {
+            "t": q["text"][:250],
+            "o": [str(x)[:100] for x in (q.get("options") or [])[:5]],
+            "ca": str(q.get("correctAnswer") or "")[:100],
+        }
+        for q in questions
+    ]
+
+    prompt = (
+        f"Rephrase medical MCQs for exam security. Language: {lang}.\n"
+        f"Keep: difficulty, topic, option count, correctAnswer meaning.\n"
+        f"Input: {json.dumps(batch, ensure_ascii=False)}\n"
+        f"Output: JSON array only. Each: {{\"t\":\"...\",\"o\":[...],\"ca\":\"...\"}}\n"
+        f"ca must exactly match one item in o."
+    )
+
+    try:
+        t = _generate(client, prompt).strip()
+        arr = _extract_json_array_from_model_text(t)
+    except Exception:
+        return questions
+
+    out: list[dict] = []
+    for j, q in enumerate(questions):
+        if j < len(arr) and isinstance(arr[j], dict):
+            opts = [str(x) for x in (arr[j].get("o") or [])][:5]
+            while len(opts) < 2:
+                opts.append(f"Option {len(opts) + 1}")
+            ca = str(arr[j].get("ca") or opts[0])
+            if ca not in opts and opts:
+                ca = opts[0]
+            out.append({
+                "text": str(arr[j].get("t") or q["text"]),
+                "options": opts,
+                "correctAnswer": ca,
+            })
+        else:
+            out.append(dict(q))
+    return out if out else questions
