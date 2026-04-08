@@ -278,11 +278,7 @@ export function PreExamCheck({
             </motion.div>
           )}
 
-          {exam.exam_mode === 'bank_mixed' && (
-            <p className="text-xs text-indigo-800 bg-indigo-50/80 border border-indigo-100 rounded-xl px-4 py-3 leading-relaxed">
-              {t.examModeBankHint}
-            </p>
-          )}
+          {/* examModeBankHint: foydalanuvchiga ichki ma'lumot kerak emas */}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Chap ustun: tizim talablari + qoidalar */}
