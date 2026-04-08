@@ -2014,42 +2014,82 @@ def student_violations(request):
         timestamp=dj_tz.now(),
         screenshot_url=screenshot,
     )
-    # Hard violation turlari — darhol ban
+    # Violation turlari
     hard_types = {
         "IDENTITY_SUBSTITUTION",
         "REMOTE_CONTROL_SUSPECTED",
         "TAB_SWITCH_HARD",
         "FULLSCREEN_EXIT_HARD",
     }
-    # Soft violation turlari — hisobga olinadi lekin darhol ban qilmaydi
+    # Soft violation — ogohlantirish beriladi lekin darhol ban emas
     soft_types = {
         "SUSPICIOUS_AUDIO",
         "FACE_NOT_VISIBLE",
         "MULTIPLE_FACES",
+        "FORBIDDEN_OBJECT_CELL_PHONE",
+        "FORBIDDEN_OBJECT_LAPTOP",
+        "FORBIDDEN_OBJECT_BOOK",
     }
-    # Faqat hard va medium violation larni sanash (audio/face kabi kichik xatolar hisobga olinmaydi)
-    cnt_hard = ViolationLog.objects.filter(
-        student_id=u.id,
-        exam_id=exam_id,
-        violation_type__in=list(hard_types) + [
-            "FORBIDDEN_OBJECT_CELL_PHONE",
-            "FORBIDDEN_OBJECT_LAPTOP",
-            "FORBIDDEN_OBJECT_BOOK",
-        ]
-    ).count()
-    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
+    # Ogohlantirish uchun hisoblanadigan violation lar (soft + medium)
+    warn_types = list(soft_types) + ["TAB_SWITCH_SOFT", "CLIPBOARD_ATTEMPT", "PRINT_SCREEN"]
 
+    # Barcha violation soni
+    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
+    # Ogohlantirishga kiruvchi violation soni (soft)
+    cnt_warn = ViolationLog.objects.filter(
+        student_id=u.id, exam_id=exam_id, violation_type__in=warn_types
+    ).count()
+
+    # Violation sababini matn sifatida qaytarish
+    violation_reason_map = {
+        "SUSPICIOUS_AUDIO": "Shubhali ovoz aniqlandi",
+        "FACE_NOT_VISIBLE": "Yuzingiz kamerada ko'rinmayapti",
+        "MULTIPLE_FACES": "Kadrda bir nechta shaxs aniqlandi",
+        "FORBIDDEN_OBJECT_CELL_PHONE": "Telefon aniqlandi",
+        "FORBIDDEN_OBJECT_LAPTOP": "Noutbuk aniqlandi",
+        "FORBIDDEN_OBJECT_BOOK": "Kitob aniqlandi",
+        "TAB_SWITCH_SOFT": "Boshqa oynaga o'tildi",
+        "CLIPBOARD_ATTEMPT": "Nusxa ko'chirish urinishi",
+        "PRINT_SCREEN": "Ekran surati urinishi",
+        "TAB_SWITCH_HARD": "Imtihon oynasidan chiqib ketildi",
+        "FULLSCREEN_EXIT_HARD": "To'liq ekrandan chiqildi",
+        "REMOTE_CONTROL_SUSPECTED": "Masofaviy boshqaruv aniqlandi",
+        "IDENTITY_SUBSTITUTION": "Boshqa shaxs aniqlandi",
+    }
+    reason_text = violation_reason_map.get(vtype, vtype)
+
+    # Hard violation — darhol ban
     if vtype in hard_types:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
             StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")
-        return Response({"banned": True, "violationsCount": cnt_all})
+        return Response({
+            "banned": True,
+            "violationsCount": cnt_all,
+            "warningNumber": cnt_warn,
+            "violationReason": reason_text,
+            "isFinalWarning": False,
+        })
 
-    # Soft violation lar: 10 ta yig'ilsa ban (avval 3 ta edi — juda qattiq)
-    if vtype not in soft_types and cnt_hard >= 5:
+    # Soft violation — 3 ta ogohlantirishdan keyin ban
+    MAX_WARNINGS = 3
+    if cnt_warn >= MAX_WARNINGS:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
             StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")
-        return Response({"banned": True, "violationsCount": cnt_all})
+        return Response({
+            "banned": True,
+            "violationsCount": cnt_all,
+            "warningNumber": cnt_warn,
+            "violationReason": reason_text,
+            "isFinalWarning": False,
+        })
 
-    return Response({"banned": False, "violationsCount": cnt_all})
+    is_final = cnt_warn == MAX_WARNINGS - 1  # 3-ogohlantirish = oxirgi
+    return Response({
+        "banned": False,
+        "violationsCount": cnt_all,
+        "warningNumber": cnt_warn,
+        "violationReason": reason_text,
+        "isFinalWarning": is_final,
+    })

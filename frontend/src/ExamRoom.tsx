@@ -108,6 +108,13 @@ async function getPreferredProctorStream(): Promise<MediaStream> {
   });
 }
 
+// Ogohlantirish modal uchun state turi
+interface ViolationWarning {
+  reason: string;
+  warningNumber: number;
+  isFinalWarning: boolean;
+}
+
 export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: ExamRoomProps) {
   const t = translations[lang];
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -122,6 +129,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [submitting, setSubmitting] = useState(false);
   const [hardBlocked, setHardBlocked] = useState(false);
   const [banPdfBusy, setBanPdfBusy] = useState(false);
+  // Ogohlantirish modal
+  const [violationWarning, setViolationWarning] = useState<ViolationWarning | null>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -508,20 +517,20 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [identityTerminated, setIdentityTerminated] = useState(false);
 
   // --- Violation logging ---
-  // TOKEN TEJASH: Screenshot base64 serverga yuborilmaydi (har bir rasm ~15KB+).
-  // Faqat violation type va metadata. Bir xil tip 10 soniyada bir marta yuboriladi.
+  // Bir xil violation tipini 10 soniyada bir marta yuborish (spam oldini olish)
   const logViolation = async (type: string) => {
     if (bannedRef.current) return;
 
-    setWarningMsg(type);
-    setTimeout(() => setWarningMsg(''), 3500);
-
-    // Bir xil violation tipini 10 soniyada bir marta yuborish (spam oldini olish)
+    // Dedup: hard violation larni har doim yuborish, softlarni 10s da bir marta
+    const hardTypes = new Set(['IDENTITY_SUBSTITUTION', 'TAB_SWITCH_HARD', 'FULLSCREEN_EXIT_HARD', 'REMOTE_CONTROL_SUSPECTED']);
     const dedupeKey = `viol_last_${type}`;
     const lastSent = parseInt(sessionStorage.getItem(dedupeKey) || '0', 10);
     const now = Date.now();
     const MIN_INTERVAL = 10_000;
-    if (now - lastSent < MIN_INTERVAL && type !== 'IDENTITY_SUBSTITUTION' && type !== 'TAB_SWITCH_HARD') {
+    if (!hardTypes.has(type) && now - lastSent < MIN_INTERVAL) {
+      // Faqat UI ga ko'rsatish, serverga yubormaslik
+      setWarningMsg(type);
+      setTimeout(() => setWarningMsg(''), 3000);
       return;
     }
     sessionStorage.setItem(dedupeKey, String(now));
@@ -536,20 +545,42 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         body: JSON.stringify({
           exam_id: examIdRef.current,
           violation_type: type,
-          // screenshot_url: null — intentionally not sending large base64 data
         }),
       });
-      const data = (await readJsonSafe<{ violationsCount?: number; banned?: boolean }>(res)) || {};
+      const data = (await readJsonSafe<{
+        violationsCount?: number;
+        banned?: boolean;
+        warningNumber?: number;
+        violationReason?: string;
+        isFinalWarning?: boolean;
+      }>(res)) || {};
+
       if (typeof data.violationsCount === 'number') {
         setWarnings(data.violationsCount);
       }
+
       if (data.banned) {
+        // Ban berildi — darhol ban ekrani
         if (type === 'IDENTITY_SUBSTITUTION') setIdentityTerminated(true);
+        setViolationWarning(null);
         setBanned(true);
         streamRef.current?.getTracks().forEach((t) => t.stop());
+      } else if (typeof data.warningNumber === 'number' && data.warningNumber > 0) {
+        // Ogohlantirish modal ko'rsatish
+        setViolationWarning({
+          reason: data.violationReason || type,
+          warningNumber: data.warningNumber,
+          isFinalWarning: data.isFinalWarning === true,
+        });
+      } else {
+        // Faqat status bar da ko'rsatish
+        setWarningMsg(data.violationReason || type);
+        setTimeout(() => setWarningMsg(''), 3500);
       }
     } catch {
-      // Tarmoq xatosi — muhim emas, local state saqlanadi
+      // Tarmoq xatosi — local state
+      setWarningMsg(type);
+      setTimeout(() => setWarningMsg(''), 3000);
     }
   };
 
@@ -705,24 +736,147 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     return () => window.clearInterval(timer);
   }, [banned, runSubmitCore]);
 
-  if (banned || hardBlocked) {
+  // --- Ogohlantirish modal (ban emas, davom etish mumkin) ---
+  if (violationWarning && !banned && !hardBlocked) {
+    const isFinal = violationWarning.isFinalWarning;
+    const warnNum = violationWarning.warningNumber;
+
+    const warnTitle =
+      lang === 'ru' ? `Предупреждение ${warnNum} из 3` :
+      lang === 'en' ? `Warning ${warnNum} of 3` :
+      `${warnNum}-ogohlantirish (3 tadan)`;
+
+    const warnContinue =
+      lang === 'ru' ? 'Понял, продолжить экзамен' :
+      lang === 'en' ? 'Understood, continue exam' :
+      "Tushundim, imtihonni davom ettirish";
+
+    const finalMsg =
+      lang === 'ru' ? 'Bu oxirgi ogohlantirish! Keyingi qoidabuzarlik sizni bloklaydi.' :
+      lang === 'en' ? 'This is your FINAL warning! Next violation will block you.' :
+      "Bu OXIRGI ogohlantirish! Keyingi qoidabuzarlik sizni bloklaydi.";
+
+    const reasonLabel =
+      lang === 'ru' ? 'Причина нарушения' :
+      lang === 'en' ? 'Violation reason' :
+      'Qoidabuzarlik sababi';
+
     return (
-      <motion.div 
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          className={`w-full max-w-md rounded-3xl border-2 shadow-2xl p-8 ${
+            isFinal ? 'border-red-400 bg-red-50' : 'border-orange-400 bg-orange-50'
+          }`}
+        >
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${isFinal ? 'bg-red-100' : 'bg-orange-100'}`}>
+            <svg className={`w-9 h-9 ${isFinal ? 'text-red-600' : 'text-orange-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                d="M12 9v3m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+
+          <h2 className={`text-xl font-bold text-center mb-3 ${isFinal ? 'text-red-700' : 'text-orange-700'}`}>
+            {warnTitle}
+          </h2>
+
+          <div className="bg-white/80 rounded-2xl px-5 py-4 mb-4 text-center border border-white/60">
+            <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide font-medium">{reasonLabel}</p>
+            <p className="text-base font-semibold text-gray-800">{violationWarning.reason}</p>
+          </div>
+
+          <div className="flex justify-center gap-3 mb-4">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
+                  n <= warnNum
+                    ? isFinal
+                      ? 'bg-red-100 text-red-700 border-red-400'
+                      : 'bg-orange-100 text-orange-700 border-orange-400'
+                    : 'bg-gray-100 text-gray-400 border-gray-200'
+                }`}
+              >
+                {n <= warnNum ? '!' : n}
+              </div>
+            ))}
+          </div>
+
+          {isFinal && (
+            <div className="bg-red-100 border border-red-300 rounded-xl px-4 py-3 mb-4 text-center">
+              <p className="text-sm font-semibold text-red-700">{finalMsg}</p>
+            </div>
+          )}
+
+          <p className="text-xs text-gray-500 text-center mb-5">
+            {lang === 'ru'
+              ? 'Продолжайте экзамен честно. Камера и активность отслеживаются.'
+              : lang === 'en'
+              ? 'Continue the exam honestly. Camera and activity are monitored.'
+              : "Imtihonni halol davom ettiring. Kamera va faoliyat kuzatilmoqda."}
+          </p>
+
+          <button
+            onClick={() => setViolationWarning(null)}
+            className={`w-full py-3.5 rounded-2xl font-semibold text-base transition-all active:scale-95 text-white ${
+              isFinal ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-500 hover:bg-orange-600'
+            }`}
+          >
+            {warnContinue}
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // --- Ban ekrani (to'liq bloklash) ---
+  if (banned || hardBlocked) {
+    const banTitle =
+      lang === 'ru' ? 'Экзамен завершён' :
+      lang === 'en' ? 'Exam Terminated' :
+      "Imtihon to'xtatildi";
+
+    const banMsg = identityTerminated ? t.examTerminatedIdentity : t.examTerminatedWarnings;
+
+    const banPdfLabel =
+      lang === 'ru' ? 'Скачать официальный документ BAN' :
+      lang === 'en' ? 'Download official BAN report' :
+      'Rasmiy BAN hujjatini yuklab olish';
+
+    const backLabel =
+      lang === 'ru' ? 'Вернуться на главную' :
+      lang === 'en' ? 'Return to Dashboard' :
+      'Bosh sahifaga qaytish';
+
+    return (
+      <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         className="min-h-[80vh] flex items-center justify-center p-6"
       >
-        <Card className="max-w-md text-center p-8 border-red-500/30 bg-red-50/80 backdrop-blur-xl shadow-2xl shadow-red-500/10">
+        <Card className="max-w-md w-full text-center p-8 border-red-500/30 bg-red-50/80 backdrop-blur-xl shadow-2xl shadow-red-500/10">
           <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
           </div>
-          <h2 className="text-3xl font-bold text-red-600 mb-4 tracking-tight">Exam Terminated</h2>
-          <p className="text-gray-700 mb-8 leading-relaxed">
-            {identityTerminated ? t.examTerminatedIdentity : t.examTerminatedWarnings}
-          </p>
+          <h2 className="text-2xl font-bold text-red-600 mb-3 tracking-tight">{banTitle}</h2>
+          <p className="text-gray-700 mb-5 leading-relaxed text-sm">{banMsg}</p>
+
+          <div className="flex justify-center gap-2 mb-6">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="w-9 h-9 rounded-full bg-red-200 text-red-700 flex items-center justify-center text-sm font-bold border-2 border-red-400">
+                !
+              </div>
+            ))}
+          </div>
+
           <div className="space-y-3">
             <Button
-              className="w-full rounded-full"
+              className="w-full rounded-full bg-red-600 hover:bg-red-700 text-white"
               disabled={banPdfBusy}
               onClick={async () => {
                 try {
@@ -730,7 +884,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                   const res = await fetch(apiUrl(`/api/student/ban-report.pdf?exam_id=${exam.id}`), {
                     headers: { Authorization: `Bearer ${token}` },
                   });
-                  if (!res.ok) throw new Error('Ban report yuklab bo‘lmadi');
+                  if (!res.ok) throw new Error('yuklab bo\'lmadi');
                   const blob = await res.blob();
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -740,16 +894,15 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                   window.URL.revokeObjectURL(url);
                 } catch (e) {
                   console.error(e);
-                  alert('Ban report PDF yuklab bo‘lmadi');
                 } finally {
                   setBanPdfBusy(false);
                 }
               }}
             >
-              {banPdfBusy ? 'PDF tayyorlanmoqda...' : 'Rasmiy BAN hujjatini yuklab olish'}
+              {banPdfBusy ? '...' : banPdfLabel}
             </Button>
             <Button className="w-full rounded-full" variant="outline" onClick={() => onFinish(null)}>
-              Return to Dashboard
+              {backLabel}
             </Button>
           </div>
         </Card>
