@@ -176,13 +176,13 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "login": "10/h",
-        "face_verify": "30/m",
-        "public_verify": "200/h",
-        "anon": "120/m",
-        "user": "400/m",
-        "exam_autosave": "45/m",
-        "bank_ai_import": "15/h",
+        "login": "60/h",        # 10 → 60: har soatda 60 urinish (5 ta foydalanuvchi × 12)
+        "face_verify": "60/m",  # 30 → 60: identity check tezroq
+        "public_verify": "300/h",
+        "anon": "200/m",
+        "user": "600/m",
+        "exam_autosave": "60/m",
+        "bank_ai_import": "20/h",
     },
 }
 if not DEBUG:
