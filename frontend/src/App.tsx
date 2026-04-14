@@ -125,7 +125,7 @@ function AppContent() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/40 backdrop-blur-3xl border-b border-white/40 shadow-[0_4px_30px_rgb(0,0,0,0.03)] px-6 py-4 flex justify-between items-center transition-all duration-500">
         <div className="flex items-center gap-3">
           <InstituteLogo size="sm" className="shrink-0" />
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900 hidden sm:block">Fjsti Online Exam</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-gray-900 hidden sm:block">{t.appBrandTitle}</h1>
         </div>
         <div className="flex items-center gap-4">
           <select 
@@ -133,9 +133,9 @@ function AppContent() {
             onChange={(e) => setLang(e.target.value as Language)}
             className="bg-white/50 backdrop-blur-md border border-white/50 rounded-full px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black/10 transition-all cursor-pointer"
           >
-            <option value="uz">O'zbekcha</option>
-            <option value="ru">Русский</option>
-            <option value="en">English</option>
+            <option value="uz">{t.langUzbek}</option>
+            <option value="ru">{t.langRussian}</option>
+            <option value="en">{t.langEnglish}</option>
           </select>
           <div className="hidden sm:flex items-center gap-2 bg-white/50 backdrop-blur-md border border-white/50 rounded-full px-4 py-2">
             <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-300 flex items-center justify-center text-xs font-bold text-gray-600">

@@ -71,8 +71,8 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             </div>
-            <h2 className="text-2xl font-bold text-red-700 mb-2">Account Banned</h2>
-            <p className="text-red-600/80">Your account has been suspended due to multiple rule violations during exams. Please contact your administrator for more information.</p>
+            <h2 className="text-2xl font-bold text-red-700 mb-2">{t.studentAccountBannedTitle}</h2>
+            <p className="text-red-600/80">{t.studentAccountBannedBody}</p>
           </CardContent>
         </Card>
       </div>
@@ -129,13 +129,13 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
             onClick={() => setActiveTab('available')}
             className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'available' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            Available Exams
+            {t.tabAvailableExams}
           </button>
           <button 
             onClick={() => setActiveTab('results')}
             className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'results' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
           >
-            My Results
+            {t.tabMyResults}
           </button>
         </div>
       </div>
@@ -187,7 +187,9 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                         </div>
                         <div className="flex justify-between items-center pt-2 border-t border-black/5">
                           <span className="text-gray-500 font-medium">{t.duration}</span>
-                          <span className="font-semibold text-gray-900 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md">{e.duration_minutes} min</span>
+                          <span className="font-semibold text-gray-900 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md">
+                            {e.duration_minutes} {t.minutesShort}
+                          </span>
                         </div>
                         {e.exam_mode === 'bank_mixed' && e.bank_question_count ? (
                           <p className="text-[11px] text-gray-500 pt-1">{t.examBankQuestionCount}: {e.bank_question_count}</p>
@@ -196,7 +198,7 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                           <div className="flex justify-between items-center pt-2 border-t border-black/5">
                             <span className="text-yellow-600 font-medium flex items-center gap-1">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                              PIN Required
+                              {t.examPinRequiredBadge}
                             </span>
                           </div>
                         )}
@@ -206,9 +208,13 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                         {isOngoing ? (
                           <Button className="w-full shadow-lg shadow-blue-500/20" onClick={() => startExam(e)}>{t.takeExam}</Button>
                         ) : isUpcoming ? (
-                          <Button className="w-full" variant="secondary" disabled>Upcoming</Button>
+                          <Button className="w-full" variant="secondary" disabled>
+                            {t.examStateUpcoming}
+                          </Button>
                         ) : (
-                          <Button className="w-full" variant="ghost" disabled>Ended</Button>
+                          <Button className="w-full" variant="ghost" disabled>
+                            {t.examStateEnded}
+                          </Button>
                         )}
                       </div>
                     </CardContent>
@@ -221,7 +227,7 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                 </div>
-                <p className="text-gray-500 font-medium text-lg">No exams available at the moment.</p>
+                <p className="text-gray-500 font-medium text-lg">{t.emptyStudentExams}</p>
               </div>
             )}
           </motion.div>
@@ -235,9 +241,9 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                   </CardHeader>
                   <CardContent className="flex-1 flex flex-col p-6 space-y-4">
                     <div className="flex justify-between items-center bg-white/50 p-4 rounded-2xl">
-                      <span className="text-gray-600 font-medium">Score</span>
+                      <span className="text-gray-600 font-medium">{t.resultScore}</span>
                       <span className={`text-2xl font-bold ${(r.percentage ?? 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                        {r.percentage != null ? `${r.percentage}%` : r.score != null ? `${r.score}` : 'Pending'}
+                        {r.percentage != null ? `${r.percentage}%` : r.score != null ? `${r.score}` : t.resultPending}
                         {r.total_questions > 0 && r.percentage != null && (
                           <span className="block text-xs font-normal text-gray-500">
                             ({r.score}/{r.total_questions})
@@ -246,18 +252,22 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                       </span>
                     </div>
                     <div className="flex justify-between items-center bg-white/50 p-4 rounded-2xl">
-                      <span className="text-gray-600 font-medium">Status</span>
+                      <span className="text-gray-600 font-medium">{t.resultStatus}</span>
                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                         r.status === 'Completed' ? 'bg-green-100 text-green-700' :
                         r.status === 'Banned' ? 'bg-red-100 text-red-700' :
                         'bg-yellow-100 text-yellow-700'
                       }`}>
-                        {r.status}
+                        {r.status === 'Completed'
+                          ? t.resultStatusCompleted
+                          : r.status === 'Banned'
+                            ? t.resultStatusBanned
+                            : t.resultStatusOther}
                       </span>
                     </div>
                     {r.completed_at && (
                       <div className="text-xs text-gray-500 text-center pt-2">
-                        Completed: {new Date(r.completed_at).toLocaleString()}
+                        {t.resultCompletedLabel}: {new Date(r.completed_at).toLocaleString()}
                       </div>
                     )}
                     {r.status === 'Completed' && r.result_public_id && (
@@ -267,7 +277,7 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                         disabled={detailLoading}
                         onClick={() => openResultDetail(r.exam_id)}
                       >
-                        Sertifikat va batafsil
+                        {t.studentResultCertificateBtn}
                       </Button>
                     )}
                   </CardContent>
@@ -279,7 +289,7 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 </div>
-                <p className="text-gray-500 font-medium text-lg">No results available yet.</p>
+                <p className="text-gray-500 font-medium text-lg">{t.emptyStudentResults}</p>
               </div>
             )}
           </motion.div>

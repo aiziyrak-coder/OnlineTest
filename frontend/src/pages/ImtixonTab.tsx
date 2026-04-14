@@ -105,25 +105,25 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
       return;
     }
     if (!startLocal || !endLocal) {
-      setMsg({ type: 'err', text: 'Vaqt maydonlari' });
+      setMsg({ type: 'err', text: t.examDateTimeRequired });
       return;
     }
     const startIso = toIsoOrNull(startLocal);
     const endIso = toIsoOrNull(endLocal);
     const normalizedBankCount = Math.max(1, Math.min(200, Number(bankCount) || 1));
     if (!startIso || !endIso) {
-      setMsg({ type: 'err', text: 'Sana/vaqt formati noto‘g‘ri. Qayta tanlang.' });
+      setMsg({ type: 'err', text: t.examInvalidDateTime });
       return;
     }
     if (new Date(startIso).getTime() >= new Date(endIso).getTime()) {
-      setMsg({ type: 'err', text: 'Boshlanish vaqti tugash vaqtidan oldin bo‘lishi kerak.' });
+      setMsg({ type: 'err', text: t.examStartMustBeBeforeEnd });
       return;
     }
     const selectedPoolCount = categories
       .filter((c: any) => selCats.includes(c.id))
       .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.question_count) || 0), 0);
     if (selectedPoolCount < 1) {
-      setMsg({ type: 'err', text: 'Tanlangan kategoriyalarda savollar mavjud emas.' });
+      setMsg({ type: 'err', text: t.examCreateBankCategoriesEmpty });
       return;
     }
     const effectiveBankCount = Math.min(normalizedBankCount, selectedPoolCount);
@@ -150,14 +150,14 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
       });
       const d = await readJsonSafe<{ error?: string; id?: number }>(res);
       if (!res.ok) {
-        setMsg({ type: 'err', text: d?.error || 'Error' });
+        setMsg({ type: 'err', text: d?.error || t.errorGeneric });
         return;
       }
       setMsg({
         type: 'ok',
         text:
           effectiveBankCount !== normalizedBankCount
-            ? `${t.examCreated} (savollar soni ${effectiveBankCount} ga moslashtirildi)`
+            ? t.examCreatedWithQuestionCountAdjusted.replace('{n}', String(effectiveBankCount))
             : t.examCreated,
       });
       setTitle('');
@@ -202,9 +202,9 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
                     onChange={(e) => setLanguage(e.target.value)}
                     className="mt-1 w-full h-12 rounded-2xl border border-white/50 bg-white/50 px-3 text-sm"
                   >
-                    <option value="uz">O‘zbekcha</option>
-                    <option value="ru">Русский</option>
-                    <option value="en">English</option>
+                    <option value="uz">{t.langUzbek}</option>
+                    <option value="ru">{t.langRussian}</option>
+                    <option value="en">{t.langEnglish}</option>
                   </select>
                 </div>
                 <div>

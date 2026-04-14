@@ -41,7 +41,7 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
     // Collect selected groups
     const selectedGroups = Array.from(fd.getAll('group_ids')).map(Number);
     if (selectedGroups.length === 0) {
-      setError('Please select at least one group.');
+      setError(t.examCreateSelectGroup);
       return;
     }
     fd.delete('group_ids');
@@ -57,7 +57,7 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
         .filter((c: any) => catIds.includes(Number(c.id)))
         .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.question_count) || 0), 0);
       if (selectedPoolCount < 1) {
-        setError('Selected categories contain no questions.');
+        setError(t.examCreateBankCategoriesEmpty);
         return;
       }
       fd.delete('bank_category_ids');
@@ -88,7 +88,7 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
       
       const data = await readJsonSafe<{ error?: string }>(res);
       if (!res.ok) {
-        setError(data?.error || 'Failed to create exam');
+        setError(data?.error || t.examCreateFailed);
         return;
       }
       
@@ -100,7 +100,7 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
         setSuccess('');
       }, 3000);
     } catch (err) {
-      setError('An error occurred while creating the exam.');
+      setError(t.examCreateError);
     }
   };
 
@@ -130,9 +130,9 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">{t.language}</label>
               <select name="language" className="glass-input w-full px-4 py-3 rounded-2xl bg-white/50 border border-white/50 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all duration-300">
-                <option value="uz">O'zbekcha</option>
-                <option value="ru">Русский</option>
-                <option value="en">English</option>
+                <option value="uz">{t.langUzbek}</option>
+                <option value="ru">{t.langRussian}</option>
+                <option value="en">{t.langEnglish}</option>
               </select>
             </div>
             <div><label className="block text-sm font-medium text-gray-700 mb-2">{t.startTime}</label><Input name="start_time" type="datetime-local" required /></div>

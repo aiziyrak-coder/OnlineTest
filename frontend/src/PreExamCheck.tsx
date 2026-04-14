@@ -300,14 +300,14 @@ export function PreExamCheck({
             <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1.5">
               <span className={`w-2.5 h-2.5 rounded-full ${cameraReady ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
               <span className="text-white text-xs font-medium">
-                {cameraReady ? (lang === 'ru' ? 'Камера активна' : lang === 'en' ? 'Camera active' : 'Kamera yoqilgan') : t.preExamWaitCamera}
+                {cameraReady ? t.preExamCameraActive : t.preExamWaitCamera}
               </span>
             </div>
             {/* Mikrofon holati badge */}
             <div className="absolute top-3 right-3 flex items-center gap-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1.5">
               <span className={`w-2.5 h-2.5 rounded-full ${micReady ? 'bg-green-400' : 'bg-red-400'}`} />
               <span className="text-white text-xs font-medium">
-                {micReady ? (lang === 'ru' ? 'Микрофон' : lang === 'en' ? 'Mic' : 'Mikrofon') : (lang === 'ru' ? 'Нет микрофона' : lang === 'en' ? 'No mic' : 'Mikrofon yo\'q')}
+                {micReady ? t.preExamMicActive : t.preExamMicInactive}
               </span>
             </div>
           </div>

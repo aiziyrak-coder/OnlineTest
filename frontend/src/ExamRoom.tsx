@@ -839,27 +839,10 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     const isFinal = violationWarning.isFinalWarning;
     const warnNum = violationWarning.warningNumber;
 
-    const warnTitle =
-      lang === 'ru' ? `Предупреждение ${warnNum} из 3` :
-      lang === 'en' ? `Warning ${warnNum} of 3` :
-      `${warnNum}-ogohlantirish (3 tadan)`;
-
-    const warnContinue =
-      lang === 'ru' ? 'Понял, продолжить экзамен' :
-      lang === 'en' ? 'Understood, continue exam' :
-      "Tushundim, imtihonni davom ettirish";
-
-    const finalMsg =
-      lang === 'ru'
-        ? 'Это последнее предупреждение (3 из 3). Следующее нарушение приведёт к блокировке экзамена.'
-        : lang === 'en'
-          ? 'This is your final warning (3 of 3). One more violation will end the exam and block your account.'
-          : "Bu oxirgi ogohlantirish (3/3). Keyingi qoidabuzarlik imtihonni tugatadi va akkauntingiz bloklanadi.";
-
-    const reasonLabel =
-      lang === 'ru' ? 'Причина нарушения' :
-      lang === 'en' ? 'Violation reason' :
-      'Qoidabuzarlik sababi';
+    const warnTitle = t.violationWarningTitle.replace('{n}', String(warnNum));
+    const warnContinue = t.violationContinueExam;
+    const finalMsg = t.violationFinalNotice;
+    const reasonLabel = t.violationReasonLabel;
 
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -910,13 +893,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             </div>
           )}
 
-          <p className="text-xs text-gray-500 text-center mb-5">
-            {lang === 'ru'
-              ? 'Продолжайте экзамен честно. Камера и активность отслеживаются.'
-              : lang === 'en'
-              ? 'Continue the exam honestly. Camera and activity are monitored.'
-              : "Imtihonni halol davom ettiring. Kamera va faoliyat kuzatilmoqda."}
-          </p>
+          <p className="text-xs text-gray-500 text-center mb-5">{t.violationFooterHonest}</p>
 
           <button
             onClick={() => setViolationWarning(null)}
@@ -933,22 +910,10 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
   // --- Ban ekrani (to'liq bloklash) ---
   if (banned || hardBlocked) {
-    const banTitle =
-      lang === 'ru' ? 'Экзамен завершён' :
-      lang === 'en' ? 'Exam Terminated' :
-      "Imtihon to'xtatildi";
-
+    const banTitle = t.examEndedTitle;
     const banMsg = identityTerminated ? t.examTerminatedIdentity : t.examTerminatedWarnings;
-
-    const banPdfLabel =
-      lang === 'ru' ? 'Скачать официальный документ BAN' :
-      lang === 'en' ? 'Download official BAN report' :
-      'Rasmiy BAN hujjatini yuklab olish';
-
-    const backLabel =
-      lang === 'ru' ? 'Вернуться на главную' :
-      lang === 'en' ? 'Return to Dashboard' :
-      'Bosh sahifaga qaytish';
+    const banPdfLabel = t.banReportDownload;
+    const backLabel = t.banBackToDashboard;
 
     return (
       <motion.div
@@ -999,7 +964,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                 }
               }}
             >
-              {banPdfBusy ? '...' : banPdfLabel}
+              {banPdfBusy ? t.downloading : banPdfLabel}
             </Button>
             <Button className="w-full rounded-full" variant="outline" onClick={() => onFinish(null)}>
               {backLabel}
@@ -1117,7 +1082,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                     type="button"
                     onClick={() => toggleFlag(currentQ.id)}
                     className={`ml-4 p-2 rounded-full transition-colors ${flaggedQuestions.includes(currentQ.id) ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                    title="Flag for review"
+                    title={t.flagQuestion}
                   >
                     <svg className="w-5 h-5" fill={flaggedQuestions.includes(currentQ.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
                   </button>
@@ -1170,7 +1135,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
               disabled={qIndex <= 0}
               onClick={() => setQIndex((i) => Math.max(0, i - 1))}
             >
-              ← Oldingi
+              {t.examNavPrev}
             </Button>
             <Button
               type="button"
@@ -1178,7 +1143,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
               disabled={qIndex >= totalQuestions - 1}
               onClick={() => setQIndex((i) => Math.min(totalQuestions - 1, i + 1))}
             >
-              Keyingi →
+              {t.examNavNext}
             </Button>
           </div>
         </div>

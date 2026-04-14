@@ -64,8 +64,8 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
       try {
         const res = await fetch(apiUrl(`/api/admin/exams/${examId}`), { headers: { Authorization: `Bearer ${token}` } });
         const data = await readJsonSafe<any>(res);
-        if (!res.ok) throw new Error(data?.error || 'Load failed');
-        if (!data) throw new Error('Invalid server response');
+        if (!res.ok) throw new Error(data?.error || t.examLoadFailed);
+        if (!data) throw new Error(t.loginInvalidServerResponse);
         if (cancelled) return;
         setExam(data);
         setTitle(data.title);
@@ -89,7 +89,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
           }
         }
       } catch (e: any) {
-        if (!cancelled) setError(e.message || 'Error');
+        if (!cancelled) setError(e.message || t.errorGeneric);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -97,7 +97,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
     return () => {
       cancelled = true;
     };
-  }, [examId, token]);
+  }, [examId, token, t]);
 
   const toggleGroup = (id: number) => {
     setSelectedGroups((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -109,7 +109,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
 
   const handleSave = async () => {
     if (selectedGroups.length === 0) {
-      setError('Select at least one group');
+      setError(t.examCreateSelectGroup);
       return;
     }
     setSaving(true);
@@ -118,7 +118,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
       const startIso = toIsoOrNull(startLocal);
       const endIso = toIsoOrNull(endLocal);
       if (!startIso || !endIso) {
-        setError('Invalid date/time');
+        setError(t.examInvalidDateTime);
         setSaving(false);
         return;
       }
@@ -147,7 +147,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
           .filter((c: any) => selectedBankCats.includes(c.id))
           .reduce((sum: number, c: any) => sum + Math.max(0, Number(c.question_count) || 0), 0);
         if (selectedPoolCount < 1) {
-          setError('Tanlangan kategoriyalarda savollar mavjud emas');
+          setError(t.examCreateBankCategoriesEmpty);
           setSaving(false);
           return;
         }
@@ -163,11 +163,11 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         body: JSON.stringify(body),
       });
       const data = (await readJsonSafe<{ error?: string }>(res)) || {};
-      if (!res.ok) throw new Error(data.error || 'Save failed');
+      if (!res.ok) throw new Error(data.error || t.examSaveFailed);
       onSaved({ examId });
       onClose();
     } catch (e: any) {
-      setError(e.message || 'Error');
+      setError(e.message || t.errorGeneric);
     } finally {
       setSaving(false);
     }
@@ -183,9 +183,9 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         body: JSON.stringify({ items: exceptions }),
       });
       const data = (await readJsonSafe<{ error?: string }>(res)) || {};
-      if (!res.ok) throw new Error(data.error || 'Save failed');
+      if (!res.ok) throw new Error(data.error || t.examSaveFailed);
     } catch (e: any) {
-      setError(e.message || 'Error');
+      setError(e.message || t.errorGeneric);
     } finally {
       setExBusy(false);
     }
@@ -197,7 +197,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
 
   const addRetake = async () => {
     if (!rtStudent.trim() || !rtStart || !rtEnd) {
-      setError('Talaba ID va vaqt oralig‘i kerak');
+      setError(t.retakeWindowNeedFields);
       return;
     }
     setExBusy(true);
@@ -214,14 +214,14 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         }),
       });
       const data = (await readJsonSafe<{ error?: string; id?: number }>(res)) || {};
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(data.error || t.examSaveFailed);
       const r2 = await fetch(apiUrl(`/api/admin/exams/${examId}`), { headers: { Authorization: `Bearer ${token}` } });
       const ex = await readJsonSafe<any>(r2);
       if (r2.ok && ex?.retake_windows) setRetakeList(ex.retake_windows);
       setRtStudent('');
       setRtNote('');
     } catch (e: any) {
-      setError(e.message || 'Error');
+      setError(e.message || t.errorGeneric);
     } finally {
       setExBusy(false);
     }
@@ -237,11 +237,11 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
       });
       if (!res.ok) {
         const data = (await readJsonSafe<{ error?: string }>(res)) || {};
-        throw new Error(data.error || 'Delete failed');
+        throw new Error(data.error || t.examDeleteFailed);
       }
       setRetakeList((p) => p.filter((x) => x.id !== wid));
     } catch (e: any) {
-      setError(e.message || 'Error');
+      setError(e.message || t.errorGeneric);
     } finally {
       setExBusy(false);
     }
@@ -257,11 +257,11 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = (await readJsonSafe<{ error?: string }>(res)) || {};
-      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      if (!res.ok) throw new Error(data.error || t.examDeleteFailed);
       onSaved({ examId, deleted: true });
       onClose();
     } catch (e: any) {
-      setError(e.message || 'Error');
+      setError(e.message || t.errorGeneric);
     } finally {
       setSaving(false);
     }
@@ -307,9 +307,9 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                     onChange={(e) => setLanguage(e.target.value)}
                     className="mt-1 w-full h-12 rounded-2xl border border-white/50 bg-white/50 px-3 text-sm"
                   >
-                    <option value="uz">O‘zbekcha</option>
-                    <option value="ru">Русский</option>
-                    <option value="en">English</option>
+                    <option value="uz">{t.langUzbek}</option>
+                    <option value="ru">{t.langRussian}</option>
+                    <option value="en">{t.langEnglish}</option>
                   </select>
                 </div>
                 <div>

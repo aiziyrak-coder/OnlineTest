@@ -64,8 +64,8 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
         body: JSON.stringify({ id, password }),
       });
       const data = await readJsonSafe<{ token?: string; user?: any; error?: string }>(res);
-      if (!res.ok) throw new Error(data?.error || 'Login failed');
-      if (!data?.token || !data?.user) throw new Error('Server did not return JSON (wrong URL or proxy?)');
+      if (!res.ok) throw new Error(data?.error || t.loginFailed);
+      if (!data?.token || !data?.user) throw new Error(t.loginInvalidServerResponse);
       persistRemember(id, rememberMe);
       onLogin(data.token, data.user);
     } catch (err: any) {
@@ -98,8 +98,8 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
       >
         <div className="flex flex-col items-center mb-8">
           <InstituteLogo size="lg" className="mb-4 shadow-xl" />
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Fjsti Online Exam</h1>
-          <p className="text-gray-500 mt-2 font-medium">Sign in to continue</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">{t.appBrandTitle}</h1>
+          <p className="text-gray-500 mt-2 font-medium">{t.loginSubtitle}</p>
         </div>
 
         <Card className="w-full">
