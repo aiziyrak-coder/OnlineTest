@@ -4,7 +4,12 @@ from __future__ import annotations
 import multiprocessing
 import os
 
-bind = os.environ.get("GUNICORN_BIND", "0.0.0.0:8000")
+# bind faqat GUNICORN_BIND orqali (CLI --bind ba'zi versiyalarda config bilan ziddiyat qiladi).
+# Server: systemd Environment=GUNICORN_BIND=127.0.0.1:9081 | Docker: ENV GUNICORN_BIND=0.0.0.0:8000
+_bind = os.environ.get("GUNICORN_BIND", "").strip()
+if _bind:
+    bind = _bind
+
 workers = int(os.environ.get("WEB_CONCURRENCY", str(min(multiprocessing.cpu_count() * 2 + 1, 9))))
 workers = max(2, workers)
 worker_class = "sync"

@@ -32,6 +32,7 @@ services:
       DB_CONN_MAX_AGE: "60"
       TRUST_X_FORWARDED_HOST: "0"
       APP_BUILD_REF: docker-compose-example
+      GUNICORN_BIND: 0.0.0.0:8000
     depends_on:
       db:
         condition: service_healthy
