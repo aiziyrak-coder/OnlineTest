@@ -119,7 +119,6 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const t = translations[lang];
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<number[]>([]);
-  const [draftSynced, setDraftSynced] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [banned, setBanned] = useState(false);
   const [timeLeft, setTimeLeft] = useState(() => initialSecondsLeft(exam));
@@ -195,8 +194,6 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             body,
           });
           if (r.ok) {
-            setDraftSynced(true);
-            window.setTimeout(() => setDraftSynced(false), 2500);
             return;
           }
           if (n < 2 && (r.status >= 500 || r.status === 429)) {
@@ -1047,9 +1044,6 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                   .replace('{total}', String(totalQuestions))
                   .replace('{answered}', String(answeredCount))}
               </span>
-              {draftSynced && (
-                <span className="text-xs text-emerald-600 font-medium ml-2">{t.draftSynced}</span>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
@@ -1076,7 +1070,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
               <svg className="w-6 h-6 text-orange-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <div>
                 <strong className="font-semibold block">{t.timeWarningTitle}</strong>
-                <span className="text-sm">{t.timeWarningBody}</span>
+                {t.timeWarningBody.trim() ? <span className="text-sm">{t.timeWarningBody}</span> : null}
               </div>
             </motion.div>
           )}
@@ -1090,7 +1084,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
               <svg className="w-6 h-6 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
               <div>
                 <strong className="font-semibold block">{t.connectionLostTitle}</strong>
-                <span className="text-sm">{t.connectionLostBody}</span>
+                {t.connectionLostBody.trim() ? <span className="text-sm">{t.connectionLostBody}</span> : null}
               </div>
             </motion.div>
           )}
@@ -1201,7 +1195,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           <CardHeader className="py-4 bg-white/40 border-b border-white/20">
             <CardTitle className="text-sm font-semibold tracking-wide uppercase text-gray-500 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-              Live Proctoring
+              {t.examPanelCamera}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-2">
@@ -1221,7 +1215,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         <Card className="border-white/40 bg-white/30 backdrop-blur-xl">
           <CardHeader className="py-4 bg-white/40 border-b border-white/20">
             <CardTitle className="text-sm font-semibold tracking-wide uppercase text-gray-500">
-              Questions
+              {t.examPanelQuestions}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4">
@@ -1254,7 +1248,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         <Card className="border-white/40 bg-white/30 backdrop-blur-xl">
           <CardContent className="p-6">
             <div className="flex justify-between items-center mb-4">
-              <span className="text-sm font-semibold text-gray-700">Warnings</span>
+              <span className="text-sm font-semibold text-gray-700">{t.examPanelWarnings}</span>
               <div className="flex items-center gap-2">
                 {[1, 2, 3].map(num => (
                   <div 
@@ -1266,7 +1260,6 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                 ))}
               </div>
             </div>
-            <p className="text-xs text-gray-500 leading-relaxed">{t.proctoringSidebarHint}</p>
           </CardContent>
         </Card>
       </motion.div>

@@ -312,32 +312,14 @@ export function PreExamCheck({
             </div>
           </div>
 
-          {/* Pastki qism: 2 ustun */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Chap: qoidalar + tizim talablari */}
-            <div className="space-y-4">
-              {/* Qoidalar */}
-              <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
-                <h3 className="font-semibold text-base text-gray-800 mb-2">{t.rules}</h3>
-                <ul className="list-disc pl-5 space-y-1.5 text-sm text-gray-600">
-                  <li>{t.preExamRule1}</li>
-                  <li>{t.preExamRule2}</li>
-                  <li>{t.preExamRule3}</li>
-                  <li>{t.preExamRule4}</li>
-                  <li>{t.preExamRule5}</li>
-                  <li className="text-red-600 font-medium">{t.preExamRule6}</li>
-                </ul>
-                {exam.custom_rules && (
-                  <div className="mt-3 pt-3 border-t border-black/5">
-                    <h4 className="font-semibold text-sm text-gray-800 mb-1">{t.customRules}:</h4>
-                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{exam.custom_rules}</p>
-                  </div>
-                )}
-              </div>
+          {exam.custom_rules && (
+            <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
+              <h4 className="font-semibold text-sm text-gray-800 mb-1">{t.customRules}</h4>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{exam.custom_rules}</p>
             </div>
+          )}
 
-            {/* O'ng: shaxs tasdiqlash + liveness */}
-            <div className="space-y-4">
+          <div className="space-y-4 max-w-xl mx-auto w-full">
               {/* Shaxs tasdiqlash */}
               {user.profile_image ? (
                 <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm space-y-4">
@@ -350,7 +332,6 @@ export function PreExamCheck({
                     />
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-800 text-sm">{t.identityVerification}</h4>
-                      <p className="text-xs text-gray-500">{t.identityVerificationHint}</p>
                     </div>
                   </div>
 
@@ -387,9 +368,9 @@ export function PreExamCheck({
                         <p className={`text-sm font-medium ${livenessStep >= 1 ? 'text-green-700' : 'text-gray-700'}`}>
                           {t.preExamLiveness1}
                         </p>
-                        {livenessActive && livenessStep === 0 && (
+                        {livenessActive && livenessStep === 0 && t.preExamLivenessHint1.trim() ? (
                           <p className="text-xs text-blue-600 mt-0.5 animate-pulse">{t.preExamLivenessHint1}</p>
-                        )}
+                        ) : null}
                       </div>
                       {livenessStep === 0 && (
                         <Button
@@ -422,9 +403,9 @@ export function PreExamCheck({
                         <p className={`text-sm font-medium ${livenessStep >= 2 ? 'text-green-700' : 'text-gray-700'}`}>
                           {t.preExamLiveness2}
                         </p>
-                        {livenessActive && livenessStep === 1 && (
+                        {livenessActive && livenessStep === 1 && t.preExamLivenessHint2.trim() ? (
                           <p className="text-xs text-blue-600 mt-0.5 animate-pulse">{t.preExamLivenessHint2}</p>
-                        )}
+                        ) : null}
                       </div>
                       {livenessStep === 1 && (
                         <Button
@@ -472,7 +453,6 @@ export function PreExamCheck({
                 </div>
               )}
             </div>
-          </div>
 
           {/* Rozilik + tugmalar */}
           <div className="pt-4 border-t border-gray-200/50 flex flex-col sm:flex-row items-center justify-between gap-4">
