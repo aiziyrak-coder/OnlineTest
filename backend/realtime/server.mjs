@@ -34,7 +34,8 @@ const corsOrigin = process.env.SOCKET_IO_CORS_ORIGIN
 const httpServer = createServer((req, res) => {
   if (req.url === '/health' || req.url === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, service: 'fjsti-realtime' }));
+    const build = (process.env.APP_BUILD_REF || process.env.GIT_COMMIT || '').trim();
+    res.end(JSON.stringify({ ok: true, service: 'fjsti-realtime', build: build || null }));
     return;
   }
   res.statusCode = 404;

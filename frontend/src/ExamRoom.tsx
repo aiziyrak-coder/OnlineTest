@@ -124,7 +124,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [banned, setBanned] = useState(false);
   const [timeLeft, setTimeLeft] = useState(() => initialSecondsLeft(exam));
   const [showTimeWarning, setShowTimeWarning] = useState(false);
-  const [warnings, setWarnings] = useState(0);
+  /** Ogohlantirish bosqichi 1–3 (serverdagi warn_types soni; ban 4-chi hodisada). */
+  const [strikeLevel, setStrikeLevel] = useState(0);
   const [warningMsg, setWarningMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [hardBlocked, setHardBlocked] = useState(false);
@@ -182,21 +183,34 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   useEffect(() => {
     if (banned) return;
     const id = window.setTimeout(() => {
-      fetch(apiUrl(`/api/student/exams/${exam.id}/save-progress`), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ answers, flaggedQuestions }),
-      })
-        .then((r) => {
+      const body = JSON.stringify({ answers, flaggedQuestions });
+      const attempt = async (n: number): Promise<void> => {
+        try {
+          const r = await fetch(apiUrl(`/api/student/exams/${exam.id}/save-progress`), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body,
+          });
           if (r.ok) {
             setDraftSynced(true);
             window.setTimeout(() => setDraftSynced(false), 2500);
+            return;
           }
-        })
-        .catch(() => {});
+          if (n < 2 && (r.status >= 500 || r.status === 429)) {
+            await new Promise((res) => setTimeout(res, 800 * (n + 1)));
+            return attempt(n + 1);
+          }
+        } catch {
+          if (n < 2) {
+            await new Promise((res) => setTimeout(res, 800 * (n + 1)));
+            return attempt(n + 1);
+          }
+        }
+      };
+      void attempt(0);
     }, 22000);
     return () => clearTimeout(id);
   }, [answers, flaggedQuestions, exam.id, token, banned]);
@@ -332,6 +346,11 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const singleFaceRef = useRef(false);
   const identityCheckBusyRef = useRef(false);
   const logViolationRef = useRef<(type: string) => Promise<void>>(async () => {});
+  /** Ogohlantirish modali ochiq — yangi ogohlantirish yuborilmaydi (ketma-ket 3 ta alohida modal). Darhol ban turlari bundan mustasno. */
+  const violationModalOpenRef = useRef(false);
+  useEffect(() => {
+    violationModalOpenRef.current = violationWarning !== null;
+  }, [violationWarning]);
   const isProcessingRef = useRef(false);
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<{ [id: string]: RTCPeerConnection }>({});
@@ -441,7 +460,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
       } catch (err) {
         console.error("Failed to setup AI proctoring:", err);
-        logViolation("Failed to access camera/microphone");
+        void logViolationRef.current('CAMERA_MIC_ACCESS_FAILED');
       }
     };
 
@@ -477,13 +496,18 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
   // Frame counter — object detection ni kamroq chaqirish uchun
   const frameCountRef = useRef(0);
+  /** Yuz bbox markazini kenglikka nisbatan: uzoq chap/o'ng qarash (~4.5s ketma-ket). */
+  const gazeLeftStreakRef = useRef(0);
+  const gazeRightStreakRef = useRef(0);
+  /** Bitta yuz + o'rtacha ovoz past–o'rta diapazon (gapirish/pichirlash shubhasi). */
+  const whisperStreakRef = useRef(0);
 
   // --- AI Processing Loop ---
   // OPTIMALLASHTIRISH:
   // - Face detection: har 1.5 soniyada (lokal model, API yo'q)
   // - Object detection: har 6 soniyada (og'ir model, CPU tejash)
   // - Audio: har 2 soniyada
-  // - Violation dedup: logViolation ichida 10s minimum interval
+  // - Violation dedup: logViolation ichida ~14s bir xil tur uchun (spam oldini olish)
   const processFrame = async () => {
     if (bannedRef.current || !videoRef.current || isProcessingRef.current) return;
 
@@ -495,31 +519,68 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     try {
       if (video.readyState < 2) return;
 
-      // 1. Audio tekshiruvi (har 2 soniyada: frame % 2 == 0, ~1.5s interval)
-      if (frame % 2 === 0 && analyserRef.current) {
-        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-        analyserRef.current.getByteFrequencyData(dataArray);
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        if (avg > 55) {
-          void logViolation('SUSPICIOUS_AUDIO');
-        }
-      }
-
-      // 2. Yuz aniqlash (har frame: tez lokal model)
+      // 1. Yuz aniqlash + kamera markazidan uzoq qarash (bbox markazi) — keyingi bloklar uchun singleFaceRef
       if (faceDetectorRef.current) {
         const faceResult = faceDetectorRef.current.detectForVideo(video, performance.now());
         const faceCount = faceResult.detections.length;
         singleFaceRef.current = faceCount === 1;
 
         if (faceCount === 0) {
+          gazeLeftStreakRef.current = 0;
+          gazeRightStreakRef.current = 0;
           if (Date.now() - lastFaceTimeRef.current > 6000) {
-            void logViolation('FACE_NOT_VISIBLE');
+            void logViolationRef.current('FACE_NOT_VISIBLE');
             lastFaceTimeRef.current = Date.now();
           }
         } else if (faceCount > 1) {
-          void logViolation('MULTIPLE_FACES');
+          gazeLeftStreakRef.current = 0;
+          gazeRightStreakRef.current = 0;
+          void logViolationRef.current('MULTIPLE_FACES');
         } else {
           lastFaceTimeRef.current = Date.now();
+          const det = faceResult.detections[0];
+          const bb = det?.boundingBox;
+          const vw = video.videoWidth || 1;
+          if (bb && vw > 40) {
+            const cx = (bb.originX + bb.width / 2) / vw;
+            if (cx < 0.34) {
+              gazeLeftStreakRef.current += 1;
+              gazeRightStreakRef.current = 0;
+              if (gazeLeftStreakRef.current >= 3) {
+                gazeLeftStreakRef.current = 0;
+                void logViolationRef.current('GAZE_AWAY_LEFT');
+              }
+            } else if (cx > 0.66) {
+              gazeRightStreakRef.current += 1;
+              gazeLeftStreakRef.current = 0;
+              if (gazeRightStreakRef.current >= 3) {
+                gazeRightStreakRef.current = 0;
+                void logViolationRef.current('GAZE_AWAY_RIGHT');
+              }
+            } else {
+              gazeLeftStreakRef.current = 0;
+              gazeRightStreakRef.current = 0;
+            }
+          }
+        }
+      }
+
+      // 2. Audio: baland shovqin yoki (bitta yuzda) past–o'rta — gapirish/pichirlash shubhasi
+      if (frame % 2 === 0 && analyserRef.current) {
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        if (avg > 55) {
+          whisperStreakRef.current = 0;
+          void logViolationRef.current('SUSPICIOUS_AUDIO');
+        } else if (singleFaceRef.current && avg >= 20 && avg <= 52) {
+          whisperStreakRef.current += 1;
+          if (whisperStreakRef.current >= 5) {
+            whisperStreakRef.current = 0;
+            void logViolationRef.current('WHISPER_OR_CONVERSATION_SUSPECTED');
+          }
+        } else {
+          whisperStreakRef.current = Math.max(0, whisperStreakRef.current - 1);
         }
       }
 
@@ -531,7 +592,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           (p) => forbidden.includes(p.class) && p.score > 0.65
         );
         if (found) {
-          void logViolation(`FORBIDDEN_OBJECT_${found.class.replace(' ', '_').toUpperCase()}`);
+          void logViolationRef.current(`FORBIDDEN_OBJECT_${found.class.replace(' ', '_').toUpperCase()}`);
         }
       }
     } catch {
@@ -550,22 +611,20 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [identityTerminated, setIdentityTerminated] = useState(false);
 
   // --- Violation logging ---
-  // Bir xil violation tipini 10 soniyada bir marta yuborish (spam oldini olish)
   const logViolation = async (type: string) => {
     if (bannedRef.current) return;
 
-    // Dedup: bir xil violation tipini ma'lum vaqt ichida bir marta yuborish
-    // TAB_SWITCH va FULLSCREEN bir vaqtda kelishi mumkin — 30s dedupe
     const INSTANT_BAN_TYPES = new Set(['IDENTITY_SUBSTITUTION', 'REMOTE_CONTROL_SUSPECTED']);
+    if (violationModalOpenRef.current && !INSTANT_BAN_TYPES.has(type)) {
+      return;
+    }
+
+    // Dedup: bir xil tur uchun qisqa interval (har xil tur ketma-ket 3 ogohlantirish uchun alohida hisoblanadi)
     const dedupeKey = `viol_last_${type}`;
     const lastSent = parseInt(sessionStorage.getItem(dedupeKey) || '0', 10);
     const now = Date.now();
-    // Instant ban turlari har doim yuboriladi
-    // Qolganlar: 30 soniyada bir marta (TAB_SWITCH + FULLSCREEN bir vaqtda kelmasin)
-    const MIN_INTERVAL = INSTANT_BAN_TYPES.has(type) ? 0 : 30_000;
+    const MIN_INTERVAL = INSTANT_BAN_TYPES.has(type) ? 0 : 14_000;
     if (MIN_INTERVAL > 0 && now - lastSent < MIN_INTERVAL) {
-      setWarningMsg(type);
-      setTimeout(() => setWarningMsg(''), 3000);
       return;
     }
     sessionStorage.setItem(dedupeKey, String(now));
@@ -590,18 +649,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         isFinalWarning?: boolean;
       }>(res)) || {};
 
-      if (typeof data.violationsCount === 'number') {
-        setWarnings(data.violationsCount);
-      }
-
       if (data.banned) {
-        // Ban berildi — darhol ban ekrani
         if (type === 'IDENTITY_SUBSTITUTION') setIdentityTerminated(true);
         setViolationWarning(null);
+        setStrikeLevel(3);
         setBanned(true);
         streamRef.current?.getTracks().forEach((t) => t.stop());
       } else if (typeof data.warningNumber === 'number' && data.warningNumber > 0) {
-        // Ogohlantirish modal ko'rsatish
+        setStrikeLevel(data.warningNumber);
         setViolationWarning({
           reason: data.violationReason || type,
           warningNumber: data.warningNumber,
@@ -654,6 +709,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             Authorization: `Bearer ${tokenRef.current}`,
           },
           body: JSON.stringify({
+            exam_id: examIdRef.current,
             profile_image_base64: prof,
             live_capture_base64: liveB64,
           }),
@@ -666,7 +722,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }
         if (!res.ok) return;
 
-        const data = await res.json().catch(() => ({}));
+        const data = (await readJsonSafe<{ match?: boolean }>(res)) || {};
         if (!data.match) {
           identityFailCountRef.current += 1;
           // 3 ta ketma-ket muvaffaqiyatsiz → blok (yolg'on positive oldini olish)
@@ -717,9 +773,15 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           },
           body: JSON.stringify({ answers: ans, flaggedQuestions: fl }),
         });
-        const json = await res.json().catch(() => ({}));
+        const json = await readJsonSafe<ExamResultPayload & { error?: string }>(res);
         if (!res.ok) {
-          alert((json as { error?: string }).error || t.submitError);
+          alert(String(json?.error || t.submitError));
+          submittingRef.current = false;
+          setSubmitting(false);
+          return;
+        }
+        if (!json?.result_public_id || !Array.isArray(json.questions)) {
+          alert(t.submitError);
           submittingRef.current = false;
           setSubmitting(false);
           return;
@@ -730,7 +792,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           exam_id: json.exam_id,
           result_public_id: json.result_public_id,
           verify_url: json.verify_url,
-          overview: json.overview,
+          overview: json.overview ?? '',
           questions: json.questions,
           score: json.score,
           total: json.total,
@@ -757,6 +819,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     if (banned) return;
     const timer = window.setInterval(() => {
       setTimeLeft((prev) => {
+        if (violationModalOpenRef.current) {
+          return prev;
+        }
         if (prev === 300) {
           setShowTimeWarning(true);
           window.setTimeout(() => setShowTimeWarning(false), 5000);
@@ -788,9 +853,11 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       "Tushundim, imtihonni davom ettirish";
 
     const finalMsg =
-      lang === 'ru' ? 'Bu oxirgi ogohlantirish! Keyingi qoidabuzarlik sizni bloklaydi.' :
-      lang === 'en' ? 'This is your FINAL warning! Next violation will block you.' :
-      "Bu OXIRGI ogohlantirish! Keyingi qoidabuzarlik sizni bloklaydi.";
+      lang === 'ru'
+        ? 'Это последнее предупреждение (3 из 3). Следующее нарушение приведёт к блокировке экзамена.'
+        : lang === 'en'
+          ? 'This is your final warning (3 of 3). One more violation will end the exam and block your account.'
+          : "Bu oxirgi ogohlantirish (3/3). Keyingi qoidabuzarlik imtihonni tugatadi va akkauntingiz bloklanadi.";
 
     const reasonLabel =
       lang === 'ru' ? 'Причина нарушения' :
@@ -1193,7 +1260,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                   <div 
                     key={num} 
                     className={`w-3 h-3 rounded-full transition-colors ${
-                      warnings >= num ? 'bg-red-500 shadow-sm shadow-red-500/50' : 'bg-gray-200'
+                      strikeLevel >= num ? 'bg-red-500 shadow-sm shadow-red-500/50' : 'bg-gray-200'
                     }`}
                   />
                 ))}

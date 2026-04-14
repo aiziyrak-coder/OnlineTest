@@ -16,7 +16,8 @@ interface LoginProps {
 
 const LS_REMEMBER = 'fjsti_login_remember';
 const LS_ID = 'fjsti_login_saved_id';
-const LS_PW = 'fjsti_login_saved_password';
+/** @deprecated Parol hech qachon localStorage da saqlanmaydi (XSS / umumiy kompyuter xavfi). */
+const LS_PW_LEGACY = 'fjsti_login_saved_password';
 
 export function Login({ onLogin, lang, setLang }: LoginProps) {
   const [id, setId] = useState('');
@@ -27,28 +28,26 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
 
   useEffect(() => {
     try {
+      localStorage.removeItem(LS_PW_LEGACY);
       if (localStorage.getItem(LS_REMEMBER) === '1') {
         setRememberMe(true);
         const sid = localStorage.getItem(LS_ID);
-        const sp = localStorage.getItem(LS_PW);
         if (sid) setId(sid);
-        if (sp) setPassword(sp);
       }
     } catch {
       /* ignore */
     }
   }, []);
 
-  const persistRemember = (loginId: string, loginPassword: string, remember: boolean) => {
+  /** Faqat foydalanuvchi ID; parol brauzerda saqlanmaydi. */
+  const persistRemember = (loginId: string, remember: boolean) => {
     try {
       if (remember) {
         localStorage.setItem(LS_REMEMBER, '1');
         localStorage.setItem(LS_ID, loginId);
-        localStorage.setItem(LS_PW, loginPassword);
       } else {
         localStorage.removeItem(LS_REMEMBER);
         localStorage.removeItem(LS_ID);
-        localStorage.removeItem(LS_PW);
       }
     } catch {
       /* ignore */
@@ -67,7 +66,7 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
       const data = await readJsonSafe<{ token?: string; user?: any; error?: string }>(res);
       if (!res.ok) throw new Error(data?.error || 'Login failed');
       if (!data?.token || !data?.user) throw new Error('Server did not return JSON (wrong URL or proxy?)');
-      persistRemember(id, password, rememberMe);
+      persistRemember(id, rememberMe);
       onLogin(data.token, data.user);
     } catch (err: any) {
       setError(err.message);

@@ -24,3 +24,9 @@ class BankAiImportThrottle(UserRateThrottle):
     """Test bazasiga AI orqali yuklash (qimmat)."""
 
     scope = "bank_ai_import"
+
+
+class ViolationThrottle(UserRateThrottle):
+    """Proktoring buzilishlari — server va bazani himoya qilish."""
+
+    scope = "violations"

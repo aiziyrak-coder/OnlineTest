@@ -12,13 +12,14 @@ RuntimeDirectory=onlinetest
 EnvironmentFile=/etc/onlinetest/api.env
 WorkingDirectory=/var/www/onlinetest/backend
 ExecStart=/var/www/onlinetest/backend/.venv/bin/gunicorn \
+  exam_platform.wsgi:application \
+  --config gunicorn.conf.py \
   --bind 127.0.0.1:9081 \
   --forwarded-allow-ips=127.0.0.1 \
   --workers 3 \
   --timeout 900 \
   --access-logfile - \
-  --error-logfile - \
-  exam_platform.wsgi:application
+  --error-logfile -
 Restart=on-failure
 RestartSec=5
 

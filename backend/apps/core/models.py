@@ -106,6 +106,9 @@ class StudentExam(models.Model):
 
     class Meta:
         db_table = "student_exams"
+        indexes = [
+            models.Index(fields=["student", "exam"]),
+        ]
 
 
 class ViolationLog(models.Model):
@@ -117,6 +120,10 @@ class ViolationLog(models.Model):
 
     class Meta:
         db_table = "violations_log"
+        indexes = [
+            models.Index(fields=["student", "exam"]),
+            models.Index(fields=["exam", "timestamp"]),
+        ]
 
 
 class UnbanEvidence(models.Model):

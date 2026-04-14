@@ -38,6 +38,7 @@ def _rf_throttle_off():
         "user": "100000/h",
         "exam_autosave": "100000/h",
         "bank_ai_import": "100000/h",
+        "violations": "100000/h",
     }
     return rf
 
@@ -300,11 +301,153 @@ class ExamFlowApiTests(TestCase):
         self.assertTrue(TestBankCategory.objects.filter(name__iexact="Matematika").exists())
         self.assertEqual(TestBankQuestion.objects.count(), 1)
 
+    def test_violation_three_distinct_warnings_then_ban_on_fourth(self):
+        """3 ta ogohlantirish (har biri alohida log), 4-chi hodisada ban — bir martada 3 ta bo'lib ban bo'lmasin."""
+        hp = bcrypt.hashpw(b"vstudent2", bcrypt.gensalt(rounds=10)).decode("ascii")
+        st2 = AppUser.objects.create(
+            id="itest_student_viol",
+            password=hp,
+            role="student",
+            name="Viol Student",
+            status="Active",
+            group_id=self.group.id,
+            profile_image="",
+        )
+        r0 = self.client.post(
+            "/api/auth/login",
+            {"id": "itest_student_viol", "password": "vstudent2"},
+            format="json",
+        )
+        self.assertEqual(r0.status_code, 200)
+        tok = r0.json()["token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tok}")
+        eid = self.exam_a.id
+        for i in range(3):
+            r = self.client.post(
+                "/api/student/violations",
+                {"exam_id": eid, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+                format="json",
+            )
+            self.assertEqual(r.status_code, 200, msg=f"warn step {i}")
+            body = r.json()
+            self.assertFalse(body.get("banned"), msg=f"step {i} should not ban yet")
+            self.assertEqual(body.get("warningNumber"), i + 1)
+            self.assertEqual(body.get("isFinalWarning"), i == 2)
+        r4 = self.client.post(
+            "/api/student/violations",
+            {"exam_id": eid, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r4.status_code, 200)
+        self.assertTrue(r4.json().get("banned"))
+        st2.refresh_from_db()
+        self.assertEqual(st2.status, "Banned")
+
     def test_health_includes_database(self):
         r = self.client.get("/api/health")
         self.assertEqual(r.status_code, 200)
-        self.assertTrue(r.json().get("ok"))
-        self.assertTrue(r.json().get("database"))
+        body = r.json()
+        self.assertTrue(body.get("ok"))
+        self.assertEqual(body.get("service"), "fjsti-exam-api")
+        self.assertTrue(body.get("database"))
+        self.assertIn("db_latency_ms", body)
+        self.assertIn("X-Request-Id", r)
+
+    def test_health_live_liveness(self):
+        r = self.client.get("/api/live")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body.get("ok"))
+        self.assertTrue(body.get("live"))
+        self.assertEqual(body.get("service"), "fjsti-exam-api")
+
+    def test_health_ready_readiness(self):
+        r = self.client.get("/api/ready")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body.get("ready"))
+        self.assertTrue(body.get("database"))
+        self.assertIn("db_latency_ms", body)
+
+    def test_request_id_echo_from_client(self):
+        rid = "client-trace-abc12"
+        r = self.client.get("/api/live", HTTP_X_REQUEST_ID=rid)
+        self.assertEqual(r["X-Request-Id"], rid)
+        self.assertEqual(r.json().get("request_id"), rid)
+
+    def test_admin_users_list_paginated_envelope(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")
+        r = self.client.get("/api/admin/users?limit=10&offset=0")
+        self.assertEqual(r.status_code, 200)
+        j = r.json()
+        self.assertIn("results", j)
+        self.assertIn("total", j)
+        self.assertIsInstance(j["results"], list)
+        self.assertGreaterEqual(j["total"], 2)
+
+    def test_student_violation_forbidden_for_unassigned_exam(self):
+        e = Exam.objects.create(
+            teacher_id=self.admin.id,
+            title="Yolg'iz imtihon",
+            start_time=dj_tz.now() - timedelta(minutes=5),
+            end_time=dj_tz.now() + timedelta(hours=2),
+            duration_minutes=30,
+            questions_json=__import__("json").dumps(QUESTIONS),
+            language="uz",
+            pin="",
+            custom_rules="",
+            exam_mode="static",
+            bank_category_ids="[]",
+            bank_question_count=0,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        r = self.client.post(
+            "/api/student/violations",
+            {"exam_id": e.id, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 403)
+
+    def test_student_violation_unknown_type_not_logged(self):
+        from apps.core.models import ViolationLog
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        before = ViolationLog.objects.filter(student_id=self.student.id, exam_id=self.exam_a.id).count()
+        r = self.client.post(
+            "/api/student/violations",
+            {"exam_id": self.exam_a.id, "violation_type": "NOT_A_REAL_TYPE", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        after = ViolationLog.objects.filter(student_id=self.student.id, exam_id=self.exam_a.id).count()
+        self.assertEqual(before, after)
+
+    def test_identity_compare_forbidden_when_exam_not_assigned(self):
+        e = Exam.objects.create(
+            teacher_id=self.admin.id,
+            title="Imtihon X",
+            start_time=dj_tz.now() - timedelta(minutes=5),
+            end_time=dj_tz.now() + timedelta(hours=2),
+            duration_minutes=30,
+            questions_json=__import__("json").dumps(QUESTIONS),
+            language="uz",
+            pin="",
+            custom_rules="",
+            exam_mode="static",
+            bank_category_ids="[]",
+            bank_question_count=0,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        r = self.client.post(
+            "/api/student/identity-compare",
+            {
+                "exam_id": e.id,
+                "profile_image_base64": PROFILE,
+                "live_capture_base64": PROFILE,
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 403)
 
     def test_unban_requires_reason_and_evidence(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")

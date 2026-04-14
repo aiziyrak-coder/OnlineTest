@@ -24,7 +24,10 @@ export function ExamSettings({ token, lang, groups, onSuccess }: ExamSettingsPro
     if (method !== 'bank') return;
     (async () => {
       const res = await fetch(apiUrl('/api/admin/test-bank/categories'), { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setBankCategories(await res.json());
+      if (res.ok) {
+        const raw = await readJsonSafe<unknown>(res);
+        setBankCategories(Array.isArray(raw) ? raw : []);
+      }
     })();
   }, [method, token]);
 

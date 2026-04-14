@@ -1,6 +1,8 @@
 Django>=5.0,<6
 djangorestframework>=3.15
 django-cors-headers>=4.3
+dj-database-url>=2.1
+psycopg2-binary>=2.9
 PyJWT>=2.8
 bcrypt>=4.1
 google-genai>=1.0

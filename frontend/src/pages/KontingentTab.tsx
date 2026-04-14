@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../components/ui';
-import { translations, Language } from '../i18n';
-import { readJsonSafe } from '../lib/http';
+import { translations, Language, type TranslationBundle } from '../i18n';
+import { readJsonSafe, parseAdminUsersList } from '../lib/http';
 import { apiUrl } from '../lib/apiUrl';
 
 type Level = { id: number; name: string };
@@ -93,20 +93,20 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
 
   const loadGroupStudents = useCallback(async (groupId: number) => {
     const res = await fetch(apiUrl(`/api/admin/users?group_id=${groupId}&role=student`), { headers: h });
-    const j = await readJsonSafe<StudentRow[]>(res);
-    setGroupStudents(Array.isArray(j) ? j : []);
+    const j = await readJsonSafe<unknown>(res);
+    setGroupStudents(parseAdminUsersList<StudentRow>(j));
   }, [token]);
 
   const loadAllStudents = useCallback(async () => {
     const res = await fetch(apiUrl('/api/admin/users?role=student'), { headers: h });
-    const j = await readJsonSafe<StudentRow[]>(res);
-    setAllStudents(Array.isArray(j) ? j : []);
+    const j = await readJsonSafe<unknown>(res);
+    setAllStudents(parseAdminUsersList<StudentRow>(j));
   }, [token]);
 
   const loadBanned = useCallback(async () => {
     const res = await fetch(apiUrl('/api/admin/users?role=student&status=Banned'), { headers: h });
-    const j = await readJsonSafe<StudentRow[]>(res);
-    setBanList(Array.isArray(j) ? j : []);
+    const j = await readJsonSafe<unknown>(res);
+    setBanList(parseAdminUsersList<StudentRow>(j));
   }, [token]);
 
   const reloadAll = useCallback(() => {
@@ -192,8 +192,8 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
         profile_image: profileImageBase64,
       }),
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setAddUserError(data.error || 'Xatolik'); return; }
+      const data = (await readJsonSafe<{ error?: string }>(res)) || {};
+      if (!res.ok) { setAddUserError(data.error || 'Xatolik'); return; }
     formEl.reset();
     reloadAll();
   };
@@ -392,13 +392,13 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                           profile_image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
                         }),
                       });
-                      const data = await res.json().catch(() => ({}));
+                      const data = (await readJsonSafe<{ error?: string }>(res)) || {};
                       if (res.ok) { loadStats(); formEl.reset(); }
                       else alert(data.error || 'Xatolik');
                     }} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                       <div><label className="text-sm text-gray-600">ID</label><Input name="id" required className="mt-1" /></div>
                       <div><label className="text-sm text-gray-600">{t.userFullName}</label><Input name="name" required className="mt-1" /></div>
-                      <div><label className="text-sm text-gray-600">{t.password}</label><Input name="password" type="password" required className="mt-1" /></div>
+                      <div><label className="text-sm text-gray-600">{t.password}</label><Input name="password" type="password" required minLength={10} autoComplete="new-password" className="mt-1" /></div>
                       <Button type="submit" className="sm:col-span-3 w-full sm:w-auto">Admin yaratish</Button>
                     </form>
                   </CardContent>
@@ -464,7 +464,7 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                     <form onSubmit={addStudent} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
                       <div><label className="text-sm text-gray-600">ID</label><Input name="id" required className="mt-1" /></div>
                       <div><label className="text-sm text-gray-600">{t.userFullName}</label><Input name="name" required className="mt-1" /></div>
-                      <div><label className="text-sm text-gray-600">{t.password}</label><Input name="password" type="password" required className="mt-1" /></div>
+                      <div><label className="text-sm text-gray-600">{t.password}</label><Input name="password" type="password" required minLength={10} autoComplete="new-password" className="mt-1" /></div>
                       <div className="sm:col-span-2">
                         <label className="text-sm text-gray-600">{t.profilePhotoLabel} <span className="text-red-500">*</span></label>
                         <Input name="profile_image" type="file" accept="image/*" className="mt-1 h-12 pt-2" required />
@@ -679,7 +679,7 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700 block mb-1">{t.newPasswordOptional}</label>
-                      <Input name="password" type="password" placeholder="Bo'sh qoldiring — o'zgarmaydi" />
+                      <Input name="password" type="password" minLength={10} placeholder="Bo'sh yoki kamida 10 belgi" />
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700 block mb-1">
@@ -791,7 +791,7 @@ function StudentTable({
 }: {
   students: StudentRow[];
   groups: Group[];
-  t: ReturnType<typeof translations['uz']>;
+  t: TranslationBundle;
   onEdit: (u: StudentRow) => void;
   onDelete: (u: StudentRow) => void;
   onUnban: (u: StudentRow) => void;

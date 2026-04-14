@@ -30,6 +30,7 @@ from apps.api.throttles import (
     FaceVerifyThrottle,
     LoginThrottle,
     PublicVerifyThrottle,
+    ViolationThrottle,
 )
 from apps.api.certificate_pdf import build_ban_report_pdf, build_certificate_pdf
 from apps.api.gemini_tools import (
@@ -86,20 +87,112 @@ def _hash_pw(plain: str) -> str:
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=10)).decode("utf-8")
 
 
+MIN_APP_PASSWORD_LEN = 10
+
+
+def _student_assigned_to_exam(user, exam_id: int) -> bool:
+    """Talaba guruhi ushbu imtihonga biriktirilgan bo‘lsa True."""
+    gid = getattr(user, "group_id", None)
+    if gid is None:
+        return False
+    return ExamGroup.objects.filter(exam_id=exam_id, group_id=gid).exists()
+
+
 # --- Public / auth ---
+
+
+def _health_build_ref() -> str | None:
+    return (os.environ.get("APP_BUILD_REF") or os.environ.get("GIT_COMMIT") or "").strip() or None
+
+
+def _request_id(request) -> str | None:
+    return getattr(request, "request_id", None)
 
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
-def health(_request):
+def health(request):
+    """Umumiy holat + DB tekshiruvi (monitoring / eski mijozlar bilan mos)."""
+    import time
+
     from django.db import connection
 
+    db_ok = False
+    db_ms = None
     try:
+        t0 = time.perf_counter()
         connection.ensure_connection()
+        with connection.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        db_ms = round((time.perf_counter() - t0) * 1000, 2)
         db_ok = True
     except Exception:
         db_ok = False
-    return Response({"ok": True, "database": db_ok})
+    return Response(
+        {
+            "ok": True,
+            "service": "fjsti-exam-api",
+            "request_id": _request_id(request),
+            "database": db_ok,
+            "db_latency_ms": db_ms,
+            "build": _health_build_ref(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health_live(request):
+    """Kubernetes / load balancer liveness — DBsiz, tez."""
+    return Response(
+        {
+            "ok": True,
+            "live": True,
+            "service": "fjsti-exam-api",
+            "request_id": _request_id(request),
+            "build": _health_build_ref(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health_ready(request):
+    """Readiness — baza ulanishi bo‘lmasa 503."""
+    import time
+
+    from django.db import connection
+
+    try:
+        t0 = time.perf_counter()
+        connection.ensure_connection()
+        with connection.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        db_ms = round((time.perf_counter() - t0) * 1000, 2)
+    except Exception:
+        return Response(
+            {
+                "ok": False,
+                "ready": False,
+                "service": "fjsti-exam-api",
+                "request_id": _request_id(request),
+                "database": False,
+            },
+            status=503,
+        )
+    return Response(
+        {
+            "ok": True,
+            "ready": True,
+            "service": "fjsti-exam-api",
+            "request_id": _request_id(request),
+            "database": True,
+            "db_latency_ms": db_ms,
+            "build": _health_build_ref(),
+        }
+    )
 
 
 @api_view(["POST"])
@@ -159,6 +252,16 @@ def student_identity_compare(request):
     max_b64 = 14 * 1024 * 1024
     if len(p) < 80 or len(l) < 80 or len(p) > max_b64 or len(l) > max_b64:
         return Response({"error": "Invalid image payload"}, status=400)
+    exam_id_raw = body.get("exam_id")
+    if exam_id_raw is not None and exam_id_raw != "":
+        try:
+            eid = int(exam_id_raw)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid exam_id"}, status=400)
+        if not Exam.objects.filter(pk=eid).exists():
+            return Response({"error": "Exam not found"}, status=404)
+        if not _student_assigned_to_exam(u, eid):
+            return Response({"error": "Forbidden"}, status=403)
     result = compare_faces(p_raw, l_raw)
     if not result.get("success"):
         code = result.get("code") or "GEMINI_ERROR"
@@ -192,10 +295,20 @@ def admin_users(request):
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
+        qs = qs.order_by("name")
+        total = qs.count()
+        try:
+            limit = int(request.query_params.get("limit", 200))
+        except (TypeError, ValueError):
+            limit = 200
+        limit = max(1, min(limit, 500))
+        try:
+            offset = int(request.query_params.get("offset", 0))
+        except (TypeError, ValueError):
+            offset = 0
+        offset = max(0, offset)
         rows = []
-        for u in qs.order_by("name"):
-            # profile_image: ro'yxatda to'liq base64 yubormaslik (JSON hajmini kamaytirish)
-            # has_photo flag yetarli — to'liq rasm faqat login/identity-compare da kerak
+        for u in qs[offset : offset + limit]:
             rows.append(
                 {
                     "id": u.id,
@@ -204,17 +317,24 @@ def admin_users(request):
                     "status": u.status,
                     "group_id": u.group_id,
                     "has_photo": bool(u.profile_image and len(u.profile_image) > 50),
-                    "profile_image": None,  # ro'yxatda kerak emas, JSON hajmini kamaytiradi
+                    "profile_image": None,
                     "group_name": u.group.name if u.group_id else None,
                 }
             )
-        return Response(rows)
+        resp = Response({"results": rows, "total": total, "limit": limit, "offset": offset})
+        resp["X-Total-Count"] = str(total)
+        return resp
     d = request.data or {}
     uid, password, role, name = d.get("id"), d.get("password"), d.get("role"), d.get("name")
     group_id = d.get("group_id")
     profile_image = d.get("profile_image")
     if not uid or not password or not role or not name:
         return Response({"error": "Missing required fields"}, status=400)
+    if len(str(password)) < MIN_APP_PASSWORD_LEN:
+        return Response(
+            {"error": f"Parol kamida {MIN_APP_PASSWORD_LEN} belgi bo‘lishi kerak"},
+            status=400,
+        )
     if role not in ("admin", "student"):
         return Response({"error": "Role must be admin or student"}, status=400)
     if role == "student" and (not profile_image or len(str(profile_image)) < 50):
@@ -275,8 +395,11 @@ def admin_user_detail(request, user_id: str):
     if "profile_image" in d:
         row.profile_image = d["profile_image"] or ""
     if d.get("password"):
-        if len(str(d["password"])) < 6:
-            return Response({"error": "Password min 6 characters"}, status=400)
+        if len(str(d["password"])) < MIN_APP_PASSWORD_LEN:
+            return Response(
+                {"error": f"Password min {MIN_APP_PASSWORD_LEN} characters"},
+                status=400,
+            )
         row.password = _hash_pw(str(d["password"]))
     touched = any(
         k in d for k in ("name", "role", "group_id", "status", "profile_image", "password")
@@ -1469,33 +1592,41 @@ def student_exams_submit(request, pk: int):
     flagged = (request.data or {}).get("flaggedQuestions")
     if not isinstance(answers, dict):
         return Response({"error": "Invalid answers format"}, status=400)
-    exam = Exam.objects.filter(pk=pk).first()
-    if not exam:
+    if not Exam.objects.filter(pk=pk).exists():
         return Response({"error": "Exam not found"}, status=404)
-    se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
-    if not se or se.status != "In Progress":
-        return Response({"error": "Cannot submit exam"}, status=403)
-    deadline = submission_deadline(exam, se)
-    if deadline and dj_tz.now() > deadline:
-        return Response(
-            {"error": "Imtihon vaqti tugagan. Javoblar qabul qilinmaydi."},
-            status=403,
-        )
-    if se.session_questions_json:
-        questions = safe_json_loads(se.session_questions_json, [])
-    else:
-        questions = safe_json_loads(exam.questions_json, [])
-    norm = norm_answers(answers)
-    score = sum(1 for q in questions if norm.get(str(q["id"])) == q.get("correctAnswer"))
-    flagged_json = json.dumps(flagged) if flagged else "[]"
-    completed_at = dj_tz.now()
-    result_public_id = next_result_public_id()
-    verify_secret = secrets.token_hex(32)
-    total = len(questions)
-    percentage = round((score / total) * 100) if total else 0
-    ai_summary = generate_exam_ai_summary(questions, norm, exam.language or "uz")
-    ai_summary_json = json.dumps(ai_summary)
+    if not _student_assigned_to_exam(u, pk):
+        return Response({"error": "Forbidden"}, status=403)
+
     with transaction.atomic():
+        se = (
+            StudentExam.objects.select_for_update()
+            .filter(student_id=u.id, exam_id=pk)
+            .select_related("exam")
+            .first()
+        )
+        if not se or se.status != "In Progress":
+            return Response({"error": "Cannot submit exam"}, status=403)
+        exam = se.exam
+        deadline = submission_deadline(exam, se)
+        if deadline and dj_tz.now() > deadline:
+            return Response(
+                {"error": "Imtihon vaqti tugagan. Javoblar qabul qilinmaydi."},
+                status=403,
+            )
+        if se.session_questions_json:
+            questions = safe_json_loads(se.session_questions_json, [])
+        else:
+            questions = safe_json_loads(exam.questions_json, [])
+        norm = norm_answers(answers)
+        score = sum(1 for q in questions if norm.get(str(q["id"])) == q.get("correctAnswer"))
+        flagged_json = json.dumps(flagged) if flagged else "[]"
+        completed_at = dj_tz.now()
+        result_public_id = next_result_public_id()
+        verify_secret = secrets.token_hex(32)
+        total = len(questions)
+        percentage = round((score / total) * 100) if total else 0
+        ai_summary = generate_exam_ai_summary(questions, norm, exam.language or "uz")
+        ai_summary_json = json.dumps(ai_summary)
         se.status = "Completed"
         se.score = score
         se.answers_json = json.dumps(norm)
@@ -1558,6 +1689,8 @@ def student_exam_clock(request, pk: int):
     exam = Exam.objects.filter(pk=pk).first()
     if not exam:
         return Response({"error": "Exam not found"}, status=404)
+    if not _student_assigned_to_exam(u, pk):
+        return Response({"error": "Forbidden"}, status=403)
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
     if not se or se.status != "In Progress":
         return Response({"error": "No active session"}, status=400)
@@ -1581,6 +1714,8 @@ def student_exam_draft(request, pk: int):
         return Response({"error": "Forbidden"}, status=403)
     if not Exam.objects.filter(pk=pk).exists():
         return Response({"error": "Exam not found"}, status=404)
+    if not _student_assigned_to_exam(u, pk):
+        return Response({"error": "Forbidden"}, status=403)
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
     if not se or se.status != "In Progress":
         return Response({"answers": {}, "flaggedQuestions": [], "updated_at": None})
@@ -1605,6 +1740,8 @@ def student_exam_save_progress(request, pk: int):
     exam = Exam.objects.filter(pk=pk).first()
     if not exam:
         return Response({"error": "Exam not found"}, status=404)
+    if not _student_assigned_to_exam(u, pk):
+        return Response({"error": "Forbidden"}, status=403)
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
     if not se or se.status != "In Progress":
         return Response({"error": "No active session"}, status=400)
@@ -1632,6 +1769,8 @@ def student_results(request):
     u = request.user
     if u.role != "student":
         return Response({"error": "Forbidden"}, status=403)
+    if not u.group_id:
+        return Response([])
     rows = (
         StudentExam.objects.filter(student_id=u.id, status__in=["Completed", "Banned"])
         .select_related("exam")
@@ -1965,13 +2104,14 @@ def student_ban_report_pdf(request):
 
 
 @api_view(["GET"])
+@throttle_classes([PublicVerifyThrottle])
 @permission_classes([AllowAny])
 def public_verify_ban_report(request):
     token = (request.query_params.get("token") or "").strip()
     if not token:
         return Response({"valid": False, "error": "token required"}, status=400)
     try:
-        data = signing.loads(token, salt="ban-report", max_age=60 * 60 * 24 * 365)
+        data = signing.loads(token, salt="ban-report", max_age=60 * 60 * 24 * 90)
     except signing.BadSignature:
         return Response({"valid": False, "error": "invalid token"}, status=400)
     sid = str(data.get("sid") or "")
@@ -1995,45 +2135,67 @@ def public_verify_ban_report(request):
 
 
 @api_view(["POST"])
+@throttle_classes([ViolationThrottle])
 @permission_classes([IsAuthenticated])
 def student_violations(request):
     u = request.user
     if u.role != "student":
         return Response({"error": "Forbidden"}, status=403)
     d = request.data or {}
-    exam_id, vtype = d.get("exam_id"), d.get("violation_type")
-    screenshot = d.get("screenshot_url") or ""
-    if not exam_id or not vtype:
+    exam_id, vtype_raw = d.get("exam_id"), d.get("violation_type")
+    if exam_id is None or exam_id == "" or vtype_raw is None or vtype_raw == "":
         return Response({"error": "Missing required fields"}, status=400)
-    if not Exam.objects.filter(pk=exam_id).exists():
+    if not isinstance(vtype_raw, str):
+        return Response({"error": "Invalid violation_type"}, status=400)
+    vtype = vtype_raw.strip()[:80]
+    if not vtype:
+        return Response({"error": "Invalid violation_type"}, status=400)
+    screenshot = str(d.get("screenshot_url") or "")[:50_000]
+
+    instant_ban_types = frozenset(
+        {
+            "IDENTITY_SUBSTITUTION",
+            "REMOTE_CONTROL_SUSPECTED",
+        }
+    )
+    warn_types = frozenset(
+        {
+            "TAB_SWITCH_HARD",
+            "TAB_SWITCH_SOFT",
+            "FULLSCREEN_EXIT_HARD",
+            "SUSPICIOUS_AUDIO",
+            "WHISPER_OR_CONVERSATION_SUSPECTED",
+            "CAMERA_MIC_ACCESS_FAILED",
+            "FACE_NOT_VISIBLE",
+            "MULTIPLE_FACES",
+            "GAZE_AWAY_LEFT",
+            "GAZE_AWAY_RIGHT",
+            "FORBIDDEN_OBJECT_CELL_PHONE",
+            "FORBIDDEN_OBJECT_LAPTOP",
+            "FORBIDDEN_OBJECT_BOOK",
+            "CLIPBOARD_ATTEMPT",
+            "PRINT_SCREEN",
+        }
+    )
+    if vtype not in instant_ban_types and vtype not in warn_types:
+        return Response({"error": "Unknown or disallowed violation_type"}, status=400)
+
+    try:
+        exam_id_int = int(exam_id)
+    except (TypeError, ValueError):
+        return Response({"error": "Invalid exam_id"}, status=400)
+    if not Exam.objects.filter(pk=exam_id_int).exists():
         return Response({"error": "Exam not found"}, status=404)
+    if not _student_assigned_to_exam(u, exam_id_int):
+        return Response({"error": "Forbidden"}, status=403)
+
     ViolationLog.objects.create(
         student_id=u.id,
-        exam_id=exam_id,
+        exam_id=exam_id_int,
         violation_type=vtype,
         timestamp=dj_tz.now(),
         screenshot_url=screenshot,
     )
-    # Violation turlari
-    # Faqat shu 2 ta darhol ban beradi (shaxs almashinuvi va masofaviy boshqaruv)
-    instant_ban_types = {
-        "IDENTITY_SUBSTITUTION",
-        "REMOTE_CONTROL_SUSPECTED",
-    }
-    # Ogohlantirish uchun hisoblanadigan violation lar (3 ta = ban)
-    warn_types = {
-        "TAB_SWITCH_HARD",
-        "TAB_SWITCH_SOFT",
-        "FULLSCREEN_EXIT_HARD",
-        "SUSPICIOUS_AUDIO",
-        "FACE_NOT_VISIBLE",
-        "MULTIPLE_FACES",
-        "FORBIDDEN_OBJECT_CELL_PHONE",
-        "FORBIDDEN_OBJECT_LAPTOP",
-        "FORBIDDEN_OBJECT_BOOK",
-        "CLIPBOARD_ATTEMPT",
-        "PRINT_SCREEN",
-    }
 
     # Violation sababini matn sifatida qaytarish
     violation_reason_map = {
@@ -2050,17 +2212,19 @@ def student_violations(request):
         "FULLSCREEN_EXIT_HARD": "To'liq ekrandan chiqildi",
         "REMOTE_CONTROL_SUSPECTED": "Masofaviy boshqaruv aniqlandi",
         "IDENTITY_SUBSTITUTION": "Boshqa shaxs aniqlandi",
+        "GAZE_AWAY_LEFT": "Kamera markazidan chapga uzoq qaraldi",
+        "GAZE_AWAY_RIGHT": "Kamera markazidan o'ngga uzoq qaraldi",
+        "WHISPER_OR_CONVERSATION_SUSPECTED": "Past ovoz / gapirish yoki pichirlash shubhasi",
+        "CAMERA_MIC_ACCESS_FAILED": "Kamera yoki mikrofonni ishga tushirib bo'lmadi",
     }
     reason_text = violation_reason_map.get(vtype, vtype)
 
-    # Barcha violation soni
-    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id).count()
+    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
 
-    # Darhol ban (faqat shaxs almashinuvi va masofaviy boshqaruv)
     if vtype in instant_ban_types:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
-            StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")
+            StudentExam.objects.filter(student_id=u.id, exam_id=exam_id_int).update(status="Banned")
         return Response({
             "banned": True,
             "violationsCount": cnt_all,
@@ -2069,40 +2233,34 @@ def student_violations(request):
             "isFinalWarning": False,
         })
 
-    # Ogohlantirish tizimi — faqat warn_types uchun hisoblaymiz
-    if vtype not in warn_types:
-        # Noma'lum violation — faqat log, ogohlantirish yo'q
-        return Response({
-            "banned": False,
-            "violationsCount": cnt_all,
-            "warningNumber": 0,
-            "violationReason": reason_text,
-            "isFinalWarning": False,
-        })
-
     # Ogohlantirishga kiruvchi violation soni
     cnt_warn = ViolationLog.objects.filter(
-        student_id=u.id, exam_id=exam_id, violation_type__in=list(warn_types)
+        student_id=u.id, exam_id=exam_id_int, violation_type__in=list(warn_types)
     ).count()
 
-    MAX_WARNINGS = 3
-    if cnt_warn >= MAX_WARNINGS:
+    # 3 ta alohida ogohlantirish (har biri modal + «tushundim»), 4-chi hodisada ban
+    MAX_WARNINGS_BEFORE_BAN = 3
+    if cnt_warn > MAX_WARNINGS_BEFORE_BAN:
         with transaction.atomic():
             AppUser.objects.filter(pk=u.id).update(status="Banned")
-            StudentExam.objects.filter(student_id=u.id, exam_id=exam_id).update(status="Banned")
-        return Response({
-            "banned": True,
+            StudentExam.objects.filter(student_id=u.id, exam_id=exam_id_int).update(status="Banned")
+        return Response(
+            {
+                "banned": True,
+                "violationsCount": cnt_all,
+                "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                "violationReason": reason_text,
+                "isFinalWarning": False,
+            }
+        )
+
+    is_final = cnt_warn == MAX_WARNINGS_BEFORE_BAN
+    return Response(
+        {
+            "banned": False,
             "violationsCount": cnt_all,
             "warningNumber": cnt_warn,
             "violationReason": reason_text,
-            "isFinalWarning": False,
-        })
-
-    is_final = cnt_warn == MAX_WARNINGS - 1
-    return Response({
-        "banned": False,
-        "violationsCount": cnt_all,
-        "warningNumber": cnt_warn,
-        "violationReason": reason_text,
-        "isFinalWarning": is_final,
-    })
+            "isFinalWarning": is_final,
+        }
+    )

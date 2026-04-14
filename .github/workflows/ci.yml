@@ -70,6 +70,13 @@ jobs:
           JWT_SECRET: ci-placeholder-jwt-secret-min-24-chars-long
         run: python manage.py check
 
+      - name: No missing migrations
+        env:
+          DJANGO_SECRET_KEY: ci-django-secret-key-at-least-40-characters-long-x
+          DJANGO_DEBUG: "1"
+          JWT_SECRET: ci-placeholder-jwt-secret-min-24-chars-long
+        run: python manage.py makemigrations --check --dry-run
+
       - name: Django check --deploy (prod-like)
         env:
           DJANGO_SECRET_KEY: ci-django-secret-key-at-least-40-characters-long-x
@@ -86,6 +93,7 @@ jobs:
           DJANGO_SECRET_KEY: ci-django-secret-key-at-least-40-characters-long-x
           DJANGO_DEBUG: "1"
           JWT_SECRET: ci-placeholder-jwt-secret-min-24-chars-long
+          APP_BUILD_REF: ${{ github.sha }}
         run: python manage.py test apps.api.tests -v 1
 
   realtime-smoke:

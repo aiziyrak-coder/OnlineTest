@@ -180,11 +180,12 @@ export function PreExamCheck({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          exam_id: exam.id,
           profile_image_base64: profilePayload,
           live_capture_base64: capturedImageBase64,
         }),
       });
-      const data = await response.json().catch(() => ({}));
+      const data = (await readJsonSafe<{ match?: boolean; skipped?: boolean; code?: string }>(response)) || {};
       if (response.status === 503) {
         const code = data?.code || '';
         if (code === 'GEMINI_UNAVAILABLE') {

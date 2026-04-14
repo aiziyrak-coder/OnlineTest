@@ -40,7 +40,7 @@ export const translations = {
     questionText: "Savol matni",
     correctAnswer: "To'g'ri javob",
     wrongAnswer: "Xato javob",
-    rememberLogin: "Login va parolni ushbu brauzerda eslab qolish",
+    rememberLogin: "Faqat foydalanuvchi ID ni ushbu brauzerda eslab qolish (parol saqlanmaydi)",
     pin: "PIN kod",
     enterPin: "Imtihon PIN kodini kiriting",
     invalidPin: "Noto'g'ri PIN kod",
@@ -159,9 +159,9 @@ export const translations = {
     examTerminatedIdentity:
       "Kadrda profil rasmingizdagi shaxsdan boshqa odam aniqlandi. Imtihon darhol to‘xtatildi. Administratorga murojaat qiling.",
     examTerminatedWarnings:
-      "Qoidalar 3 marta buzildi. Imtihon to‘xtatildi. Administratorga murojaat qiling.",
+      "3 marta rasmiy ogohlantirishdan keyin yana qoidabuzarlik qayd etildi — imtihon to‘xtatildi va akkaunt bloklandi. Administratorga murojaat qiling.",
     proctoringSidebarHint:
-      "AI yuz, ovoz va muhitni kuzatadi. Profil rasmingiz bilan yuz taxminan har 45 soniyada solishtiriladi — boshqa shaxs aniqlansa imtihon darhol to‘xtatiladi. Boshqa buzilishlar uchun 3 ogohlantirishdan keyin bloklanasiz.",
+      "AI yuz, bosh harakati, ovoz va muhitni kuzatadi. Profil bilan yuz solishtirish ~90 s: boshqa shaxs — darhol blok. Boshqa hodisalar: har biri alohida modal (3 marta), keyingi hodisada blok.",
     semesterExamBanner:
       "Masofaviy semestr imtihoni: javoblar brauzer va serverda avtosaqlanadi; vaqt server va imtihon oynasi bo‘yicha qat’iy; boshqa varaqqa o‘tish qayd etiladi.",
     questionProgress: "Savol {cur} / {total} · {answered} javoblangan",
@@ -246,7 +246,7 @@ export const translations = {
     questionText: "Текст вопроса",
     correctAnswer: "Правильный ответ",
     wrongAnswer: "Неправильный ответ",
-    rememberLogin: "Сохранить логин и пароль в этом браузере",
+    rememberLogin: "Сохранить только ID в этом браузере (пароль не хранится)",
     pin: "PIN-код",
     enterPin: "Введите PIN-код экзамена",
     invalidPin: "Неверный PIN-код",
@@ -360,9 +360,10 @@ export const translations = {
     profilePhotoRequiredStudent: "Для студента обязательно фото профиля.",
     profilePhotoLabel: "Фото профиля",
     examTerminatedIdentity: "Обнаружено другое лицо. Экзамен немедленно прекращён.",
-    examTerminatedWarnings: "Правила нарушены (3 предупреждения). Обратитесь к администратору.",
+    examTerminatedWarnings:
+      "После 3 официальных предупреждений зафиксировано ещё одно нарушение — экзамен остановлен, аккаунт заблокирован. Обратитесь к администратору.",
     proctoringSidebarHint:
-      "ИИ следит за лицом, звуком и обстановкой. Лицо сравнивается с фото профиля ~каждые 45 с — смена лица = немедленная блокировка. Иные нарушения: 3 предупреждения.",
+      "ИИ: лицо, поворот головы, звук, обстановка. Сравнение с фото ~90 с — другое лицо = сразу блок. Прочие нарушения: три отдельных окна предупреждения, затем блок при следующем.",
     semesterExamBanner:
       "Дистанционный семестровый экзамен: ответы сохраняются в браузере и на сервере; время строго по серверу и окну экзамена; смена вкладки фиксируется.",
     questionProgress: "Вопрос {cur} / {total} · отвечено {answered}",
@@ -447,7 +448,7 @@ export const translations = {
     questionText: "Question Text",
     correctAnswer: "Correct Answer",
     wrongAnswer: "Wrong Answer",
-    rememberLogin: "Remember login and password on this browser",
+    rememberLogin: "Remember only your user ID on this browser (password is never stored)",
     pin: "PIN Code",
     enterPin: "Enter Exam PIN",
     invalidPin: "Invalid PIN",
@@ -561,9 +562,10 @@ export const translations = {
     profilePhotoRequiredStudent: "Profile photo is required for students.",
     profilePhotoLabel: "Profile photo",
     examTerminatedIdentity: "A different person was detected — exam stopped immediately. Contact your administrator.",
-    examTerminatedWarnings: "Exam rules were broken (3 warnings). Contact your administrator.",
+    examTerminatedWarnings:
+      "After three official warnings, another violation was recorded — the exam was stopped and your account was blocked. Contact your administrator.",
     proctoringSidebarHint:
-      "AI monitors face, audio, and room. Your face is compared to your profile about every 45s — a different person ends the exam immediately. Other violations: ban after 3 warnings.",
+      "AI monitors face, head movement, audio, and the room. Face vs profile ~90s — a different person ends the exam immediately. Other issues: three separate warning dialogs, then a block on the next violation.",
     semesterExamBanner:
       "Remote semester exam: answers auto-save in your browser and on the server; time is enforced by the server and exam window; switching tabs is logged.",
     questionProgress: "Question {cur} / {total} · {answered} answered",
@@ -610,3 +612,6 @@ export const translations = {
 };
 
 export type Language = 'uz' | 'ru' | 'en';
+
+/** Barcha tillar uchun bir xil kalitlar to‘plami (komponent prop tiplari). */
+export type TranslationBundle = (typeof translations)[Language];

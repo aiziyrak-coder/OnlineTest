@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiUrl } from '../lib/apiUrl';
+import { readJsonSafe } from '../lib/http';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '../components/ui';
 import { translations, Language } from '../i18n';
 import { motion, AnimatePresence } from 'motion/react';
@@ -46,18 +47,25 @@ export function AdminExamsTab({
 
   const fetchExams = async () => {
     const res = await fetch(apiUrl('/api/admin/exams'), { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setExams(await res.json());
+    if (res.ok) {
+      const raw = await readJsonSafe<unknown>(res);
+      setExams(Array.isArray(raw) ? raw : []);
+    }
   };
 
   const fetchGroups = async () => {
     const res = await fetch(apiUrl('/api/admin/groups'), { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setGroups(await res.json());
+    if (res.ok) {
+      const raw = await readJsonSafe<unknown>(res);
+      setGroups(Array.isArray(raw) ? raw : []);
+    }
   };
 
   const viewResults = async (examId: number) => {
     const res = await fetch(apiUrl(`/api/admin/exams/${examId}/results`), { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
-      setResults(await res.json());
+      const raw = await readJsonSafe<unknown>(res);
+      setResults(raw && typeof raw === 'object' ? raw : null);
       setSelectedExam(examId);
       setSortConfig(null);
       setFilterStatus('All');

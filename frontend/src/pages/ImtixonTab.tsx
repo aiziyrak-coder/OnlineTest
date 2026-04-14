@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../components/ui';
 import { translations, Language } from '../i18n';
-import { readJsonSafe } from '../lib/http';
+import { readJsonSafe, parseAdminUsersList } from '../lib/http';
 import { apiUrl } from '../lib/apiUrl';
 import { AdminExamsTab } from './AdminExamsTab';
 
@@ -64,8 +64,8 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
     const lists = await Promise.all(
       selGroups.map(async (gid) => {
         const res = await fetch(apiUrl(`/api/admin/users?group_id=${gid}&role=student`), { headers: h });
-        const j = await readJsonSafe<StudentRow[]>(res);
-        return Array.isArray(j) ? j : [];
+        const j = await readJsonSafe<unknown>(res);
+        return parseAdminUsersList<StudentRow>(j);
       }),
     );
     const merged: StudentRow[] = [];

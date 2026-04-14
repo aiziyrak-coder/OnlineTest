@@ -72,7 +72,7 @@ python manage.py bootstrap_exam   # bir marta; keyin parolni o‘zgartiring
 deactivate
 ```
 
-`bootstrap_exam` admin yaratadi: ID `fjstiadmin`, parol `fjsti123` (yoki `ADMIN_BOOTSTRAP_ID` / `ADMIN_BOOTSTRAP_PASSWORD` muhit o‘zgaruvchilari). Demo talaba endi yaratilmaydi.
+`bootstrap_exam` admin yaratadi: ID odatda `fjstiadmin` (`ADMIN_BOOTSTRAP_ID`). **Production (`DJANGO_DEBUG=0`):** `ADMIN_BOOTSTRAP_PASSWORD` muhitda majburiy va kamida **12** belgi; standart parol ishlatilmaydi. Mahalliy ishlab chiqish (`DEBUG=1`) da parol ixtiyoriy — berilmasa `fjsti123`. `deploy/bootstrap-ubuntu-once.sh` birinchi marta `api.env` da kuchli parol generatsiya qiladi (`/root/onlinetest-admin-once.txt`).
 
 ## 5) Frontend build (production)
 

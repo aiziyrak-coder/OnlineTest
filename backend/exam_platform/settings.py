@@ -21,6 +21,10 @@ JWT_SECRET = os.environ.get("JWT_SECRET", SECRET_KEY)
 if not DEBUG and (not JWT_SECRET or len(JWT_SECRET) < 24):
     raise RuntimeError("Production: JWT_SECRET (min 24 belgi) majburiy")
 
+# Nginx / reverse proxy: Host sarlavhasi to‘g‘ri bo‘lishi (faqat aniq yoqilganda).
+if os.environ.get("TRUST_X_FORWARDED_HOST", "").strip().lower() in ("1", "true", "yes"):
+    USE_X_FORWARDED_HOST = True
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -37,12 +41,14 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "apps.core.middleware.RequestIdMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.core.middleware.SecurityHeadersMiddleware",
 ]
 
 X_FRAME_OPTIONS = "DENY"
@@ -100,15 +106,30 @@ TEMPLATES = [
     },
 ]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-        "OPTIONS": {
-            "timeout": 30,
-        },
+_database_url = os.environ.get("DATABASE_URL", "").strip()
+if _database_url:
+    import dj_database_url
+
+    _conn_max = int(os.environ.get("DB_CONN_MAX_AGE", "60") or "60")
+    _conn_max = max(0, min(_conn_max, 600))
+    _ssl = os.environ.get("DATABASE_SSL_REQUIRE", "").strip().lower() in ("1", "true", "yes")
+    DATABASES = {
+        "default": dj_database_url.parse(
+            _database_url,
+            conn_max_age=_conn_max,
+            ssl_require=_ssl,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {
+                "timeout": 30,
+            },
+        }
+    }
 
 LANGUAGE_CODE = "uz"
 TIME_ZONE = "Asia/Tashkent"
@@ -135,6 +156,7 @@ if not DEBUG and not CORS_ALLOW_ALL_ORIGINS and not CORS_ALLOWED_ORIGINS:
 
 CORS_ALLOW_CREDENTIALS = False
 CORS_PREFLIGHT_MAX_AGE = 600
+CORS_EXPOSE_HEADERS = ["X-Total-Count", "X-Request-Id"]
 
 # SPA boshqa domen orqali POST (multipart /api/admin/...) yuborilganda Django CSRF
 # HTTP_ORIGIN ni CSRF_TRUSTED_ORIGINS bilan solishtiradi. GET o'tadi, POST 403 bo'lishi mumkin
@@ -183,6 +205,7 @@ REST_FRAMEWORK = {
         "user": "600/m",
         "exam_autosave": "60/m",
         "bank_ai_import": "20/h",
+        "violations": "180/h",
     },
 }
 if not DEBUG:
@@ -196,19 +219,28 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 if not DEBUG:
+    _log_json = os.environ.get("LOG_JSON", "").strip().lower() in ("1", "true", "yes")
+    _log_formatter = "json" if _log_json else "simple"
     LOGGING = {
         "version": 1,
         "disable_existing_loggers": False,
+        "filters": {
+            "request_id": {"()": "apps.core.middleware.RequestIdLogFilter"},
+        },
         "formatters": {
             "simple": {
-                "format": "{levelname} {asctime} {name} {message}",
+                "format": "{levelname} {asctime} [{request_id}] {name} {message}",
                 "style": "{",
+            },
+            "json": {
+                "()": "apps.core.logging_formatters.JsonLogFormatter",
             },
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
-                "formatter": "simple",
+                "formatter": _log_formatter,
+                "filters": ["request_id"],
             },
         },
         "root": {"handlers": ["console"], "level": "INFO"},

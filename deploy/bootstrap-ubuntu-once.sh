@@ -56,7 +56,8 @@ ensure_api_env() {
     local sk jk adm
     sk=$(openssl rand -base64 48 | tr -d '\n')
     jk=$(openssl rand -base64 36 | tr -d '\n')
-    adm=$(openssl rand -hex 10)
+    # bootstrap_exam prod: kamida 12 belgi; 16 bayt hex = 32 belgi
+    adm=$(openssl rand -hex 16)
     cat > "$f" <<EOF
 DJANGO_SECRET_KEY=${sk}
 JWT_SECRET=${jk}

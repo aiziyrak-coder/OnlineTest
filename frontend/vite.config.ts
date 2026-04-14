@@ -35,9 +35,10 @@ export default defineConfig(({ mode }) => {
       terserOptions: isProd
         ? {
             compress: {
-              drop_console: true,   // console.log, console.error va boshqalar o'chadi
-              drop_debugger: true,  // debugger; ham o'chadi
-              pure_funcs: ['console.log', 'console.info', 'console.warn', 'console.debug', 'console.error'],
+              drop_console: false,
+              drop_debugger: true,
+              // console.error saqlanadi (prod monitoring / ErrorBoundary)
+              pure_funcs: ['console.log', 'console.info', 'console.warn', 'console.debug'],
             },
           }
         : undefined,
