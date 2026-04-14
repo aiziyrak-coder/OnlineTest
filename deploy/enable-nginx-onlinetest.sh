@@ -4,7 +4,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$ROOT/deploy/nginx/onlinetest.conf"
+# ONLINETEST_NGINX_HTTP_ONLY=1 — sertifikat yo'q payt; keyin onlinetest.conf (HTTPS) ga o'ting
+if [[ "${ONLINETEST_NGINX_HTTP_ONLY:-}" == "1" ]]; then
+  SRC="$ROOT/deploy/nginx/onlinetest.http-only.conf"
+  echo "=== HTTP-only rejim (onlinetest.http-only.conf) ==="
+else
+  SRC="$ROOT/deploy/nginx/onlinetest.conf"
+  echo "=== HTTPS rejim (onlinetest.conf) — default_server yo'q, faqat exam domenlari ==="
+fi
 DST_AVAILABLE="/etc/nginx/sites-available/fjsti-onlinetest.conf"
 DST_ENABLED="/etc/nginx/sites-enabled/fjsti-onlinetest.conf"
 
@@ -20,6 +27,13 @@ fi
 
 echo "=== Boshqa konfiglarda shu domenlar bormi? (ixtiyoriy tekshiruv) ==="
 grep -rE 'server_name.*onlinetest(\.ziyrak)?\.org' /etc/nginx/sites-enabled/ 2>/dev/null | grep -v fjsti-onlinetest || true
+
+if [[ "${ONLINETEST_NGINX_HTTP_ONLY:-}" != "1" ]] && [[ ! -f /etc/letsencrypt/live/onlinetest.ziyrak.org/fullchain.pem ]]; then
+  echo "DIQQAT: Let's Encrypt sertifikati topilmadi (/etc/letsencrypt/live/onlinetest.ziyrak.org/)."
+  echo "  nginx -t xato berishi mumkin. Variantlar:"
+  echo "  1) ONLINETEST_NGINX_HTTP_ONLY=1 sudo bash deploy/enable-nginx-onlinetest.sh"
+  echo "  2) sudo bash deploy/https-certbot.sh onlinetest.ziyrak.org onlinetestapi.ziyrak.org"
+fi
 
 cp -a "$SRC" "$DST_AVAILABLE"
 ln -sf "$DST_AVAILABLE" "$DST_ENABLED"
