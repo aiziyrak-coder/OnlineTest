@@ -103,7 +103,7 @@ Lokal yoki serverda:
 ```bash
 cd /var/www/onlinetest/frontend
 cp .env.production.example .env.production
-# VITE_API_BASE_URL va VITE_SOCKET_URL ni tekshiring
+# Bir domen: VITE_API_BASE_URL va VITE_SOCKET_URL bo‘sh qoldiring (nisbiy /api/). `api.*` DNS yo‘q bo‘lsa https://api... yozmang — brauzerda ERR_NAME_NOT_RESOLVED.
 npm ci
 npm run build
 ```
