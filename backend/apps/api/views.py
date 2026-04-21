@@ -199,8 +199,16 @@ def health_ready(request):
 @throttle_classes([LoginThrottle])
 @permission_classes([AllowAny])
 def auth_login(request):
-    uid = (request.data or {}).get("id")
-    password = (request.data or {}).get("password")
+    payload = request.data or {}
+    uid = (
+        payload.get("id")
+        or payload.get("userId")
+        or payload.get("user_id")
+        or payload.get("username")
+    )
+    password = payload.get("password") or payload.get("pass") or payload.get("pwd")
+    uid = str(uid or "").strip()
+    password = str(password or "").strip()
     if not uid or not password:
         return Response({"error": "ID and password are required"}, status=400)
     user = AppUser.objects.select_related("group").filter(pk=uid).first()
