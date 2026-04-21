@@ -12,6 +12,14 @@ curl -fsSL https://raw.githubusercontent.com/aiziyrak-coder/OnlineTest/main/depl
 
 Yoki o‘z domenlaringizni bering: `CERTBOT_EMAIL=you@mail.uz FRONT_DOMAIN=online-imtixon.uz API_DOMAIN=api.online-imtixon.uz` (export) so‘ng yuqoridagi `curl | bash`.
 
+**Brauzer ochilmayaptimi / timeout?** SSH dan keyin serverda portlar va nginx:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aiziyrak-coder/OnlineTest/main/deploy/droplet-open-ports-and-verify.sh | bash
+```
+
+Bu skript **faqat server ichida** UFW + nginx + xizmatlarni tekshiradi; **DNS va DO Cloud Firewall** sizning panelingizda qo‘lda (skript oxirida eslatma chiqadi).
+
 ## Xavfsizlik (majburiy)
 
 1. Chatda yuborilgan **root parolini darhol o‘zgartiring** (`passwd`). Keyinchalik faqat **SSH kalit** (`PermitRootLogin prohibit-password`).
