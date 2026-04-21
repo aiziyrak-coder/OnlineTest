@@ -4,6 +4,14 @@
 
 **Domen ochilsa boshqa sayt chiqsa:** nginx hali ulangan emas — [TROUBLESHOOT-DOMAINS.md](./TROUBLESHOOT-DOMAINS.md). Bir marta: `sudo bash deploy/bootstrap-ubuntu-once.sh` yoki faqat nginx: `sudo bash deploy/enable-nginx-onlinetest.sh`.
 
+**Lokaldan SSH parol/kalit ishlatib bo‘lmasa (tavsiya: DO web console / «Console»):** to‘liq o‘rnatish bitta qatorda (root sifatida):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aiziyrak-coder/OnlineTest/main/deploy/droplet-bootstrap-from-console.sh | bash
+```
+
+Yoki o‘z domenlaringizni bering: `CERTBOT_EMAIL=you@mail.uz FRONT_DOMAIN=online-imtixon.uz API_DOMAIN=api.online-imtixon.uz` (export) so‘ng yuqoridagi `curl | bash`.
+
 ## Xavfsizlik (majburiy)
 
 1. Chatda yuborilgan **root parolini darhol o‘zgartiring** (`passwd`). Keyinchalik faqat **SSH kalit** (`PermitRootLogin prohibit-password`).
