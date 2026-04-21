@@ -5,25 +5,7 @@ import { translations, Language } from './i18n';
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import { InstituteLogo } from './components/InstituteLogo';
-
-const VIRTUAL_CAMERA_LABEL_RE = /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
-
-async function getPreferredCameraStream(withAudio: boolean): Promise<MediaStream> {
-  const initial = await navigator.mediaDevices.getUserMedia({ video: true, audio: withAudio });
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const preferred = devices.find(
-    (d) => d.kind === 'videoinput' && !VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')
-  );
-  if (!preferred?.deviceId) return initial;
-  const currentTrack = initial.getVideoTracks()[0];
-  const currentId = currentTrack?.getSettings?.().deviceId;
-  if (currentId && currentId === preferred.deviceId) return initial;
-  initial.getTracks().forEach((t) => t.stop());
-  return navigator.mediaDevices.getUserMedia({
-    video: { deviceId: { exact: preferred.deviceId } },
-    audio: withAudio,
-  });
-}
+import { openPreferredCameraStream } from './lib/preferredCameraStream';
 
 export function PreExamCheck({
   exam,
@@ -167,7 +149,7 @@ export function PreExamCheck({
       };
 
       try {
-        const s = await getPreferredCameraStream(true);
+        const s = await openPreferredCameraStream(true, true);
         attachStream(s);
       } catch (e1: unknown) {
         const n1 = domName(e1);
@@ -175,7 +157,7 @@ export function PreExamCheck({
         if (n1 === 'NotReadableError' || n1 === 'TrackStartError' || n1 === 'NotAllowedError') {
           let vOnly: MediaStream | null = null;
           try {
-            vOnly = await getPreferredCameraStream(false);
+            vOnly = await openPreferredCameraStream(false, true);
             const aOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             aOnly.getAudioTracks().forEach((tr) => vOnly!.addTrack(tr));
             attachStream(vOnly);

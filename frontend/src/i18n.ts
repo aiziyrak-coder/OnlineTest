@@ -249,7 +249,7 @@ export const translations = {
     preExamMediaNotFound: "Kamera yoki mikrofon topilmadi. USB va boshqa dastur (Zoom, Telegram) kamerani band qilmaganini tekshiring.",
     preExamMediaUnsupported: "Brauzer ushbu sahifada kamera/mikrofon API sini qo‘llab-quvvatlamaydi.",
     preExamMediaInUse:
-      "Kamera/mikrofonni brauzer ocholmadi. Bu doim boshqa dastur demas: Chrome → manzil qatoridagi qulfa → kamera va mikrofon «Ruxsat berish»; Windows → Maxfiylik → Kamera/Mikrofon → brauzerga ruxsat; boshqa Chrome yorlig‘ini yoping; USB kamerani qayta ulang; kerak bo‘lsa kompyuterni qayta ishga tushiring.",
+      "Brauzer kamera yoki mikrofonni ishga tushirolmadi. Sabab har doim boshqa dastur (masalan Zoom) kamerani band qilishi bo‘lmasligi ham mumkin. Tekshiring: Chrome → manzil qatoridagi qulfa → kamera va mikrofon «Ruxsat berish»; Windows → Maxfiylik → Kamera/Mikrofon → brauzerga ruxsat; boshqa Chrome yorlig‘ini yoping; USB kamerani qayta ulang; kerak bo‘lsa kompyuterni qayta ishga tushiring.",
     preExamPermissionDenied:
       "Kamera yoki mikrofon ruxsati rad etildi. Brauzerda ushbu sayt uchun kamera va mikrofonni «Ruxsat berish» qiling.",
     preExamStarting: "Boshlanmoqda...",

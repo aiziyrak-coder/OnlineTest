@@ -10,10 +10,10 @@ import { translations, Language } from './i18n';
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import type { ExamResultPayload } from './components/ExamResultSummary';
+import { openPreferredProctorStream } from './lib/preferredCameraStream';
 
 // Identity check: har 90 soniyada (45s → 90s: Gemini token tejash)
 const IDENTITY_CHECK_MS = 90_000;
-const VIRTUAL_CAMERA_LABEL_RE = /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
 
 // Rasm hajmini kamaytirish uchun (Gemini ga yuborishdan oldin)
 function compressToJpeg(video: HTMLVideoElement, quality = 0.55, maxW = 320): string {
@@ -81,31 +81,6 @@ function initialSecondsLeft(exam: ExamRoomProps['exam']) {
   const totalDurationSeconds = exam.duration_minutes * 60;
   const remaining = totalDurationSeconds - elapsedSeconds;
   return remaining > 0 ? remaining : 0;
-}
-
-async function getPreferredProctorStream(): Promise<MediaStream> {
-  const initial = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } },
-    audio: true,
-  });
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const preferred = devices.find(
-    (d) => d.kind === 'videoinput' && !VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')
-  );
-  if (!preferred?.deviceId) return initial;
-  const currentTrack = initial.getVideoTracks()[0];
-  const currentId = currentTrack?.getSettings?.().deviceId;
-  if (currentId && currentId === preferred.deviceId) return initial;
-  initial.getTracks().forEach((t) => t.stop());
-  return navigator.mediaDevices.getUserMedia({
-    video: {
-      deviceId: { exact: preferred.deviceId },
-      width: { ideal: 320 },
-      height: { ideal: 240 },
-      frameRate: { ideal: 15 },
-    },
-    audio: true,
-  });
 }
 
 // Ogohlantirish modal uchun state turi
@@ -385,7 +360,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     const setupAI = async () => {
       try {
         // 1. Setup Media with optimized constraints for lower bandwidth
-        const stream = await getPreferredProctorStream();
+        const stream = await openPreferredProctorStream();
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
