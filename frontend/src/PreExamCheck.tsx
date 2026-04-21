@@ -137,6 +137,16 @@ export function PreExamCheck({
   useEffect(() => {
     let stream: MediaStream | null = null;
     const checkDevices = async () => {
+      setError('');
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError(t.preExamMediaUnsupported);
+        return;
+      }
+      // Chrome: getUserMedia oddiy domen uchun faqat xavfsiz kontekstda (HTTPS yoki localhost)
+      if (!window.isSecureContext) {
+        setError(t.preExamRequiresHttps);
+        return;
+      }
       try {
         stream = await getPreferredCameraStream(true);
         setCameraReady(true);
@@ -144,15 +154,23 @@ export function PreExamCheck({
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
-      } catch {
-        setError(t.preExamCameraError);
+      } catch (e: unknown) {
+        const name =
+          e instanceof DOMException ? e.name : e instanceof Error ? e.name : '';
+        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+          setError(t.preExamMediaNotFound);
+        } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+          setError(t.preExamMediaInUse);
+        } else {
+          setError(t.preExamCameraError);
+        }
       }
     };
     checkDevices();
     return () => {
       if (stream) stream.getTracks().forEach((track) => track.stop());
     };
-  }, [t.preExamCameraError]);
+  }, [lang]);
 
   const verifyIdentity = async () => {
     if (!videoRef.current || !canvasRef.current || !user.profile_image) return;
