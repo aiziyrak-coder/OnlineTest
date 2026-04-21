@@ -92,6 +92,8 @@ deactivate
 
 `bootstrap_exam` admin yaratadi: ID odatda `fjstiadmin` (`ADMIN_BOOTSTRAP_ID`). **Production (`DJANGO_DEBUG=0`):** `ADMIN_BOOTSTRAP_PASSWORD` muhitda majburiy va kamida **12** belgi; standart parol ishlatilmaydi. Mahalliy ishlab chiqish (`DEBUG=1`) da parol ixtiyoriy — berilmasa `fjsti123`. `deploy/bootstrap-ubuntu-once.sh` birinchi marta `api.env` da kuchli parol generatsiya qiladi (`/root/onlinetest-admin-once.txt`).
 
+**Demo kirishlar (ixtiyoriy):** `python manage.py seed_demo_users` — `demo_admin`, `demo_student`, `demo_teacher` uchun **bir xil** parol. Prod: `api.env` da `DEMO_SEED_PASSWORD` (kamida 12 belgi) majburiy. Dev (`DEBUG=1`): o‘rnatilmasa parol `DemoFJSTI2026!`. **Eslatma:** `teacher` roli SPA login da qo‘llab-quvvatlanmaydi (403); faqat admin va student tizimga kiradi.
+
 ## 5) Frontend build (production)
 
 Lokal yoki serverda:
