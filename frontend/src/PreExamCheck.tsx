@@ -116,16 +116,14 @@ export function PreExamCheck({
       try {
         const q = navigator.permissions?.query?.bind(navigator.permissions);
         if (q) {
-          for (const permName of ['camera', 'microphone'] as const) {
-            try {
-              const st = await q({ name: permName as PermissionName });
-              if (st.state === 'denied') {
-                setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
-                return;
-              }
-            } catch {
-              /* Chromium: ba'zi versiyalarda query nomi qo'llab-quvvatlanmaydi */
+          try {
+            const st = await q({ name: 'camera' as PermissionName });
+            if (st.state === 'denied') {
+              setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
+              return;
             }
+          } catch {
+            /* Chromium: ba'zi versiyalarda query qo'llab-quvvatlanmaydi */
           }
         }
       } catch {
@@ -192,7 +190,18 @@ export function PreExamCheck({
             } else if (ref === 'NotFoundError' || ref === 'DevicesNotFoundError') {
               setError(t.preExamMediaNotFound);
             } else {
-              setError(t.preExamMediaInUse);
+              try {
+                const raw = await navigator.mediaDevices.getUserMedia({
+                  video: true,
+                  audio: false,
+                });
+                const micOk = await attachDefaultMicrophone(raw);
+                attachStream(raw);
+                if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
+                setError('');
+              } catch {
+                setError(t.preExamMediaInUse);
+              }
             }
           }
         } else if (n1 === 'SecurityError') {
@@ -203,6 +212,21 @@ export function PreExamCheck({
           setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
         } else {
           setError(t.preExamCameraError);
+        }
+      }
+
+      if (!stream) {
+        try {
+          const raw = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+          const micOk = await attachDefaultMicrophone(raw);
+          attachStream(raw);
+          if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
+          setError('');
+        } catch {
+          setError((prev) => (prev && prev.length > 0 ? prev : t.preExamMediaInUse));
         }
       }
     };

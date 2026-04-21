@@ -6,36 +6,21 @@
 const VIRTUAL_CAMERA_LABEL_RE =
   /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
 
-/** Noutbuk ichki kamerasi (ko'pincha mikrofon ham shu yerda) ustuvorligi */
-const DEFAULT_USER_FACING: MediaTrackConstraints = {
-  facingMode: { ideal: 'user' },
-};
-
 export async function openPreferredCameraStream(
   withAudio: boolean,
   video: true | MediaTrackConstraints
 ): Promise<MediaStream> {
-  const videoConstraint: MediaTrackConstraints | boolean =
-    video === true ? DEFAULT_USER_FACING : video;
-  let initial: MediaStream;
-  try {
-    initial = await navigator.mediaDevices.getUserMedia({
-      video: videoConstraint,
-      audio: withAudio,
-    });
-  } catch (e) {
-    if (
-      video === true &&
-      e instanceof DOMException &&
-      (e.name === 'OverconstrainedError' || e.name === 'ConstraintNotSatisfiedError')
-    ) {
-      initial = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: withAudio,
-      });
-    } else {
-      throw e;
-    }
+  const videoConstraint: MediaTrackConstraints | boolean = video === true ? true : video;
+  const initial = await navigator.mediaDevices.getUserMedia({
+    video: videoConstraint,
+    audio: withAudio,
+  });
+
+  const currentTrack = initial.getVideoTracks()[0];
+  const currentLabel = currentTrack?.label || '';
+  // Virtual emas, yoritilgan nom bo'lsa — qayta deviceId ochish ko'pincha NotReadable beradi; saqlaymiz
+  if (currentLabel && !VIRTUAL_CAMERA_LABEL_RE.test(currentLabel)) {
+    return initial;
   }
 
   let devices: MediaDeviceInfo[];
@@ -50,7 +35,6 @@ export async function openPreferredCameraStream(
   );
   if (!preferred?.deviceId) return initial;
 
-  const currentTrack = initial.getVideoTracks()[0];
   const currentId = currentTrack?.getSettings?.().deviceId;
   if (currentId && currentId === preferred.deviceId) return initial;
 
@@ -100,7 +84,6 @@ export async function attachDefaultMicrophone(videoStream: MediaStream): Promise
 }
 
 const PROCTOR_VIDEO: MediaTrackConstraints = {
-  facingMode: { ideal: 'user' },
   width: { ideal: 320 },
   height: { ideal: 240 },
   frameRate: { ideal: 15 },
