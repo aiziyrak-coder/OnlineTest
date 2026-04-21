@@ -153,8 +153,12 @@ sudo nginx -t
 Keyin:
 
 ```bash
-sudo certbot --nginx -d online-imtixon.uz -d api.online-imtixon.uz
-# yoki: sudo bash deploy/https-certbot.sh online-imtixon.uz api.online-imtixon.uz
+# api DNS yo'q bo'lsa — faqat apex (bitta sertifikat):
+sudo bash deploy/https-certbot.sh online-imtixon.uz
+
+# api A yozuvi tayyor bo'lsa:
+# sudo bash deploy/https-certbot.sh online-imtixon.uz api.online-imtixon.uz
+# yoki: sudo certbot --nginx -d online-imtixon.uz -d api.online-imtixon.uz
 ```
 
 Certbot konfigni yangilaydi; keyin `listen 443 ssl` bloklari paydo bo‘ladi.
