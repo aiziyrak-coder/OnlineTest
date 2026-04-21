@@ -10,6 +10,8 @@ PrivateTmp=yes
 NoNewPrivileges=yes
 RuntimeDirectory=onlinetest
 EnvironmentFile=/etc/onlinetest/api.env
+# www-data uchun HOME odatda /var/www — Gunicorn /var/www/.gunicorn yozadi va Permission denied beradi
+Environment=HOME=/var/www/onlinetest/backend
 # gunicorn.conf.py bind ni shu yerdan oladi (config fayldagi default port bilan ziddiyat bo‘lmasin)
 Environment=GUNICORN_BIND=127.0.0.1:9081
 WorkingDirectory=/var/www/onlinetest/backend
