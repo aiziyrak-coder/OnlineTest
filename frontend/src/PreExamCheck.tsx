@@ -7,6 +7,7 @@ import { apiUrl } from './lib/apiUrl';
 import { InstituteLogo } from './components/InstituteLogo';
 import {
   attachDefaultMicrophone,
+  openCameraByTryingVideoInputs,
   openPreferredCameraStream,
 } from './lib/preferredCameraStream';
 
@@ -191,16 +192,25 @@ export function PreExamCheck({
               setError(t.preExamMediaNotFound);
             } else {
               try {
-                const raw = await navigator.mediaDevices.getUserMedia({
-                  video: true,
-                  audio: false,
-                });
-                const micOk = await attachDefaultMicrophone(raw);
-                attachStream(raw);
-                if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
+                const rotated = await openCameraByTryingVideoInputs();
+                attachStream(rotated);
+                if (rotated.getAudioTracks().length === 0) {
+                  setMediaHint(t.preExamMicOnlyFailed);
+                }
                 setError('');
-              } catch (rawErr: unknown) {
-                setError(formatPreExamMediaAccessFailure(rawErr, lang));
+              } catch {
+                try {
+                  const raw = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false,
+                  });
+                  const micOk = await attachDefaultMicrophone(raw);
+                  attachStream(raw);
+                  if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
+                  setError('');
+                } catch (rawErr: unknown) {
+                  setError(formatPreExamMediaAccessFailure(rawErr, lang));
+                }
               }
             }
           }
@@ -217,18 +227,27 @@ export function PreExamCheck({
 
       if (!stream) {
         try {
-          const raw = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
-          const micOk = await attachDefaultMicrophone(raw);
-          attachStream(raw);
-          if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
+          const rotated = await openCameraByTryingVideoInputs();
+          attachStream(rotated);
+          if (rotated.getAudioTracks().length === 0) {
+            setMediaHint(t.preExamMicOnlyFailed);
+          }
           setError('');
-        } catch (finalErr: unknown) {
-          setError((prev) =>
-            prev && prev.length > 0 ? prev : formatPreExamMediaAccessFailure(finalErr, lang)
-          );
+        } catch {
+          try {
+            const raw = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+            const micOk = await attachDefaultMicrophone(raw);
+            attachStream(raw);
+            if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
+            setError('');
+          } catch (finalErr: unknown) {
+            setError((prev) =>
+              prev && prev.length > 0 ? prev : formatPreExamMediaAccessFailure(finalErr, lang)
+            );
+          }
         }
       }
     };

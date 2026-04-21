@@ -83,6 +83,40 @@ export async function attachDefaultMicrophone(videoStream: MediaStream): Promise
   }
 }
 
+/**
+ * Default kamera NotReadable bo'lsa — har bir videoinput ni ideal deviceId bilan sinaymiz
+ * (Chrome: "Could not start video source" — noto'g'ri default qurilma yoki band).
+ */
+export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const videoInputs = devices.filter((d) => d.kind === 'videoinput' && d.deviceId);
+  let lastErr: unknown;
+
+  const tryOpen = async (d: MediaDeviceInfo) => {
+    const s = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { ideal: d.deviceId } },
+      audio: false,
+    });
+    await attachDefaultMicrophone(s);
+    return s;
+  };
+
+  for (const skipVirtual of [true, false]) {
+    for (const d of videoInputs) {
+      if (skipVirtual && VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')) continue;
+      try {
+        return await tryOpen(d);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+  }
+
+  throw lastErr instanceof Error
+    ? lastErr
+    : new DOMException('Could not open any camera', 'NotReadableError');
+}
+
 const PROCTOR_VIDEO: MediaTrackConstraints = {
   width: { ideal: 320 },
   height: { ideal: 240 },
@@ -120,9 +154,13 @@ export async function openPreferredProctorStream(): Promise<MediaStream> {
     const name =
       e instanceof DOMException ? e.name : e instanceof Error ? e.name : '';
     if (name === 'NotReadableError' || name === 'TrackStartError') {
-      const v = await openPreferredCameraStream(false, PROCTOR_VIDEO);
-      await attachDefaultMicrophone(v);
-      return v;
+      try {
+        const v = await openPreferredCameraStream(false, PROCTOR_VIDEO);
+        await attachDefaultMicrophone(v);
+        return v;
+      } catch {
+        return openCameraByTryingVideoInputs();
+      }
     }
     throw e;
   }

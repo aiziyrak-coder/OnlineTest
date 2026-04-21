@@ -248,7 +248,7 @@ export const translations = {
     preExamMediaFailedIntro: "Kamera yoki mikrofon oqimini ochib bo‘lmadi.",
     mediaErrTechnical: "Brauzer xato kodi (nusxa oling, qo‘llab-quvvatlashga yuboring)",
     mediaErrNotReadable:
-      "Qurilma band yoki drayver kamerani ochmayapti. Boshqa Chrome yorliqlarini yoping, Zoom/OBS/Telegram/«Kamera» ilovasini yoping, USB kamerani qayta ulang.",
+      "«Could not start video source» odatda kamera boshqa dasturda band, drayver yoki noto‘g‘ri default qurilma. Chrome yorliqlarini yoping; Zoom/OBS/Telegram/Windows «Kamera» ni yoping; USB kamerani qayta ulang; Qurilmalar boshqaruvi → Kameralar orqali kamerani o‘chirib yoqing yoki drayverni yangilang; Microsoft Edge bilan ham sinab ko‘ring. Sayt barcha kamera qurilmalarini ketma-ket sinaydi.",
     mediaErrNotAllowed:
       "Ruxsat rad etilgan. Manzil qatoridagi qulfa → sayt sozlamalari → kamera va mikrofon «Ruxsat berish»; Windows Maxfiylik → Kamera/Mikrofon.",
     mediaErrNotFound: "Brauzer hech qanday kamera yoki mikrofon qurilmasini topmadi (USB ulanishi, qurilma o‘chirilgan).",
@@ -516,7 +516,7 @@ export const translations = {
     preExamMediaFailedIntro: "Не удалось открыть поток камеры или микрофона.",
     mediaErrTechnical: "Код ошибки браузера (скопируйте в поддержку)",
     mediaErrNotReadable:
-      "Устройство занято или драйвер не открывает камеру. Закройте другие вкладки Chrome, Zoom/OBS/Telegram/«Камера», переподключите USB-камеру.",
+      "«Could not start video source» обычно означает занятость камеры, драйвер или неверное устройство по умолчанию. Закройте вкладки Chrome, Zoom/OBS/Telegram/«Камера», переподключите USB; в диспетчере устройств отключите/включите камеру или обновите драйвер; попробуйте Microsoft Edge. Сайт перебирает все камеры по очереди.",
     mediaErrNotAllowed:
       "Доступ запрещён. Значок замка в адресной строке → настройки сайта → разрешить камеру и микрофон; параметры конфиденциальности Windows.",
     mediaErrNotFound: "Браузер не нашёл камеру/микрофон (USB, устройство выключено).",
@@ -784,7 +784,7 @@ export const translations = {
     preExamMediaFailedIntro: "Could not open the camera or microphone stream.",
     mediaErrTechnical: "Browser error code (copy for support)",
     mediaErrNotReadable:
-      "Device is busy or the driver cannot open the camera. Close other Chrome tabs, Zoom/OBS/Telegram/Camera app, reconnect the USB camera.",
+      "“Could not start video source” usually means the camera is busy, a driver issue, or the wrong default device. Close Chrome tabs, Zoom/OBS/Telegram/Camera app, reconnect USB; in Device Manager disable/enable the camera or update the driver; try Microsoft Edge. The site will try each camera device in turn.",
     mediaErrNotAllowed:
       "Permission denied. Address bar lock → site settings → allow camera and microphone; Windows Privacy → Camera/Microphone.",
     mediaErrNotFound: "No camera/microphone device found (USB, device disabled).",
