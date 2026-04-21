@@ -29,6 +29,16 @@ grep -rE "server_name.*(online-imtixon\.uz|api\.online-imtixon\.uz)" /etc/nginx/
 
 cp -a "$SRC" "$DST_AVAILABLE"
 ln -sf "$DST_AVAILABLE" "$DST_ENABLED"
+
+# SPA: nginx www-data o'qishi + katalog bo'ylab "x" (403 oldini olish)
+if [[ -d "$ROOT/frontend/dist" ]]; then
+  chmod o+rx "$ROOT" 2>/dev/null || true
+  if id www-data &>/dev/null; then
+    chown -R www-data:www-data "$ROOT/frontend/dist" 2>/dev/null || true
+  fi
+  chmod -R a+rX "$ROOT/frontend/dist" 2>/dev/null || true
+fi
+
 nginx -t
 systemctl reload nginx
 
