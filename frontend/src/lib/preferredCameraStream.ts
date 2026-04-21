@@ -83,32 +83,90 @@ export async function attachDefaultMicrophone(videoStream: MediaStream): Promise
   }
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+function uniqueVideoInputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
+  const seen = new Set<string>();
+  const out: MediaDeviceInfo[] = [];
+  for (const d of devices) {
+    if (d.kind !== 'videoinput' || !d.deviceId) continue;
+    if (seen.has(d.deviceId)) continue;
+    seen.add(d.deviceId);
+    out.push(d);
+  }
+  const rank = (d: MediaDeviceInfo) => {
+    const L = (d.label || '').toLowerCase();
+    if (/integrated|built-in|internal|facetime/.test(L)) return 0;
+    if (/usb|hd|webcam/.test(L)) return 1;
+    return 2;
+  };
+  out.sort((a, b) => rank(a) - rank(b));
+  return out;
+}
+
 /**
- * Default kamera NotReadable bo'lsa — har bir videoinput ni ideal deviceId bilan sinaymiz
- * (Chrome: "Could not start video source" — noto'g'ri default qurilma yoki band).
+ * Default kamera NotReadable bo'lsa — har bir videoinput ni bir necha cheklov bilan,
+ * qurilmalar orasida qisqa kutish bilan sinaymiz (Chrome: "Could not start video source").
  */
 export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
+  await sleep(280);
   const devices = await navigator.mediaDevices.enumerateDevices();
-  const videoInputs = devices.filter((d) => d.kind === 'videoinput' && d.deviceId);
+  const videoInputs = uniqueVideoInputs(devices);
   let lastErr: unknown;
 
-  const tryOpen = async (d: MediaDeviceInfo) => {
-    const s = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { ideal: d.deviceId } },
-      audio: false,
-    });
+  const tryConstraints = async (constraints: MediaStreamConstraints): Promise<MediaStream> => {
+    const s = await navigator.mediaDevices.getUserMedia(constraints);
     await attachDefaultMicrophone(s);
     return s;
   };
 
+  const variantsForDevice = (id: string): MediaStreamConstraints[] => [
+    { video: { deviceId: { ideal: id } }, audio: false },
+    {
+      video: {
+        deviceId: { ideal: id },
+        width: { max: 320 },
+        height: { max: 240 },
+        frameRate: { max: 15 },
+      },
+      audio: false,
+    },
+    {
+      video: {
+        deviceId: { ideal: id },
+        width: { ideal: 160 },
+        height: { ideal: 120 },
+      },
+      audio: false,
+    },
+  ];
+
   for (const skipVirtual of [true, false]) {
     for (const d of videoInputs) {
       if (skipVirtual && VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')) continue;
-      try {
-        return await tryOpen(d);
-      } catch (e) {
-        lastErr = e;
+      for (const constraints of variantsForDevice(d.deviceId)) {
+        try {
+          await sleep(200);
+          return await tryConstraints(constraints);
+        } catch (e) {
+          lastErr = e;
+        }
       }
+      await sleep(120);
+    }
+  }
+
+  const globalFallbacks: MediaStreamConstraints[] = [
+    { video: { width: { max: 320 }, height: { max: 240 }, frameRate: { max: 10 } }, audio: false },
+    { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+    { video: true, audio: false },
+  ];
+  for (const constraints of globalFallbacks) {
+    try {
+      await sleep(300);
+      return await tryConstraints(constraints);
+    } catch (e) {
+      lastErr = e;
     }
   }
 

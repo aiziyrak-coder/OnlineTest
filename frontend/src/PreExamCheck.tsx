@@ -164,6 +164,19 @@ export function PreExamCheck({
           setError(t.preExamMediaNotFound);
           return;
         }
+        if (n0 === 'NotReadableError' || n0 === 'TrackStartError') {
+          try {
+            const rotated = await openCameraByTryingVideoInputs();
+            attachStream(rotated);
+            if (rotated.getAudioTracks().length === 0) {
+              setMediaHint(t.preExamMicOnlyFailed);
+            }
+            setError('');
+            return;
+          } catch {
+            /* keyingi getUserMedia yo'llariga o'tamiz */
+          }
+        }
       }
 
       try {
