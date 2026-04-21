@@ -21,7 +21,8 @@ pip install -r requirements.txt
 cp .env.example .env        # qiymatlarni to‘ldiring (JWT_SECRET, DJANGO_SECRET_KEY)
 python manage.py migrate
 python manage.py bootstrap_exam   # DEBUG=1 da admin: fjstiadmin / fjsti123 (yoki .env)
-python manage.py seed_demo_users  # demo_admin, demo_student, demo_teacher — bitta parol (DEBUG da standart DemoFJSTI2026!)
+python manage.py seed_demo_users  # ixtiyoriy demo hisoblar (bitta parol)
+python manage.py reset_single_admin --yes  # hammasini o‘chirib faqat admin / fjsti123 (ID: admin)
 python manage.py runserver
 ```
 

@@ -94,6 +94,8 @@ deactivate
 
 **Demo kirishlar (ixtiyoriy):** `python manage.py seed_demo_users` — `demo_admin`, `demo_student`, `demo_teacher` uchun **bir xil** parol. Prod: `api.env` da `DEMO_SEED_PASSWORD` (kamida 12 belgi) majburiy. Dev (`DEBUG=1`): o‘rnatilmasa parol `DemoFJSTI2026!`. **Eslatma:** `teacher` roli SPA login da qo‘llab-quvvatlanmaydi (403); faqat admin va student tizimga kiradi.
 
+**Toza boshlash:** `python manage.py reset_single_admin --yes` — barcha `AppUser` va imtihon/natija yozuvlarini o‘chiradi, faqat **ID `admin`**, parol **`fjsti123`** qoldiradi (`--id` / `--password` bilan boshqacha ham bo‘ladi).
+
 ## 5) Frontend build (production)
 
 Lokal yoki serverda:
