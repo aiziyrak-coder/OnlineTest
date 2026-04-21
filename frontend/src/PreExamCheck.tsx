@@ -154,22 +154,50 @@ export function PreExamCheck({
         setError(t.preExamRequiresHttps);
         return;
       }
-      try {
-        stream = await getPreferredCameraStream(true);
-        setCameraReady(true);
-        setMicReady(true);
+      const domName = (err: unknown) =>
+        err instanceof DOMException ? err.name : err instanceof Error ? err.name : '';
+
+      const attachStream = (s: MediaStream) => {
+        stream = s;
+        setCameraReady(s.getVideoTracks().length > 0);
+        setMicReady(s.getAudioTracks().length > 0);
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          videoRef.current.srcObject = s;
         }
-      } catch (e: unknown) {
-        const name =
-          e instanceof DOMException ? e.name : e instanceof Error ? e.name : '';
-        if (name === 'SecurityError') {
+      };
+
+      try {
+        const s = await getPreferredCameraStream(true);
+        attachStream(s);
+      } catch (e1: unknown) {
+        const n1 = domName(e1);
+        // Bir vaqtda video+audio ba'zi Windows/Chrome da NotReadableError beradi; alohida olish ko'pincha ishlaydi
+        if (n1 === 'NotReadableError' || n1 === 'TrackStartError' || n1 === 'NotAllowedError') {
+          let vOnly: MediaStream | null = null;
+          try {
+            vOnly = await getPreferredCameraStream(false);
+            const aOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            aOnly.getAudioTracks().forEach((tr) => vOnly!.addTrack(tr));
+            attachStream(vOnly);
+            setError('');
+          } catch {
+            if (vOnly) vOnly.getTracks().forEach((tr) => tr.stop());
+            if (n1 === 'NotAllowedError' || n1 === 'PermissionDeniedError') {
+              setError(t.preExamPermissionDenied);
+            } else if (n1 === 'SecurityError') {
+              setError(t.preExamRequiresHttps);
+            } else if (n1 === 'NotFoundError' || n1 === 'DevicesNotFoundError') {
+              setError(t.preExamMediaNotFound);
+            } else {
+              setError(t.preExamMediaInUse);
+            }
+          }
+        } else if (n1 === 'SecurityError') {
           setError(t.preExamRequiresHttps);
-        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        } else if (n1 === 'NotFoundError' || n1 === 'DevicesNotFoundError') {
           setError(t.preExamMediaNotFound);
-        } else if (name === 'NotReadableError' || name === 'TrackStartError') {
-          setError(t.preExamMediaInUse);
+        } else if (n1 === 'NotAllowedError' || n1 === 'PermissionDeniedError') {
+          setError(t.preExamPermissionDenied);
         } else {
           setError(t.preExamCameraError);
         }

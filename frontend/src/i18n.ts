@@ -248,7 +248,10 @@ export const translations = {
       "Manzilni https:// bilan oching (masalan https://online-imtixon.uz). HTTP da kamera/mikrofon brauzer tomonidan bloklanadi. Serverda: sudo bash deploy/https-certbot.sh online-imtixon.uz va nginx HTTPS.",
     preExamMediaNotFound: "Kamera yoki mikrofon topilmadi. USB va boshqa dastur (Zoom, Telegram) kamerani band qilmaganini tekshiring.",
     preExamMediaUnsupported: "Brauzer ushbu sahifada kamera/mikrofon API sini qo‘llab-quvvatlamaydi.",
-    preExamMediaInUse: "Kamera boshqa dasturda ochiq. Barcha dasturlarni yoping va sahifani yangilang.",
+    preExamMediaInUse:
+      "Kamera/mikrofonni brauzer ocholmadi. Bu doim boshqa dastur demas: Chrome → manzil qatoridagi qulfa → kamera va mikrofon «Ruxsat berish»; Windows → Maxfiylik → Kamera/Mikrofon → brauzerga ruxsat; boshqa Chrome yorlig‘ini yoping; USB kamerani qayta ulang; kerak bo‘lsa kompyuterni qayta ishga tushiring.",
+    preExamPermissionDenied:
+      "Kamera yoki mikrofon ruxsati rad etildi. Brauzerda ushbu sayt uchun kamera va mikrofonni «Ruxsat berish» qiling.",
     preExamStarting: "Boshlanmoqda...",
     preExamStartError: "Imtihonni boshlashda xatolik",
     preExamServerError: "Xatolik.",
@@ -499,7 +502,10 @@ export const translations = {
       "Откройте сайт по https:// (например https://online-imtixon.uz). На HTTP браузер блокирует камеру/микрофон. На сервере: certbot + nginx HTTPS.",
     preExamMediaNotFound: "Камера или микрофон не найдены. Проверьте USB и что Zoom/Telegram не занимают камеру.",
     preExamMediaUnsupported: "Браузер не поддерживает доступ к камере/микрофону на этой странице.",
-    preExamMediaInUse: "Камера занята другим приложением. Закройте его и обновите страницу.",
+    preExamMediaInUse:
+      "Браузер не может открыть камеру/микрофон. Это не всегда «другое приложение»: разрешения сайта в Chrome, параметры конфиденциальности Windows, другая вкладка Chrome, переподключение USB-камеры, перезагрузка ПК.",
+    preExamPermissionDenied:
+      "Доступ к камере/микрофону запрещён. В настройках сайта в Chrome разрешите камеру и микрофон.",
     preExamStarting: "Запуск...",
     preExamStartError: "Ошибка запуска экзамена",
     preExamServerError: "Ошибка.",
@@ -750,7 +756,10 @@ export const translations = {
       "Open the site with https:// (e.g. https://online-imtixon.uz). HTTP blocks camera/mic in the browser. On the server: certbot + nginx HTTPS.",
     preExamMediaNotFound: "No camera or microphone found. Check USB and that Zoom/Telegram are not using the camera.",
     preExamMediaUnsupported: "This browser/page does not support camera/microphone access.",
-    preExamMediaInUse: "The camera is in use by another app. Close it and refresh.",
+    preExamMediaInUse:
+      "The browser could not open the camera/microphone. It is not always another app: allow camera+mic for this site in Chrome, check Windows Privacy → Camera/Microphone, close other Chrome tabs, reconnect USB camera, or reboot.",
+    preExamPermissionDenied:
+      "Camera or microphone permission was denied. In Chrome site settings, allow camera and microphone for this site.",
     preExamStarting: "Starting...",
     preExamStartError: "Failed to start exam",
     preExamServerError: "Error.",
