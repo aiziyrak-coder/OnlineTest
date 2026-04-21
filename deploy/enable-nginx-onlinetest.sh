@@ -5,6 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/deploy/nginx/onlinetest.conf"
 if [[ "${ONLINETEST_NGINX_HTTP_ONLY:-}" == "1" ]]; then
   SRC="$ROOT/deploy/nginx/onlinetest.http-only.conf"
+elif [[ ! -f /etc/letsencrypt/live/online-imtixon.uz/fullchain.pem ]]; then
+  # HTTPS bloki fullchain.pem siz ishlamaydi — nginx yiqilmasligi uchun HTTP-only
+  echo "[enable-nginx] SSL sertifikat yo'q (/etc/letsencrypt/live/online-imtixon.uz/)."
+  echo "[enable-nginx] Vaqtincha HTTP-only (80). Keyin: DNS (api A yozuvi) + certbot, so'ng: sudo bash deploy/enable-nginx-onlinetest.sh"
+  SRC="$ROOT/deploy/nginx/onlinetest.http-only.conf"
 fi
 
 DST_AVAILABLE="/etc/nginx/sites-available/fjsti-onlinetest.conf"
@@ -21,11 +26,6 @@ if [[ ! -f "$SRC" ]]; then
 fi
 
 grep -rE "server_name.*(online-imtixon\.uz|api\.online-imtixon\.uz)" /etc/nginx/sites-enabled/ 2>/dev/null | grep -v fjsti-onlinetest || true
-
-if [[ "${ONLINETEST_NGINX_HTTP_ONLY:-}" != "1" ]] && [[ ! -f /etc/letsencrypt/live/online-imtixon.uz/fullchain.pem ]]; then
-  echo "Warning: cert not found in /etc/letsencrypt/live/online-imtixon.uz/"
-  echo "Use: sudo bash deploy/https-certbot.sh online-imtixon.uz api.online-imtixon.uz"
-fi
 
 cp -a "$SRC" "$DST_AVAILABLE"
 ln -sf "$DST_AVAILABLE" "$DST_ENABLED"

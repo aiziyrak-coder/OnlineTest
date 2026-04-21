@@ -20,6 +20,8 @@ curl -fsSL https://raw.githubusercontent.com/aiziyrak-coder/OnlineTest/main/depl
 
 Bu skript **faqat server ichida** UFW + nginx + xizmatlarni tekshiradi; **DNS va DO Cloud Firewall** sizning panelingizda qo‘lda (skript oxirida eslatma chiqadi).
 
+**`api.online-imtixon.uz` DNS yo‘q / sertifikat chiqmayaptimi:** `sudo bash deploy/enable-nginx-onlinetest.sh` endi **sertifikat bo‘lmasa** avtomatik **HTTP-only** nginx qo‘yadi (`nginx -t` yiqilmasin). DNS da `api` uchun **A** yozuvi paydo bo‘lib, certbot muvaffaq bo‘lgach, yana shu skriptni ishga tushiring — HTTPS konfig yuklanadi.
+
 ## Xavfsizlik (majburiy)
 
 1. Chatda yuborilgan **root parolini darhol o‘zgartiring** (`passwd`). Keyinchalik faqat **SSH kalit** (`PermitRootLogin prohibit-password`).
