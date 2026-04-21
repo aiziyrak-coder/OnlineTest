@@ -56,10 +56,16 @@ function targetInSameExamRoom(examId, targetSocketId) {
 
 if (jwtAuthEnabled) {
   io.use((socket, next) => {
+    // Prod: token URL query da — server loglari / proxy access loglarida ochilishi mumkin.
+    const fromQuery =
+      typeof socket.handshake.query?.token === 'string' ? socket.handshake.query.token : '';
+    if (isProd && fromQuery) {
+      return next(new Error('Unauthorized: do not pass token in query string'));
+    }
     const raw =
       socket.handshake.auth?.token ||
       socket.handshake.auth?.jwt ||
-      (typeof socket.handshake.query?.token === 'string' ? socket.handshake.query.token : '');
+      (isProd ? '' : fromQuery);
     if (!raw || typeof raw !== 'string') {
       return next(new Error('Unauthorized: missing token'));
     }
@@ -68,6 +74,9 @@ if (jwtAuthEnabled) {
         algorithms: ['HS256'],
         clockTolerance: 60,
       });
+      if (typeof payload.exp !== 'number') {
+        return next(new Error('Unauthorized: token must include exp'));
+      }
       const userId = payload.id ?? payload.sub;
       if (userId == null || userId === '') {
         return next(new Error('Unauthorized: invalid payload'));

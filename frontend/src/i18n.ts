@@ -195,7 +195,8 @@ export const translations = {
     violationFinalNotice:
       "Bu oxirgi ogohlantirish (3/3). Keyingi qoidabuzarlik imtihonni tugatadi va akkauntingiz bloklanadi.",
     violationReasonLabel: "Sabab",
-    violationFooterHonest: "Imtihonni halol davom ettiring.",
+    violationFooterHonest:
+      "Bir daqiqa ichidagi bir nechta shubha bitta ogohlantirish sifatida yoziladi. Imtihonni halol davom ettiring.",
     examEndedTitle: "Imtihon to‘xtatildi",
     banReportDownload: "Rasmiy BAN hisobotini yuklab olish",
     banBackToDashboard: "Bosh sahifaga qaytish",
@@ -440,7 +441,8 @@ export const translations = {
     violationFinalNotice:
       "Это последнее предупреждение (3 из 3). Следующее нарушение завершит экзамен и заблокирует аккаунт.",
     violationReasonLabel: "Причина",
-    violationFooterHonest: "Продолжайте экзамен честно.",
+    violationFooterHonest:
+      "Несколько подозрений в течение минуты считаются одним предупреждением. Продолжайте экзамен честно.",
     examEndedTitle: "Экзамен остановлен",
     banReportDownload: "Скачать официальный отчёт о блокировке (BAN)",
     banBackToDashboard: "Вернуться на главную",
@@ -685,7 +687,8 @@ export const translations = {
     violationFinalNotice:
       "This is your final warning (3 of 3). Another violation will end the exam and block your account.",
     violationReasonLabel: "Reason",
-    violationFooterHonest: "Continue the exam honestly.",
+    violationFooterHonest:
+      "Multiple suspicious events within one minute count as a single warning. Continue the exam honestly.",
     examEndedTitle: "Exam stopped",
     banReportDownload: "Download official ban report (PDF)",
     banBackToDashboard: "Back to dashboard",

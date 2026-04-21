@@ -14,8 +14,8 @@
 
 | Xizmat   | Domen                      | Nginx root / proxy        |
 |----------|----------------------------|---------------------------|
-| Frontend | `onlinetest.ziyrak.org`    | Statik `frontend/dist`    |
-| API+WS   | `onlinetestapi.ziyrak.org` | `127.0.0.1:9081` + `:9082` |
+| Frontend | `online-imtixon.uz`    | Statik `frontend/dist`    |
+| API+WS   | `api.online-imtixon.uz` | `127.0.0.1:9081` + `:9082` |
 
 Boshqa loyihalarga tegmaslik: faqat **loopback** (`127.0.0.1`) portlari; tashqi dunyoga faqat **80/443** orqali nginx.
 
@@ -35,7 +35,7 @@ Agar `9081` yoki `9082` band bo‘lsa, boshqa bo‘sh port tanlang va quyidagila
 
 ## 2) DNS
 
-`onlinetest` va `onlinetestapi` uchun **A** yozuvlari droplet IP (`167.71.53.238`) ga.
+`online-imtixon.uz` va `api.online-imtixon.uz` uchun **A** yozuvlari droplet IP (`209.38.239.183`) ga.
 
 ## 3) Serverda katalog va kod
 
@@ -54,7 +54,7 @@ sudo rm -rf /var/www/onlinetest
 sudo mkdir -p /var/www/onlinetest
 sudo git clone https://github.com/aiziyrak-coder/OnlineTest.git /var/www/onlinetest
 cd /var/www/onlinetest
-sudo CERTBOT_EMAIL=admin@ziyrak.org FRONT_DOMAIN=onlinetest.ziyrak.org API_DOMAIN=onlinetestapi.ziyrak.org bash deploy/full-install-root.sh
+sudo CERTBOT_EMAIL=admin@online-imtixon.uz FRONT_DOMAIN=online-imtixon.uz API_DOMAIN=api.online-imtixon.uz bash deploy/full-install-root.sh
 ```
 
 ## 4) Backend
@@ -122,8 +122,8 @@ sudo nginx -t && sudo systemctl reload nginx
 Ikki domen uchun SSL (yoki qo‘lda):
 
 ```bash
-sudo certbot --nginx -d onlinetest.ziyrak.org -d onlinetestapi.ziyrak.org
-# yoki: sudo bash deploy/https-certbot.sh onlinetest.ziyrak.org onlinetestapi.ziyrak.org
+sudo certbot --nginx -d online-imtixon.uz -d api.online-imtixon.uz
+# yoki: sudo bash deploy/https-certbot.sh online-imtixon.uz api.online-imtixon.uz
 ```
 
 Certbot konfigni yangilaydi; keyin `listen 443 ssl` bloklari paydo bo‘ladi.
@@ -149,8 +149,8 @@ bash deploy/remote-update.sh --no-autostash
 
 ## Tekshiruv
 
-- `https://onlinetestapi.ziyrak.org/api/health` — `{"ok":true,"database":true}`
-- `https://onlinetest.ziyrak.org` — SPA yuklanishi
+- `https://api.online-imtixon.uz/api/health` — `{"ok":true,"database":true}`
+- `https://online-imtixon.uz` — SPA yuklanishi
 - Brauzerda login va imtihon oqimi
 
 ## Xavfsizlik (audit qoidalari)

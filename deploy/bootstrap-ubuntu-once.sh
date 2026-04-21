@@ -2,13 +2,13 @@
 # Ubuntu droplet: nginx, git, Python venv, Node 20, klon, env (avto kalit), systemd, build, nginx.
 # Bir marta root:
 #   sudo bash deploy/bootstrap-ubuntu-once.sh
-#   sudo CERTBOT_EMAIL=you@mail.com FRONT_DOMAIN=onlinetest.ziyrak.org API_DOMAIN=onlinetestapi.ziyrak.org bash deploy/bootstrap-ubuntu-once.sh
+#   sudo CERTBOT_EMAIL=you@mail.com FRONT_DOMAIN=online-imtixon.uz API_DOMAIN=api.online-imtixon.uz bash deploy/bootstrap-ubuntu-once.sh
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/aiziyrak-coder/OnlineTest.git}"
 APP="${APP_PATH:-/var/www/onlinetest}"
-FRONT_DOMAIN="${FRONT_DOMAIN:-onlinetest.ziyrak.org}"
-API_DOMAIN="${API_DOMAIN:-onlinetestapi.ziyrak.org}"
+FRONT_DOMAIN="${FRONT_DOMAIN:-online-imtixon.uz}"
+API_DOMAIN="${API_DOMAIN:-api.online-imtixon.uz}"
 
 if [[ $(id -u) -ne 0 ]]; then
   echo "Faqat root yoki sudo -i"

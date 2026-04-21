@@ -7,8 +7,8 @@ import os
 # bind faqat GUNICORN_BIND orqali (CLI --bind ba'zi versiyalarda config bilan ziddiyat qiladi).
 # Server: systemd Environment=GUNICORN_BIND=127.0.0.1:9081 | Docker: ENV GUNICORN_BIND=0.0.0.0:8000
 _bind = os.environ.get("GUNICORN_BIND", "").strip()
-if _bind:
-    bind = _bind
+# Bo'sh bo'lsa modulda `bind` yo'q qolmasin (Linuxda systemd/env xatosi).
+bind = _bind or "127.0.0.1:8000"
 
 workers = int(os.environ.get("WEB_CONCURRENCY", str(min(multiprocessing.cpu_count() * 2 + 1, 9))))
 workers = max(2, workers)

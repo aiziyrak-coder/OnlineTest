@@ -43,7 +43,7 @@ cat gh_deploy_onlinetest   # PRIVATE kalit — faqat Secret SSH_PRIVATE_KEY
 
 | Nomi | Tavsif | Majburiy |
 |------|--------|----------|
-| `SSH_HOST` | Masalan `167.71.53.238` | ha |
+| `SSH_HOST` | Masalan `209.38.239.183` | ha |
 | `SSH_USERNAME` | Masalan `root` | ha |
 | `SSH_PRIVATE_KEY` | To‘liq private key matni | kalit bilan — ha |
 | `SSH_PASSWORD` | Server paroli | parol bilan — ha |

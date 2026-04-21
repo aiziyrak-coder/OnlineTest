@@ -7,7 +7,7 @@ import secrets
 import tempfile
 import base64
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.core import signing
 import jwt
 
@@ -2170,6 +2170,8 @@ def student_violations(request):
             "MULTIPLE_FACES",
             "GAZE_AWAY_LEFT",
             "GAZE_AWAY_RIGHT",
+            "GAZE_AWAY_UP",
+            "GAZE_AWAY_DOWN",
             "FORBIDDEN_OBJECT_CELL_PHONE",
             "FORBIDDEN_OBJECT_LAPTOP",
             "FORBIDDEN_OBJECT_BOOK",
@@ -2189,17 +2191,9 @@ def student_violations(request):
     if not _student_assigned_to_exam(u, exam_id_int):
         return Response({"error": "Forbidden"}, status=403)
 
-    ViolationLog.objects.create(
-        student_id=u.id,
-        exam_id=exam_id_int,
-        violation_type=vtype,
-        timestamp=dj_tz.now(),
-        screenshot_url=screenshot,
-    )
-
     # Violation sababini matn sifatida qaytarish
     violation_reason_map = {
-        "SUSPICIOUS_AUDIO": "Shubhali ovoz aniqlandi",
+        "SUSPICIOUS_AUDIO": "Shubhali ovoz aniqlandi (gapirish yoki shovqin)",
         "FACE_NOT_VISIBLE": "Yuzingiz kamerada ko'rinmayapti",
         "MULTIPLE_FACES": "Kadrda bir nechta shaxs aniqlandi",
         "FORBIDDEN_OBJECT_CELL_PHONE": "Telefon aniqlandi",
@@ -2212,55 +2206,98 @@ def student_violations(request):
         "FULLSCREEN_EXIT_HARD": "To'liq ekrandan chiqildi",
         "REMOTE_CONTROL_SUSPECTED": "Masofaviy boshqaruv aniqlandi",
         "IDENTITY_SUBSTITUTION": "Boshqa shaxs aniqlandi",
-        "GAZE_AWAY_LEFT": "Kamera markazidan chapga uzoq qaraldi",
-        "GAZE_AWAY_RIGHT": "Kamera markazidan o'ngga uzoq qaraldi",
-        "WHISPER_OR_CONVERSATION_SUSPECTED": "Past ovoz / gapirish yoki pichirlash shubhasi",
+        "GAZE_AWAY_LEFT": "Kamera markazidan chapga uzoq qaraldi (nojo'ya harakat)",
+        "GAZE_AWAY_RIGHT": "Kamera markazidan o'ngga uzoq qaraldi (nojo'ya harakat)",
+        "GAZE_AWAY_UP": "Tepaga uzoq qaraldi (nojo'ya harakat)",
+        "GAZE_AWAY_DOWN": "Pastga uzoq qaraldi (nojo'ya harakat)",
+        "WHISPER_OR_CONVERSATION_SUSPECTED": "Past ovoz / gapirish yoki suhbat shubhasi",
         "CAMERA_MIC_ACCESS_FAILED": "Kamera yoki mikrofonni ishga tushirib bo'lmadi",
     }
     reason_text = violation_reason_map.get(vtype, vtype)
 
-    cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
+    WARN_SUPPRESS_SECONDS = 60
+    MAX_WARNINGS_BEFORE_BAN = 3  # 3 ta modal; 4-chi rasmiy epizodda ban
 
-    if vtype in instant_ban_types:
-        with transaction.atomic():
-            AppUser.objects.filter(pk=u.id).update(status="Banned")
-            StudentExam.objects.filter(student_id=u.id, exam_id=exam_id_int).update(status="Banned")
-        return Response({
-            "banned": True,
-            "violationsCount": cnt_all,
-            "warningNumber": 3,
-            "violationReason": reason_text,
-            "isFinalWarning": False,
-        })
+    with transaction.atomic():
+        se = (
+            StudentExam.objects.select_for_update()
+            .filter(student_id=u.id, exam_id=exam_id_int)
+            .first()
+        )
+        if se is None:
+            se = StudentExam.objects.create(student_id=u.id, exam_id=exam_id_int, status="Pending")
+            se = StudentExam.objects.select_for_update().get(pk=se.pk)
 
-    # Ogohlantirishga kiruvchi violation soni
-    cnt_warn = ViolationLog.objects.filter(
-        student_id=u.id, exam_id=exam_id_int, violation_type__in=list(warn_types)
-    ).count()
-
-    # 3 ta alohida ogohlantirish (har biri modal + «tushundim»), 4-chi hodisada ban
-    MAX_WARNINGS_BEFORE_BAN = 3
-    if cnt_warn > MAX_WARNINGS_BEFORE_BAN:
-        with transaction.atomic():
-            AppUser.objects.filter(pk=u.id).update(status="Banned")
-            StudentExam.objects.filter(student_id=u.id, exam_id=exam_id_int).update(status="Banned")
-        return Response(
-            {
-                "banned": True,
-                "violationsCount": cnt_all,
-                "warningNumber": MAX_WARNINGS_BEFORE_BAN,
-                "violationReason": reason_text,
-                "isFinalWarning": False,
-            }
+        ViolationLog.objects.create(
+            student_id=u.id,
+            exam_id=exam_id_int,
+            violation_type=vtype,
+            timestamp=dj_tz.now(),
+            screenshot_url=screenshot,
         )
 
-    is_final = cnt_warn == MAX_WARNINGS_BEFORE_BAN
-    return Response(
-        {
-            "banned": False,
-            "violationsCount": cnt_all,
-            "warningNumber": cnt_warn,
-            "violationReason": reason_text,
-            "isFinalWarning": is_final,
-        }
-    )
+        cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
+
+        if vtype in instant_ban_types:
+            AppUser.objects.filter(pk=u.id).update(status="Banned")
+            StudentExam.objects.filter(pk=se.pk).update(status="Banned")
+            return Response(
+                {
+                    "banned": True,
+                    "violationsCount": cnt_all,
+                    "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                    "violationReason": reason_text,
+                    "isFinalWarning": False,
+                    "warningSuppressed": False,
+                    "officialWarnings": se.proctor_official_warnings,
+                }
+            )
+
+        now = dj_tz.now()
+        last = se.proctor_last_warning_at
+        if last is not None and (now - last) < timedelta(seconds=WARN_SUPPRESS_SECONDS):
+            return Response(
+                {
+                    "banned": False,
+                    "warningSuppressed": True,
+                    "violationsCount": cnt_all,
+                    "warningNumber": 0,
+                    "violationReason": reason_text,
+                    "isFinalWarning": False,
+                    "officialWarnings": se.proctor_official_warnings,
+                }
+            )
+
+        se.proctor_official_warnings = int(se.proctor_official_warnings or 0) + 1
+        se.proctor_last_warning_at = now
+
+        if se.proctor_official_warnings >= 4:
+            AppUser.objects.filter(pk=u.id).update(status="Banned")
+            se.status = "Banned"
+            se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at", "status"])
+            return Response(
+                {
+                    "banned": True,
+                    "violationsCount": cnt_all,
+                    "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                    "violationReason": reason_text,
+                    "isFinalWarning": False,
+                    "warningSuppressed": False,
+                    "officialWarnings": se.proctor_official_warnings,
+                }
+            )
+
+        se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at"])
+        cnt_warn = se.proctor_official_warnings
+        is_final = cnt_warn == MAX_WARNINGS_BEFORE_BAN
+        return Response(
+            {
+                "banned": False,
+                "warningSuppressed": False,
+                "violationsCount": cnt_all,
+                "warningNumber": cnt_warn,
+                "violationReason": reason_text,
+                "isFinalWarning": is_final,
+                "officialWarnings": cnt_warn,
+            }
+        )

@@ -302,7 +302,7 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(TestBankQuestion.objects.count(), 1)
 
     def test_violation_three_distinct_warnings_then_ban_on_fourth(self):
-        """3 ta ogohlantirish (har biri alohida log), 4-chi hodisada ban — bir martada 3 ta bo'lib ban bo'lmasin."""
+        """3 ta rasmiy ogohlantirish (har biri oldingisidan 60s o'tgach), 4-chi epizodda ban."""
         hp = bcrypt.hashpw(b"vstudent2", bcrypt.gensalt(rounds=10)).decode("ascii")
         st2 = AppUser.objects.create(
             id="itest_student_viol",
@@ -331,8 +331,12 @@ class ExamFlowApiTests(TestCase):
             self.assertEqual(r.status_code, 200, msg=f"warn step {i}")
             body = r.json()
             self.assertFalse(body.get("banned"), msg=f"step {i} should not ban yet")
+            self.assertFalse(body.get("warningSuppressed"), msg=f"step {i} must count")
             self.assertEqual(body.get("warningNumber"), i + 1)
             self.assertEqual(body.get("isFinalWarning"), i == 2)
+            StudentExam.objects.filter(student_id=st2.id, exam_id=eid).update(
+                proctor_last_warning_at=dj_tz.now() - timedelta(seconds=61)
+            )
         r4 = self.client.post(
             "/api/student/violations",
             {"exam_id": eid, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
@@ -342,6 +346,45 @@ class ExamFlowApiTests(TestCase):
         self.assertTrue(r4.json().get("banned"))
         st2.refresh_from_db()
         self.assertEqual(st2.status, "Banned")
+
+    def test_violation_multiple_types_within_one_minute_single_warning(self):
+        """1 daqiqa ichida turli violationlar — faqat bitta rasmiy ogohlantirish."""
+        hp = bcrypt.hashpw(b"vstudent3", bcrypt.gensalt(rounds=10)).decode("ascii")
+        st3 = AppUser.objects.create(
+            id="itest_student_viol3",
+            password=hp,
+            role="student",
+            name="Viol Student 3",
+            status="Active",
+            group_id=self.group.id,
+            profile_image="",
+        )
+        r0 = self.client.post(
+            "/api/auth/login",
+            {"id": "itest_student_viol3", "password": "vstudent3"},
+            format="json",
+        )
+        self.assertEqual(r0.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
+        eid = self.exam_a.id
+        r1 = self.client.post(
+            "/api/student/violations",
+            {"exam_id": eid, "violation_type": "FACE_NOT_VISIBLE", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r1.json().get("warningNumber"), 1)
+        self.assertFalse(r1.json().get("warningSuppressed"))
+        r2 = self.client.post(
+            "/api/student/violations",
+            {"exam_id": eid, "violation_type": "SUSPICIOUS_AUDIO", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertTrue(r2.json().get("warningSuppressed"))
+        self.assertEqual(r2.json().get("warningNumber"), 0)
+        se = StudentExam.objects.get(student_id=st3.id, exam_id=eid)
+        self.assertEqual(se.proctor_official_warnings, 1)
 
     def test_health_includes_database(self):
         r = self.client.get("/api/health")

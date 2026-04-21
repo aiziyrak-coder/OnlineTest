@@ -8,7 +8,7 @@ Buning sababi odatda: **nginx sizning `server_name` uchun blokni umuman yuklamag
 sudo nginx -T 2>/dev/null | grep -E 'server_name|fjsti-onlinetest'
 ```
 
-`onlinetest.ziyrak.org` va `onlinetestapi.ziyrak.org` **faqat** `fjsti-onlinetest.conf` ichida bo‘lishi kerak. Agar boshqa `sites-enabled` faylida ham shu nomlar bo‘lsa — **birini o‘chiring** yoki domenni bir joyga qoldiring.
+`online-imtixon.uz` va `api.online-imtixon.uz` **faqat** `fjsti-onlinetest.conf` ichida bo‘lishi kerak. Agar boshqa `sites-enabled` faylida ham shu nomlar bo‘lsa — **birini o‘chiring** yoki domenni bir joyga qoldiring.
 
 ## 2) Sayt yoqilganmi?
 
@@ -26,8 +26,8 @@ sudo bash deploy/enable-nginx-onlinetest.sh
 ## 3) Loopbackdan tekshiruv (qaysi virtual host ishlayapti)
 
 ```bash
-curl -sS -H 'Host: onlinetest.ziyrak.org' http://127.0.0.1/healthz
-curl -sS -H 'Host: onlinetestapi.ziyrak.org' http://127.0.0.1/api/health
+curl -sS -H 'Host: online-imtixon.uz' http://127.0.0.1/healthz
+curl -sS -H 'Host: api.online-imtixon.uz' http://127.0.0.1/api/health
 ```
 
 Birinchi `ok`, ikkinchi `{"ok":true` kabi bo‘lishi kerak. Agar boshqa HTML chiqsa — hali noto‘g‘ri `server` bloki ishlayapti.

@@ -103,6 +103,9 @@ class StudentExam(models.Model):
     result_public_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
     result_verify_secret = models.CharField(max_length=128, blank=True, null=True)
     ai_summary_json = models.TextField(blank=True, null=True)
+    # Proktorlik: rasmiy ogohlantirish (1 daqiqada bir nechta qonunbuzarlik = 1 ta); 4-chi epizodda ban
+    proctor_official_warnings = models.PositiveSmallIntegerField(default=0)
+    proctor_last_warning_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "student_exams"

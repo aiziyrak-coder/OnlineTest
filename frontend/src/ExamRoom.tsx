@@ -343,7 +343,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const singleFaceRef = useRef(false);
   const identityCheckBusyRef = useRef(false);
   const logViolationRef = useRef<(type: string) => Promise<void>>(async () => {});
-  /** Ogohlantirish modali ochiq — yangi ogohlantirish yuborilmaydi (ketma-ket 3 ta alohida modal). Darhol ban turlari bundan mustasno. */
+  /** Ogohlantirish modali ochiq (UI); serverga yozuvlar baribir ketadi (60s birlashtirish serverda). */
   const violationModalOpenRef = useRef(false);
   useEffect(() => {
     violationModalOpenRef.current = violationWarning !== null;
@@ -493,11 +493,15 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
   // Frame counter — object detection ni kamroq chaqirish uchun
   const frameCountRef = useRef(0);
-  /** Yuz bbox markazini kenglikka nisbatan: uzoq chap/o'ng qarash (~4.5s ketma-ket). */
+  /** Yuz bbox markazini kenglik/balandlikka nisbatan: chap/o'ng/tepa/past (~3s ketma-ket, 2 frame). */
   const gazeLeftStreakRef = useRef(0);
   const gazeRightStreakRef = useRef(0);
+  const gazeUpStreakRef = useRef(0);
+  const gazeDownStreakRef = useRef(0);
   /** Bitta yuz + o'rtacha ovoz past–o'rta diapazon (gapirish/pichirlash shubhasi). */
   const whisperStreakRef = useRef(0);
+  /** Spektr tarqalishi katta — boshqa ovoz / suhbat shubhasi. */
+  const conversationPatternStreakRef = useRef(0);
 
   // --- AI Processing Loop ---
   // OPTIMALLASHTIRISH:
@@ -525,6 +529,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         if (faceCount === 0) {
           gazeLeftStreakRef.current = 0;
           gazeRightStreakRef.current = 0;
+          gazeUpStreakRef.current = 0;
+          gazeDownStreakRef.current = 0;
           if (Date.now() - lastFaceTimeRef.current > 6000) {
             void logViolationRef.current('FACE_NOT_VISIBLE');
             lastFaceTimeRef.current = Date.now();
@@ -532,25 +538,48 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         } else if (faceCount > 1) {
           gazeLeftStreakRef.current = 0;
           gazeRightStreakRef.current = 0;
+          gazeUpStreakRef.current = 0;
+          gazeDownStreakRef.current = 0;
           void logViolationRef.current('MULTIPLE_FACES');
         } else {
           lastFaceTimeRef.current = Date.now();
           const det = faceResult.detections[0];
           const bb = det?.boundingBox;
           const vw = video.videoWidth || 1;
-          if (bb && vw > 40) {
+          const vh = video.videoHeight || 1;
+          const gazeFramesNeeded = 2;
+          if (bb && vw > 40 && vh > 40) {
             const cx = (bb.originX + bb.width / 2) / vw;
-            if (cx < 0.34) {
+            const cy = (bb.originY + bb.height / 2) / vh;
+            if (cy < 0.36) {
+              gazeUpStreakRef.current += 1;
+              gazeDownStreakRef.current = 0;
+              if (gazeUpStreakRef.current >= gazeFramesNeeded) {
+                gazeUpStreakRef.current = 0;
+                void logViolationRef.current('GAZE_AWAY_UP');
+              }
+            } else if (cy > 0.64) {
+              gazeDownStreakRef.current += 1;
+              gazeUpStreakRef.current = 0;
+              if (gazeDownStreakRef.current >= gazeFramesNeeded) {
+                gazeDownStreakRef.current = 0;
+                void logViolationRef.current('GAZE_AWAY_DOWN');
+              }
+            } else {
+              gazeUpStreakRef.current = 0;
+              gazeDownStreakRef.current = 0;
+            }
+            if (cx < 0.35) {
               gazeLeftStreakRef.current += 1;
               gazeRightStreakRef.current = 0;
-              if (gazeLeftStreakRef.current >= 3) {
+              if (gazeLeftStreakRef.current >= gazeFramesNeeded) {
                 gazeLeftStreakRef.current = 0;
                 void logViolationRef.current('GAZE_AWAY_LEFT');
               }
-            } else if (cx > 0.66) {
+            } else if (cx > 0.65) {
               gazeRightStreakRef.current += 1;
               gazeLeftStreakRef.current = 0;
-              if (gazeRightStreakRef.current >= 3) {
+              if (gazeRightStreakRef.current >= gazeFramesNeeded) {
                 gazeRightStreakRef.current = 0;
                 void logViolationRef.current('GAZE_AWAY_RIGHT');
               }
@@ -562,22 +591,42 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }
       }
 
-      // 2. Audio: baland shovqin yoki (bitta yuzda) past–o'rta — gapirish/pichirlash shubhasi
+      // 2. Audio: baland shovqin; past–o'rta — gapirish; spektr keng — boshqa ovoz / suhbat shubhasi
       if (frame % 2 === 0 && analyserRef.current) {
         const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
         analyserRef.current.getByteFrequencyData(dataArray);
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        if (avg > 55) {
+        let sum = 0;
+        let max = 0;
+        let min = 255;
+        for (let i = 0; i < dataArray.length; i++) {
+          const v = dataArray[i];
+          sum += v;
+          if (v > max) max = v;
+          if (v < min) min = v;
+        }
+        const avg = sum / dataArray.length;
+        const spread = max - min;
+        if (avg > 48) {
           whisperStreakRef.current = 0;
+          conversationPatternStreakRef.current = 0;
           void logViolationRef.current('SUSPICIOUS_AUDIO');
-        } else if (singleFaceRef.current && avg >= 20 && avg <= 52) {
+        } else if (singleFaceRef.current && spread > 88 && avg >= 18 && avg <= 50) {
+          whisperStreakRef.current = 0;
+          conversationPatternStreakRef.current += 1;
+          if (conversationPatternStreakRef.current >= 4) {
+            conversationPatternStreakRef.current = 0;
+            void logViolationRef.current('WHISPER_OR_CONVERSATION_SUSPECTED');
+          }
+        } else if (singleFaceRef.current && avg >= 18 && avg <= 52) {
+          conversationPatternStreakRef.current = 0;
           whisperStreakRef.current += 1;
-          if (whisperStreakRef.current >= 5) {
+          if (whisperStreakRef.current >= 4) {
             whisperStreakRef.current = 0;
             void logViolationRef.current('WHISPER_OR_CONVERSATION_SUSPECTED');
           }
         } else {
           whisperStreakRef.current = Math.max(0, whisperStreakRef.current - 1);
+          conversationPatternStreakRef.current = Math.max(0, conversationPatternStreakRef.current - 1);
         }
       }
 
@@ -612,11 +661,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     if (bannedRef.current) return;
 
     const INSTANT_BAN_TYPES = new Set(['IDENTITY_SUBSTITUTION', 'REMOTE_CONTROL_SUSPECTED']);
-    if (violationModalOpenRef.current && !INSTANT_BAN_TYPES.has(type)) {
-      return;
-    }
 
-    // Dedup: bir xil tur uchun qisqa interval (har xil tur ketma-ket 3 ogohlantirish uchun alohida hisoblanadi)
+    // Dedup: bir xil tur uchun qisqa interval (server 60s ichida bitta rasmiy ogohlantirishni birlashtiradi)
     const dedupeKey = `viol_last_${type}`;
     const lastSent = parseInt(sessionStorage.getItem(dedupeKey) || '0', 10);
     const now = Date.now();
@@ -644,7 +690,13 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         warningNumber?: number;
         violationReason?: string;
         isFinalWarning?: boolean;
+        warningSuppressed?: boolean;
+        officialWarnings?: number;
       }>(res)) || {};
+
+      if (data.warningSuppressed) {
+        return;
+      }
 
       if (data.banned) {
         if (type === 'IDENTITY_SUBSTITUTION') setIdentityTerminated(true);
@@ -653,7 +705,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         setBanned(true);
         streamRef.current?.getTracks().forEach((t) => t.stop());
       } else if (typeof data.warningNumber === 'number' && data.warningNumber > 0) {
-        setStrikeLevel(data.warningNumber);
+        setStrikeLevel(typeof data.officialWarnings === 'number' ? data.officialWarnings : data.warningNumber);
         setViolationWarning({
           reason: data.violationReason || type,
           warningNumber: data.warningNumber,

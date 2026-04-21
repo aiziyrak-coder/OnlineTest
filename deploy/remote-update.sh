@@ -27,7 +27,7 @@ ensure_realtime_env() {
   sudo sed -i '/^JWT_SECRET=/d;/^SOCKET_IO_CORS_ORIGIN=/d;/^REALTIME_BIND=/d;/^REALTIME_PORT=/d' "$rt_env"
   {
     echo "JWT_SECRET=$jwt"
-    echo "SOCKET_IO_CORS_ORIGIN=https://onlinetest.ziyrak.org"
+    echo "SOCKET_IO_CORS_ORIGIN=https://online-imtixon.uz"
     echo "REALTIME_BIND=127.0.0.1"
     echo "REALTIME_PORT=9082"
   } | sudo tee -a "$rt_env" >/dev/null
@@ -74,7 +74,7 @@ restore_stash_if_any() {
 
 check_health() {
   local local_api="http://127.0.0.1:9081/api/health"
-  local public_api="https://onlinetestapi.ziyrak.org/api/health"
+  local public_api="https://api.online-imtixon.uz/api/health"
   if command -v curl >/dev/null 2>&1; then
     echo "[remote-update] Health tekshirilmoqda..."
     curl -fsS --max-time 8 "$local_api" >/dev/null && echo "  - local api: OK" || echo "  - local api: FAIL ($local_api)"

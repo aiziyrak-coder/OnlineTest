@@ -27,12 +27,12 @@ fi
 bash deploy/remote-update.sh --no-git
 
 # 4) Verify cert installation (reinstall existing cert mapping, no forced renewal)
-sudo certbot --nginx -d onlinetest.ziyrak.org -d onlinetestapi.ziyrak.org || true
+sudo certbot --nginx -d online-imtixon.uz -d api.online-imtixon.uz || true
 
 # 5) Final checks
 sudo nginx -t
 sudo systemctl reload nginx
-curl -fsS --max-time 10 https://onlinetestapi.ziyrak.org/api/health >/dev/null && echo "[repair] public api health: OK"
-curl -fsS --max-time 10 https://onlinetest.ziyrak.org/healthz >/dev/null && echo "[repair] frontend health: OK"
+curl -fsS --max-time 10 https://api.online-imtixon.uz/api/health >/dev/null && echo "[repair] public api health: OK"
+curl -fsS --max-time 10 https://online-imtixon.uz/healthz >/dev/null && echo "[repair] frontend health: OK"
 echo "[repair] DONE"
 

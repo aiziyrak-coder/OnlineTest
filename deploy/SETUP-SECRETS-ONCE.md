@@ -11,7 +11,7 @@ Serverda `bootstrap-ubuntu-once.sh` yoki `enable-deploy-hook.sh` ishlagandan key
 | Name | Qiymat |
 |------|--------|
 | `DEPLOY_HOOK_SECRET` | `deploy-hook.env` dagi `DEPLOY_HOOK_SECRET` (min 24 belgi) |
-| `DEPLOY_HOOK_URL` | `https://onlinetestapi.ziyrak.org/__internal_deploy/v1` (o‘z API domeningiz) |
+| `DEPLOY_HOOK_URL` | `https://api.online-imtixon.uz/__internal_deploy/v1` (o‘z API domeningiz) |
 
 2. `DEPLOY_HOOK_URL` secret **mavjud** bo‘lsa, workflow faqat webhook orqali deploy qiladi (`SSH_*` e’tiborga olinmaydi). SSH usulini ishlatmoqchi bo‘lsangiz, `DEPLOY_HOOK_URL` va `DEPLOY_HOOK_SECRET` ni umuman qo‘shmang.
 
@@ -25,7 +25,7 @@ Serverda `bootstrap-ubuntu-once.sh` yoki `enable-deploy-hook.sh` ishlagandan key
 
 | Name | Value |
 |------|--------|
-| `SSH_HOST` | masalan `167.71.53.238` |
+| `SSH_HOST` | masalan `209.38.239.183` |
 | `SSH_USERNAME` | `root` |
 | `SSH_PASSWORD` | server paroli **yoki** `SSH_PRIVATE_KEY` (kalit) |
 
@@ -35,7 +35,7 @@ Serverda `bootstrap-ubuntu-once.sh` yoki `enable-deploy-hook.sh` ishlagandan key
 
 ```bash
 gh secret set DEPLOY_HOOK_SECRET
-gh secret set DEPLOY_HOOK_URL -b"https://onlinetestapi.ziyrak.org/__internal_deploy/v1"
+gh secret set DEPLOY_HOOK_URL -b"https://api.online-imtixon.uz/__internal_deploy/v1"
 ```
 
 Parol/tokenlarni kodga yoki chatga yozmang — faqat Secret.

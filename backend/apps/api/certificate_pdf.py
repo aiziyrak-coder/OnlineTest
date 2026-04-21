@@ -32,6 +32,12 @@ VIOLATION_LABELS: dict[str, str] = {
     "PRINT_SCREEN_ATTEMPT":         "Ekran suratga olish urinishi",
     "DEVTOOLS_OPEN":                "Dasturchi vositalari ochildi",
     "CLIPBOARD_ACCESS":             "Bufer xotirasiga kirish",
+    "GAZE_AWAY_LEFT":               "Kameradan chapga uzoq qarash",
+    "GAZE_AWAY_RIGHT":              "Kameradan o'ngga uzoq qarash",
+    "GAZE_AWAY_UP":                 "Tepaga uzoq qarash",
+    "GAZE_AWAY_DOWN":               "Pastga uzoq qarash",
+    "WHISPER_OR_CONVERSATION_SUSPECTED": "Gapirish / suhbat shubhasi",
+    "TAB_SWITCH_SOFT":              "Boshqa varaqqa o'tish",
 }
 
 # Ban sabablari — violation type bo'yicha
