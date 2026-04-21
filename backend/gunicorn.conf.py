@@ -21,3 +21,7 @@ preload_app = os.environ.get("GUNICORN_PRELOAD_APP", "0").strip() in ("1", "true
 accesslog = "-"
 errorlog = "-"
 capture_output = True
+
+# Gunicorn 25.1+: control socket ($XDG_RUNTIME_DIR yoki $HOME/.gunicorn). www-data HOME=/var/www bo‘lsa yozilmaydi.
+# systemd reload — SIGTERM; `gunicornc` ishlatilmaydi.
+control_socket_disable = True

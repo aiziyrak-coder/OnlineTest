@@ -10,7 +10,9 @@ PrivateTmp=yes
 NoNewPrivileges=yes
 RuntimeDirectory=onlinetest
 EnvironmentFile=/etc/onlinetest/api.env
-# www-data uchun HOME odatda /var/www — Gunicorn /var/www/.gunicorn yozadi va Permission denied beradi
+# Gunicorn 25+ va boshqa XDG dasturlar uchun (control socket yo‘q bo‘lsa ham zararsiz)
+Environment=XDG_RUNTIME_DIR=/run/onlinetest
+# www-data passwd HOME=/var/www — ba’zi kutubxonalar ~/.cache kabi yo‘llarni shu yerga yozadi
 Environment=HOME=/var/www/onlinetest/backend
 # gunicorn.conf.py bind ni shu yerdan oladi (config fayldagi default port bilan ziddiyat bo‘lmasin)
 Environment=GUNICORN_BIND=127.0.0.1:9081
