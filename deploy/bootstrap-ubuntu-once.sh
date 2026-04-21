@@ -33,6 +33,11 @@ else
   git -C "$APP" reset --hard "origin/HEAD"
 fi
 
+# nginx HTTPS: include /etc/letsencrypt/options-ssl-nginx.conf — ba'zi serverlarda fayl yo'q
+if [[ -f "$APP/deploy/ensure-letsencrypt-nginx-options.sh" ]]; then
+  bash "$APP/deploy/ensure-letsencrypt-nginx-options.sh"
+fi
+
 write_frontend_env() {
   cat > "$APP/frontend/.env.production" <<EOF
 VITE_API_BASE_URL=https://${API_DOMAIN}

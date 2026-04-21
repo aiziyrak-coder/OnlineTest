@@ -6,6 +6,16 @@
 # Oldin: DNS A yozuvlari server IP ga, nginx sayt fayli yoqilgan, `sudo nginx -t` OK.
 
 set -euo pipefail
+
+DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$DEPLOY_DIR/ensure-letsencrypt-nginx-options.sh" ]]; then
+  if [[ $(id -u) -eq 0 ]]; then
+    bash "$DEPLOY_DIR/ensure-letsencrypt-nginx-options.sh"
+  else
+    sudo bash "$DEPLOY_DIR/ensure-letsencrypt-nginx-options.sh"
+  fi
+fi
+
 FRONT="${1:?1-arg: frontend domen (masalan onlinetest.example.com)}"
 API="${2:?2-arg: API domen (masalan onlinetestapi.example.com)}"
 

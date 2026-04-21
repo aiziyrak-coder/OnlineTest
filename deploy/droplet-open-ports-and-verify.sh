@@ -17,7 +17,13 @@ else
   echo "ufw o'rnatilmagan — o'tkazib yuborildi."
 fi
 
-echo "=== 2) Nginx ==="
+echo "=== 2) Nginx (Let's Encrypt SSL params fayli) ==="
+if [[ -f /var/www/onlinetest/deploy/ensure-letsencrypt-nginx-options.sh ]]; then
+  bash /var/www/onlinetest/deploy/ensure-letsencrypt-nginx-options.sh
+elif curl -fsSL --max-time 30 "https://raw.githubusercontent.com/aiziyrak-coder/OnlineTest/main/deploy/ensure-letsencrypt-nginx-options.sh" -o /tmp/ensure-le.sh 2>/dev/null; then
+  bash /tmp/ensure-le.sh
+  rm -f /tmp/ensure-le.sh
+fi
 systemctl enable nginx 2>/dev/null || true
 systemctl start nginx 2>/dev/null || true
 nginx -t

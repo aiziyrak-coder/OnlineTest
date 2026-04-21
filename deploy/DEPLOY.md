@@ -135,7 +135,16 @@ sudo ln -sf /etc/nginx/sites-available/onlinetest /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Ikki domen uchun SSL (yoki qo‘lda):
+Ikki domen uchun SSL (yoki qo‘lda). **Avval** loyiha katalogiga kiring (`cd /var/www/onlinetest`).
+
+Agar `nginx -t` da `options-ssl-nginx.conf` topilmadi desa:
+
+```bash
+sudo bash deploy/ensure-letsencrypt-nginx-options.sh
+sudo nginx -t
+```
+
+Keyin:
 
 ```bash
 sudo certbot --nginx -d online-imtixon.uz -d api.online-imtixon.uz
