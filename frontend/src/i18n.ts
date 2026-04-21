@@ -245,6 +245,19 @@ export const translations = {
       "Manzilni https:// bilan oching (masalan https://online-imtixon.uz). HTTP da kamera/mikrofon brauzer tomonidan bloklanadi. Serverda: sudo bash deploy/https-certbot.sh online-imtixon.uz va nginx HTTPS.",
     preExamMediaNotFound: "Kamera yoki mikrofon topilmadi. USB va boshqa dastur (Zoom, Telegram) kamerani band qilmaganini tekshiring.",
     preExamMediaUnsupported: "Brauzer ushbu sahifada kamera/mikrofon API sini qo‘llab-quvvatlamaydi.",
+    preExamMediaFailedIntro: "Kamera yoki mikrofon oqimini ochib bo‘lmadi.",
+    mediaErrTechnical: "Brauzer xato kodi (nusxa oling, qo‘llab-quvvatlashga yuboring)",
+    mediaErrNotReadable:
+      "Qurilma band yoki drayver kamerani ochmayapti. Boshqa Chrome yorliqlarini yoping, Zoom/OBS/Telegram/«Kamera» ilovasini yoping, USB kamerani qayta ulang.",
+    mediaErrNotAllowed:
+      "Ruxsat rad etilgan. Manzil qatoridagi qulfa → sayt sozlamalari → kamera va mikrofon «Ruxsat berish»; Windows Maxfiylik → Kamera/Mikrofon.",
+    mediaErrNotFound: "Brauzer hech qanday kamera yoki mikrofon qurilmasini topmadi (USB ulanishi, qurilma o‘chirilgan).",
+    mediaErrSecurityError: "Xavfsiz kontekst: sahifa https:// orqali ochilganini tekshiring.",
+    mediaErrOverconstrainedError:
+      "Tanlangan kamera bu sozlamalarni qo‘llab-quvvatlamaydi. Boshqa kamera yoki boshqa brauzer sinab ko‘ring.",
+    mediaErrAbortError: "So‘rov bekor qilindi. Sahifani yangilab qayta urining.",
+    mediaErrUnknownError:
+      "Aniq sabab aniqlanmadi. Chrome va Windows kamera/mikrofon ruxsatlari, boshqa dasturlar bandligi.",
     preExamMediaInUse:
       "Brauzer kamera yoki mikrofonni ishga tushirolmadi. Sabab har doim boshqa dastur (masalan Zoom) kamerani band qilishi bo‘lmasligi ham mumkin. Tekshiring: Chrome → manzil qatoridagi qulfa → kamera va mikrofon «Ruxsat berish»; Windows → Maxfiylik → Kamera/Mikrofon → brauzerga ruxsat; boshqa Chrome yorlig‘ini yoping; USB kamerani qayta ulang; kerak bo‘lsa kompyuterni qayta ishga tushiring.",
     preExamMicOnlyFailed:
@@ -500,6 +513,19 @@ export const translations = {
       "Откройте сайт по https:// (например https://online-imtixon.uz). На HTTP браузер блокирует камеру/микрофон. На сервере: certbot + nginx HTTPS.",
     preExamMediaNotFound: "Камера или микрофон не найдены. Проверьте USB и что Zoom/Telegram не занимают камеру.",
     preExamMediaUnsupported: "Браузер не поддерживает доступ к камере/микрофону на этой странице.",
+    preExamMediaFailedIntro: "Не удалось открыть поток камеры или микрофона.",
+    mediaErrTechnical: "Код ошибки браузера (скопируйте в поддержку)",
+    mediaErrNotReadable:
+      "Устройство занято или драйвер не открывает камеру. Закройте другие вкладки Chrome, Zoom/OBS/Telegram/«Камера», переподключите USB-камеру.",
+    mediaErrNotAllowed:
+      "Доступ запрещён. Значок замка в адресной строке → настройки сайта → разрешить камеру и микрофон; параметры конфиденциальности Windows.",
+    mediaErrNotFound: "Браузер не нашёл камеру/микрофон (USB, устройство выключено).",
+    mediaErrSecurityError: "Нужен безопасный контекст: откройте сайт по https://.",
+    mediaErrOverconstrainedError:
+      "Камера не поддерживает выбранные ограничения. Попробуйте другую камеру или другой браузер.",
+    mediaErrAbortError: "Запрос прерван. Обновите страницу и попробуйте снова.",
+    mediaErrUnknownError:
+      "Точная причина не определена. Проверьте разрешения Chrome и Windows, занятость устройства другими программами.",
     preExamMediaInUse:
       "Браузер не может открыть камеру/микрофон. Это не всегда «другое приложение»: разрешения сайта в Chrome, параметры конфиденциальности Windows, другая вкладка Chrome, переподключение USB-камеры, перезагрузка ПК.",
     preExamMicOnlyFailed:
@@ -755,6 +781,19 @@ export const translations = {
       "Open the site with https:// (e.g. https://online-imtixon.uz). HTTP blocks camera/mic in the browser. On the server: certbot + nginx HTTPS.",
     preExamMediaNotFound: "No camera or microphone found. Check USB and that Zoom/Telegram are not using the camera.",
     preExamMediaUnsupported: "This browser/page does not support camera/microphone access.",
+    preExamMediaFailedIntro: "Could not open the camera or microphone stream.",
+    mediaErrTechnical: "Browser error code (copy for support)",
+    mediaErrNotReadable:
+      "Device is busy or the driver cannot open the camera. Close other Chrome tabs, Zoom/OBS/Telegram/Camera app, reconnect the USB camera.",
+    mediaErrNotAllowed:
+      "Permission denied. Address bar lock → site settings → allow camera and microphone; Windows Privacy → Camera/Microphone.",
+    mediaErrNotFound: "No camera/microphone device found (USB, device disabled).",
+    mediaErrSecurityError: "Secure context required: open the site over https://.",
+    mediaErrOverconstrainedError:
+      "The camera cannot satisfy these constraints. Try another camera or browser.",
+    mediaErrAbortError: "The request was aborted. Refresh the page and try again.",
+    mediaErrUnknownError:
+      "The exact cause could not be determined. Check Chrome and Windows permissions and other apps using the device.",
     preExamMediaInUse:
       "The browser could not open the camera/microphone. It is not always another app: allow camera+mic for this site in Chrome, check Windows Privacy → Camera/Microphone, close other Chrome tabs, reconnect USB camera, or reboot.",
     preExamMicOnlyFailed:
@@ -769,6 +808,56 @@ export const translations = {
     preExamNetworkError: "Network error",
   },
 };
+
+function domExceptionInfo(err: unknown): { name: string; message: string } {
+  if (err instanceof DOMException) {
+    return { name: err.name, message: err.message || '' };
+  }
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message };
+  }
+  return { name: 'UnknownError', message: typeof err === 'string' ? err : '' };
+}
+
+/**
+ * getUserMedia yoki oqim ochishda — foydalanuvchiga tushunarli sabab + brauzer kodi/xabari.
+ */
+export function formatPreExamMediaAccessFailure(err: unknown, lang: Language): string {
+  const t = translations[lang];
+  const { name, message } = domExceptionInfo(err);
+  let hint: string;
+  switch (name) {
+    case 'NotReadableError':
+    case 'TrackStartError':
+      hint = t.mediaErrNotReadable;
+      break;
+    case 'NotAllowedError':
+    case 'PermissionDeniedError':
+      hint = t.mediaErrNotAllowed;
+      break;
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      hint = t.mediaErrNotFound;
+      break;
+    case 'SecurityError':
+      hint = t.mediaErrSecurityError;
+      break;
+    case 'OverconstrainedError':
+    case 'ConstraintNotSatisfiedError':
+      hint = t.mediaErrOverconstrainedError;
+      break;
+    case 'AbortError':
+      hint = t.mediaErrAbortError;
+      break;
+    default:
+      hint = t.mediaErrUnknownError;
+  }
+  const tech = `${t.mediaErrTechnical}: ${name}${message ? ` — ${message}` : ''}`;
+  if (typeof console !== 'undefined' && console.error) {
+    console.error('[PreExamCheck] media access failed:', name, message || '(no message)', err);
+  }
+  return `${t.preExamMediaFailedIntro}\n\n${hint}\n\n${tech}`;
+}
 
 export type Language = 'uz' | 'ru' | 'en';
 

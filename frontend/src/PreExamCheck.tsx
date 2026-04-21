@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from './components/ui';
 import { motion } from 'motion/react';
-import { translations, Language } from './i18n';
+import { translations, Language, formatPreExamMediaAccessFailure } from './i18n';
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import { InstituteLogo } from './components/InstituteLogo';
@@ -199,8 +199,8 @@ export function PreExamCheck({
                 attachStream(raw);
                 if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
                 setError('');
-              } catch {
-                setError(t.preExamMediaInUse);
+              } catch (rawErr: unknown) {
+                setError(formatPreExamMediaAccessFailure(rawErr, lang));
               }
             }
           }
@@ -225,8 +225,10 @@ export function PreExamCheck({
           attachStream(raw);
           if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
           setError('');
-        } catch {
-          setError((prev) => (prev && prev.length > 0 ? prev : t.preExamMediaInUse));
+        } catch (finalErr: unknown) {
+          setError((prev) =>
+            prev && prev.length > 0 ? prev : formatPreExamMediaAccessFailure(finalErr, lang)
+          );
         }
       }
     };
