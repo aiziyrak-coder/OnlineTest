@@ -245,7 +245,7 @@ export const translations = {
     preExamLivenessStep2Btn: "2) Tabassum",
     preExamCameraError: "Kamera yoki mikrofon ruxsati rad etildi. Brauzer sozlamalaridan ruxsat bering yoki sahifani yangilang.",
     preExamRequiresHttps:
-      "Kamera va mikrofon faqat HTTPS (yoki localhost) da ishlaydi. Sayt hozir HTTP — certbot bilan HTTPS qo‘ying, keyin https:// manzilidan kiring.",
+      "Manzilni https:// bilan oching (masalan https://online-imtixon.uz). HTTP da kamera/mikrofon brauzer tomonidan bloklanadi. Serverda: sudo bash deploy/https-certbot.sh online-imtixon.uz va nginx HTTPS.",
     preExamMediaNotFound: "Kamera yoki mikrofon topilmadi. USB va boshqa dastur (Zoom, Telegram) kamerani band qilmaganini tekshiring.",
     preExamMediaUnsupported: "Brauzer ushbu sahifada kamera/mikrofon API sini qo‘llab-quvvatlamaydi.",
     preExamMediaInUse: "Kamera boshqa dasturda ochiq. Barcha dasturlarni yoping va sahifani yangilang.",
@@ -496,7 +496,7 @@ export const translations = {
     preExamLivenessStep2Btn: "2) Улыбнуться",
     preExamCameraError: "Доступ к камере или микрофону запрещён. Разрешите в настройках браузера или обновите страницу.",
     preExamRequiresHttps:
-      "Камера и микрофон работают только по HTTPS (или localhost). Сайт сейчас по HTTP — включите HTTPS (certbot), затем откройте https://",
+      "Откройте сайт по https:// (например https://online-imtixon.uz). На HTTP браузер блокирует камеру/микрофон. На сервере: certbot + nginx HTTPS.",
     preExamMediaNotFound: "Камера или микрофон не найдены. Проверьте USB и что Zoom/Telegram не занимают камеру.",
     preExamMediaUnsupported: "Браузер не поддерживает доступ к камере/микрофону на этой странице.",
     preExamMediaInUse: "Камера занята другим приложением. Закройте его и обновите страницу.",
@@ -747,7 +747,7 @@ export const translations = {
     preExamLivenessStep2Btn: "2) Smile",
     preExamCameraError: "Camera or microphone access denied. Allow in browser settings or refresh the page.",
     preExamRequiresHttps:
-      "Camera and microphone only work on HTTPS (or localhost). This site is HTTP — enable HTTPS (e.g. certbot), then open the https:// URL.",
+      "Open the site with https:// (e.g. https://online-imtixon.uz). HTTP blocks camera/mic in the browser. On the server: certbot + nginx HTTPS.",
     preExamMediaNotFound: "No camera or microphone found. Check USB and that Zoom/Telegram are not using the camera.",
     preExamMediaUnsupported: "This browser/page does not support camera/microphone access.",
     preExamMediaInUse: "The camera is in use by another app. Close it and refresh.",

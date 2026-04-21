@@ -142,8 +142,15 @@ export function PreExamCheck({
         setError(t.preExamMediaUnsupported);
         return;
       }
-      // Chrome: getUserMedia oddiy domen uchun faqat xavfsiz kontekstda (HTTPS yoki localhost)
-      if (!window.isSecureContext) {
+      const host = window.location.hostname;
+      const isLocal =
+        host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+      // Brauzerlar kamera/mikrofonni oddiy http:// domen uchun bloklaydi (localhost bundan mustasno)
+      if (!isLocal && window.location.protocol !== 'https:') {
+        setError(t.preExamRequiresHttps);
+        return;
+      }
+      if (!isLocal && !window.isSecureContext) {
         setError(t.preExamRequiresHttps);
         return;
       }
@@ -157,7 +164,9 @@ export function PreExamCheck({
       } catch (e: unknown) {
         const name =
           e instanceof DOMException ? e.name : e instanceof Error ? e.name : '';
-        if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        if (name === 'SecurityError') {
+          setError(t.preExamRequiresHttps);
+        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
           setError(t.preExamMediaNotFound);
         } else if (name === 'NotReadableError' || name === 'TrackStartError') {
           setError(t.preExamMediaInUse);
