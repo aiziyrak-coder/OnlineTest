@@ -142,6 +142,26 @@ export function PreExamCheck({
         setError(t.preExamRequiresHttps);
         return;
       }
+
+      try {
+        const q = navigator.permissions?.query?.bind(navigator.permissions);
+        if (q) {
+          for (const permName of ['camera', 'microphone'] as const) {
+            try {
+              const st = await q({ name: permName as PermissionName });
+              if (st.state === 'denied') {
+                setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
+                return;
+              }
+            } catch {
+              /* Chromium: ba'zi versiyalarda query nomi qo'llab-quvvatlanmaydi */
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+
       const domName = (err: unknown) =>
         err instanceof DOMException ? err.name : err instanceof Error ? err.name : '';
 
@@ -164,7 +184,7 @@ export function PreExamCheck({
       } catch (e0: unknown) {
         const n0 = domName(e0);
         if (n0 === 'NotAllowedError' || n0 === 'PermissionDeniedError') {
-          setError(t.preExamPermissionDenied);
+          setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
           return;
         }
         if (n0 === 'SecurityError') {
@@ -191,13 +211,15 @@ export function PreExamCheck({
             attachStream(vOnly);
             if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
             setError('');
-          } catch {
+          } catch (innerErr: unknown) {
             if (vOnly) vOnly.getTracks().forEach((tr) => tr.stop());
-            if (n1 === 'NotAllowedError' || n1 === 'PermissionDeniedError') {
-              setError(t.preExamPermissionDenied);
-            } else if (n1 === 'SecurityError') {
+            const ni = domName(innerErr);
+            const ref = ni || n1;
+            if (ref === 'NotAllowedError' || ref === 'PermissionDeniedError') {
+              setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
+            } else if (ref === 'SecurityError') {
               setError(t.preExamRequiresHttps);
-            } else if (n1 === 'NotFoundError' || n1 === 'DevicesNotFoundError') {
+            } else if (ref === 'NotFoundError' || ref === 'DevicesNotFoundError') {
               setError(t.preExamMediaNotFound);
             } else {
               setError(t.preExamMediaInUse);
@@ -208,7 +230,7 @@ export function PreExamCheck({
         } else if (n1 === 'NotFoundError' || n1 === 'DevicesNotFoundError') {
           setError(t.preExamMediaNotFound);
         } else if (n1 === 'NotAllowedError' || n1 === 'PermissionDeniedError') {
-          setError(t.preExamPermissionDenied);
+          setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
         } else {
           setError(t.preExamCameraError);
         }
@@ -339,7 +361,7 @@ export function PreExamCheck({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-2xl text-sm backdrop-blur-md"
+              className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-2xl text-sm backdrop-blur-md whitespace-pre-line"
             >
               {error}
             </motion.div>

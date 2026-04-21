@@ -254,6 +254,8 @@ export const translations = {
       "Kamera ishlayapti. Mikrofon oqimi ochilmadi (boshqa dastur band qilgani, Windows ovoz kirish hajmi 0 yoki drayver). Imtihonni shunday ham boshlashingiz mumkin; proktor tomonida ovoz tahlili cheklangan bo‘ladi.",
     preExamPermissionDenied:
       "Kamera yoki mikrofon ruxsati rad etildi. Brauzerda ushbu sayt uchun kamera va mikrofonni «Ruxsat berish» qiling.",
+    preExamSiteSettingsHint:
+      "Manzil qatoridagi qizil kamera belgisini bosing → «Sayt sozlamalari» / Site settings → kamera va mikrofon «Ruxsat berish». So‘ng sahifani qattiq yangilang: Ctrl+Shift+R (yoki Ctrl+F5).",
     preExamStarting: "Boshlanmoqda...",
     preExamStartError: "Imtihonni boshlashda xatolik",
     preExamServerError: "Xatolik.",
@@ -510,6 +512,8 @@ export const translations = {
       "Камера работает. Поток микрофона не открыт (занято другим приложением, громкость входа 0 в Windows или драйвер). Экзамен можно начать; анализ звука будет ограничен.",
     preExamPermissionDenied:
       "Доступ к камере/микрофону запрещён. В настройках сайта в Chrome разрешите камеру и микрофон.",
+    preExamSiteSettingsHint:
+      "Нажмите на значок заблокированной камеры в адресной строке → «Настройки сайта» → разрешите камеру и микрофон. Затем жёстко обновите страницу: Ctrl+Shift+R.",
     preExamStarting: "Запуск...",
     preExamStartError: "Ошибка запуска экзамена",
     preExamServerError: "Ошибка.",
@@ -766,6 +770,8 @@ export const translations = {
       "Camera is working. The microphone stream could not be opened (another app may be using it, Windows input volume at zero, or a driver issue). You can still start the exam; audio-based proctoring will be limited.",
     preExamPermissionDenied:
       "Camera or microphone permission was denied. In Chrome site settings, allow camera and microphone for this site.",
+    preExamSiteSettingsHint:
+      "Click the blocked-camera icon in the address bar → Site settings → allow camera and microphone. Then hard-refresh: Ctrl+Shift+R (or Ctrl+F5).",
     preExamStarting: "Starting...",
     preExamStartError: "Failed to start exam",
     preExamServerError: "Error.",
