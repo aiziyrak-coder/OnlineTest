@@ -404,14 +404,19 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           }
         });
 
-        // 2. Setup Audio Analysis
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const analyser = audioCtx.createAnalyser();
-        const source = audioCtx.createMediaStreamSource(stream);
-        source.connect(analyser);
-        analyser.fftSize = 256;
-        audioContextRef.current = audioCtx;
-        analyserRef.current = analyser;
+        // 2. Setup Audio Analysis (mikrofon izlari bo'lmasa — ovoz tahlilini o'tkazib yuboramiz)
+        if (stream.getAudioTracks().length > 0) {
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const analyser = audioCtx.createAnalyser();
+          const source = audioCtx.createMediaStreamSource(stream);
+          source.connect(analyser);
+          analyser.fftSize = 256;
+          audioContextRef.current = audioCtx;
+          analyserRef.current = analyser;
+        } else {
+          audioContextRef.current = null;
+          analyserRef.current = null;
+        }
 
         // 3. Setup Vision Models
         const vision = await FilesetResolver.forVisionTasks(

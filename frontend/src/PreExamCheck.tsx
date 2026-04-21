@@ -5,7 +5,10 @@ import { translations, Language } from './i18n';
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import { InstituteLogo } from './components/InstituteLogo';
-import { openPreferredCameraStream } from './lib/preferredCameraStream';
+import {
+  attachDefaultMicrophone,
+  openPreferredCameraStream,
+} from './lib/preferredCameraStream';
 
 export function PreExamCheck({
   exam,
@@ -27,6 +30,8 @@ export function PreExamCheck({
   const [agreed, setAgreed] = useState(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  /** Kamera bor, mikrofon ochilmagan — qizil xato emas, ogohlantirish */
+  const [mediaHint, setMediaHint] = useState('');
   const [starting, setStarting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
@@ -120,6 +125,7 @@ export function PreExamCheck({
     let stream: MediaStream | null = null;
     const checkDevices = async () => {
       setError('');
+      setMediaHint('');
       if (!navigator.mediaDevices?.getUserMedia) {
         setError(t.preExamMediaUnsupported);
         return;
@@ -148,19 +154,42 @@ export function PreExamCheck({
         }
       };
 
+      // 1) Avval faqat kamera, keyin mikrofon — Windows/Chrome da bir vaqtda olish ko'pincha yiqiladi.
+      try {
+        const v = await openPreferredCameraStream(false, true);
+        const micOk = await attachDefaultMicrophone(v);
+        attachStream(v);
+        if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
+        return;
+      } catch (e0: unknown) {
+        const n0 = domName(e0);
+        if (n0 === 'NotAllowedError' || n0 === 'PermissionDeniedError') {
+          setError(t.preExamPermissionDenied);
+          return;
+        }
+        if (n0 === 'SecurityError') {
+          setError(t.preExamRequiresHttps);
+          return;
+        }
+        if (n0 === 'NotFoundError' || n0 === 'DevicesNotFoundError') {
+          setError(t.preExamMediaNotFound);
+          return;
+        }
+      }
+
       try {
         const s = await openPreferredCameraStream(true, true);
         attachStream(s);
+        if (s.getAudioTracks().length === 0) setMediaHint(t.preExamMicOnlyFailed);
       } catch (e1: unknown) {
         const n1 = domName(e1);
-        // Bir vaqtda video+audio ba'zi Windows/Chrome da NotReadableError beradi; alohida olish ko'pincha ishlaydi
         if (n1 === 'NotReadableError' || n1 === 'TrackStartError' || n1 === 'NotAllowedError') {
           let vOnly: MediaStream | null = null;
           try {
             vOnly = await openPreferredCameraStream(false, true);
-            const aOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            aOnly.getAudioTracks().forEach((tr) => vOnly!.addTrack(tr));
+            const micOk = await attachDefaultMicrophone(vOnly);
             attachStream(vOnly);
+            if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
             setError('');
           } catch {
             if (vOnly) vOnly.getTracks().forEach((tr) => tr.stop());
@@ -313,6 +342,15 @@ export function PreExamCheck({
               className="bg-red-500/10 border border-red-500/20 text-red-600 p-4 rounded-2xl text-sm backdrop-blur-md"
             >
               {error}
+            </motion.div>
+          )}
+          {mediaHint && !error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-amber-500/10 border border-amber-500/25 text-amber-900 p-4 rounded-2xl text-sm backdrop-blur-md"
+            >
+              {mediaHint}
             </motion.div>
           )}
 
@@ -515,7 +553,6 @@ export function PreExamCheck({
                 onClick={handleStart}
                 disabled={
                   !cameraReady ||
-                  !micReady ||
                   !agreed ||
                   starting ||
                   (exam.has_pin && !pin) ||

@@ -49,6 +49,33 @@ export async function openPreferredCameraStream(
   }
 }
 
+/**
+ * Mavjud video oqimiga default mikrofon izini qo'shadi.
+ * Windows/Chrome da qattiq `audio: true` yiqilsa, qayta sinov — echoCancellation va h.k. o'chirilgan.
+ */
+export async function attachDefaultMicrophone(videoStream: MediaStream): Promise<boolean> {
+  try {
+    const a = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    a.getAudioTracks().forEach((tr) => videoStream.addTrack(tr));
+    return true;
+  } catch {
+    try {
+      const a = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+        video: false,
+      });
+      a.getAudioTracks().forEach((tr) => videoStream.addTrack(tr));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 const PROCTOR_VIDEO: MediaTrackConstraints = {
   width: { ideal: 320 },
   height: { ideal: 240 },
@@ -56,19 +83,38 @@ const PROCTOR_VIDEO: MediaTrackConstraints = {
 };
 
 /**
- * Imtihon xonasi: bir vaqtda video+audio ba'zi Windows/Chrome da NotReadableError;
- * alohida olish (PreExamCheck bilan bir xil strategiya).
+ * Imtihon xonasi: avval video, keyin mikrofon (Windows'da birgalikdagi NotReadable kamayadi).
+ * Mikrofon ochilmasa ham video oqimi qaytariladi.
  */
 export async function openPreferredProctorStream(): Promise<MediaStream> {
   try {
-    return await openPreferredCameraStream(true, PROCTOR_VIDEO);
+    const v = await openPreferredCameraStream(false, PROCTOR_VIDEO);
+    await attachDefaultMicrophone(v);
+    return v;
+  } catch (e0: unknown) {
+    const n0 =
+      e0 instanceof DOMException ? e0.name : e0 instanceof Error ? e0.name : '';
+    if (
+      n0 === 'NotAllowedError' ||
+      n0 === 'PermissionDeniedError' ||
+      n0 === 'SecurityError' ||
+      n0 === 'NotFoundError' ||
+      n0 === 'DevicesNotFoundError'
+    ) {
+      throw e0;
+    }
+  }
+
+  try {
+    const s = await openPreferredCameraStream(true, PROCTOR_VIDEO);
+    await attachDefaultMicrophone(s);
+    return s;
   } catch (e: unknown) {
     const name =
       e instanceof DOMException ? e.name : e instanceof Error ? e.name : '';
     if (name === 'NotReadableError' || name === 'TrackStartError') {
       const v = await openPreferredCameraStream(false, PROCTOR_VIDEO);
-      const a = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      a.getAudioTracks().forEach((tr) => v.addTrack(tr));
+      await attachDefaultMicrophone(v);
       return v;
     }
     throw e;

@@ -250,6 +250,8 @@ export const translations = {
     preExamMediaUnsupported: "Brauzer ushbu sahifada kamera/mikrofon API sini qo‘llab-quvvatlamaydi.",
     preExamMediaInUse:
       "Brauzer kamera yoki mikrofonni ishga tushirolmadi. Sabab har doim boshqa dastur (masalan Zoom) kamerani band qilishi bo‘lmasligi ham mumkin. Tekshiring: Chrome → manzil qatoridagi qulfa → kamera va mikrofon «Ruxsat berish»; Windows → Maxfiylik → Kamera/Mikrofon → brauzerga ruxsat; boshqa Chrome yorlig‘ini yoping; USB kamerani qayta ulang; kerak bo‘lsa kompyuterni qayta ishga tushiring.",
+    preExamMicOnlyFailed:
+      "Kamera ishlayapti. Mikrofon oqimi ochilmadi (boshqa dastur band qilgani, Windows ovoz kirish hajmi 0 yoki drayver). Imtihonni shunday ham boshlashingiz mumkin; proktor tomonida ovoz tahlili cheklangan bo‘ladi.",
     preExamPermissionDenied:
       "Kamera yoki mikrofon ruxsati rad etildi. Brauzerda ushbu sayt uchun kamera va mikrofonni «Ruxsat berish» qiling.",
     preExamStarting: "Boshlanmoqda...",
@@ -504,6 +506,8 @@ export const translations = {
     preExamMediaUnsupported: "Браузер не поддерживает доступ к камере/микрофону на этой странице.",
     preExamMediaInUse:
       "Браузер не может открыть камеру/микрофон. Это не всегда «другое приложение»: разрешения сайта в Chrome, параметры конфиденциальности Windows, другая вкладка Chrome, переподключение USB-камеры, перезагрузка ПК.",
+    preExamMicOnlyFailed:
+      "Камера работает. Поток микрофона не открыт (занято другим приложением, громкость входа 0 в Windows или драйвер). Экзамен можно начать; анализ звука будет ограничен.",
     preExamPermissionDenied:
       "Доступ к камере/микрофону запрещён. В настройках сайта в Chrome разрешите камеру и микрофон.",
     preExamStarting: "Запуск...",
@@ -758,6 +762,8 @@ export const translations = {
     preExamMediaUnsupported: "This browser/page does not support camera/microphone access.",
     preExamMediaInUse:
       "The browser could not open the camera/microphone. It is not always another app: allow camera+mic for this site in Chrome, check Windows Privacy → Camera/Microphone, close other Chrome tabs, reconnect USB camera, or reboot.",
+    preExamMicOnlyFailed:
+      "Camera is working. The microphone stream could not be opened (another app may be using it, Windows input volume at zero, or a driver issue). You can still start the exam; audio-based proctoring will be limited.",
     preExamPermissionDenied:
       "Camera or microphone permission was denied. In Chrome site settings, allow camera and microphone for this site.",
     preExamStarting: "Starting...",
