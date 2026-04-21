@@ -161,27 +161,29 @@ Certbot konfigni yangilaydi; keyin `listen 443 ssl` bloklari paydo bo‘ladi.
 
 **HTTPS dan keyin** `/etc/onlinetest/api.env` va `frontend/.env.production` da faqat **`https://`** URL lar bo‘lishi kerak (`deploy/https-certbot.sh` oxirida eslatma chiqadi). `DJANGO_SECURE_SSL=1` **qo‘ymang** — TLS nginx da; Django qayta yo‘naltirish cheksiz loop berishi mumkin.
 
-## 8) Yangilash
+## 8) Yangilash (bitta skript)
+
+`deploy/remote-update.sh` quyidagilarni ketma-ket bajaradi: `git pull`, `/etc/onlinetest/api.env` yuklab `migrate` / `collectstatic`, `api.online-imtixon.uz` bo‘lsa `frontend/.env.production` dagi VITE ni bir domen (bo‘sh) qilib tuzatadi, **realtime** `SOCKET_IO_CORS_ORIGIN` (HTTP+HTTPS apex + api), frontend `npm ci && build`, **`sudo bash deploy/enable-nginx-onlinetest.sh`** (sertifikat bo‘lmasa HTTP-only), systemd unitlarni nusxalaydi, servislarni restart, health.
 
 ```bash
 cd /var/www/onlinetest
 bash deploy/remote-update.sh
 ```
 
-Qo'shimcha flaglar:
+Qo‘shimcha flaglar:
 
 ```bash
-# git pull qilmasin
-bash deploy/remote-update.sh --no-git
-
-# lokal o'zgarishlarni auto-stash qilmasin
-bash deploy/remote-update.sh --no-autostash
+bash deploy/remote-update.sh --no-git          # git pull qilmasin
+bash deploy/remote-update.sh --no-autostash      # lokal o‘zgarishlarni stash qilmasin
+bash deploy/remote-update.sh --reset-admin       # XAVFLI: barcha user + imtihonlarni o‘chiradi; faqat admin / fjsti123
 ```
 
 ## Tekshiruv
 
-- `https://api.online-imtixon.uz/api/health` — `{"ok":true,"database":true}`
-- `https://online-imtixon.uz` — SPA yuklanishi
+- `curl -sS http://127.0.0.1:9081/api/health` — `{"ok":true,"database":true}`
+- `curl -sS -H 'Host: online-imtixon.uz' http://127.0.0.1/api/health` — xuddi shunday (bir domen nginx)
+- `https://api.online-imtixon.uz/api/health` — faqat `api` DNS va TLS tayyor bo‘lsa
+- `https://online-imtixon.uz` yoki `http://online-imtixon.uz` — SPA yuklanishi
 - Brauzerda login va imtihon oqimi
 
 ## Xavfsizlik (audit qoidalari)

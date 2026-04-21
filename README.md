@@ -78,6 +78,14 @@ To‘liq namunalar: `backend/.env.example`, `frontend/.env.example`, `deploy/env
 
 [`deploy/DEPLOY.md`](deploy/DEPLOY.md), GitHub Actions: [`deploy/DEPLOY-GITHUB-ACTIONS.md`](deploy/DEPLOY-GITHUB-ACTIONS.md).
 
+**Serverda bitta yangilash** (git pull, migrate, frontend build, nginx HTTP/HTTPS tanlash, realtime CORS, restart):
+
+```bash
+cd /var/www/onlinetest && bash deploy/remote-update.sh
+```
+
+Barcha foydalanuvchi + imtihonlarni o‘chirib faqat `admin` / `fjsti123` qoldirish (xavfli): `bash deploy/remote-update.sh --reset-admin`
+
 ## Xavfsizlik eslatmalari
 
 - Repoda `.env` va `db.sqlite3` qolmaganini tekshiring (`.gitignore`).

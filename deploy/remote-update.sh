@@ -1,48 +1,34 @@
 #!/usr/bin/env bash
-# Serverda loyiha ildizidan: pull (ixtiyoriy), backend, frontend build, restart + health-check.
+# Serverda loyiha ildizidan: git pull, api.env yuklash, realtime CORS, frontend (bir domen VITE),
+# backend migrate/collectstatic, nginx (HTTP-only fallback), systemd restart, health.
+#
 # Ishlatish:
-#   bash deploy/remote-update.sh
+#   cd /var/www/onlinetest && bash deploy/remote-update.sh
 #   bash deploy/remote-update.sh --no-git
+#   bash deploy/remote-update.sh --reset-admin   # XAVFLI: barcha user + imtihonlarni o'chiradi, faqat admin/fjsti123
+#
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-ensure_realtime_env() {
-  local api_env="/etc/onlinetest/api.env"
-  local rt_env="/etc/onlinetest/realtime.env"
-  if [[ ! -f "$api_env" ]]; then
-    echo "[remote-update] WARN: $api_env topilmadi; realtime JWT auto-sync o'tkazib yuborildi."
-    return 0
-  fi
-  local jwt
-  jwt="$(grep -E '^JWT_SECRET=' "$api_env" | sed -E 's/^JWT_SECRET=//')"
-  if [[ -z "$jwt" ]]; then
-    echo "[remote-update] WARN: JWT_SECRET bo'sh; realtime xizmati ishlab ketmasligi mumkin."
-    return 0
-  fi
-  if [[ ! -f "$rt_env" ]]; then
-    sudo install -o root -g root -m 600 /dev/null "$rt_env"
-  fi
-  sudo sed -i '/^JWT_SECRET=/d;/^SOCKET_IO_CORS_ORIGIN=/d;/^REALTIME_BIND=/d;/^REALTIME_PORT=/d' "$rt_env"
-  {
-    echo "JWT_SECRET=$jwt"
-    echo "SOCKET_IO_CORS_ORIGIN=https://online-imtixon.uz"
-    echo "REALTIME_BIND=127.0.0.1"
-    echo "REALTIME_PORT=9082"
-  } | sudo tee -a "$rt_env" >/dev/null
-  sudo chmod 600 "$rt_env"
-  echo "[remote-update] realtime.env JWT/CORS sync qilindi."
-}
-
+NO_GIT=0
 AUTOSTASH=1
-if [[ "${1:-}" == "--no-git" ]]; then
-  NO_GIT=1
-else
-  NO_GIT=0
-fi
-if [[ "${2:-}" == "--no-autostash" ]] || [[ "${1:-}" == "--no-autostash" ]]; then
-  AUTOSTASH=0
+RESET_ADMIN=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-git) NO_GIT=1 ;;
+    --no-autostash) AUTOSTASH=0 ;;
+    --reset-admin) RESET_ADMIN=1 ;;
+    *)
+      echo "[remote-update] Noma'lum argument: $arg (ruxsat: --no-git, --no-autostash, --reset-admin)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "$RESET_ADMIN" -eq 1 ]]; then
+  echo "[remote-update] DIQQAT: --reset-admin — barcha AppUser va imtihon/natija yozuvlari o'chadi; faqat ID admin / parol fjsti123 qoladi."
 fi
 
 STASHED=0
@@ -72,31 +58,104 @@ restore_stash_if_any() {
   fi
 }
 
+load_api_env() {
+  local api_env="/etc/onlinetest/api.env"
+  if [[ ! -f "$api_env" ]]; then
+    echo "[remote-update] WARN: $api_env topilmadi — migrate prod sozlamasida xato berishi mumkin."
+    return 0
+  fi
+  set -a
+  # shellcheck disable=SC1091
+  source "$api_env"
+  set +a
+  echo "[remote-update] $api_env yuklandi."
+}
+
+ensure_realtime_env() {
+  local api_env="/etc/onlinetest/api.env"
+  local rt_env="/etc/onlinetest/realtime.env"
+  if [[ ! -f "$api_env" ]]; then
+    echo "[remote-update] WARN: $api_env topilmadi; realtime JWT sync o'tkazib yuborildi."
+    return 0
+  fi
+  local jwt
+  jwt="$(grep -E '^JWT_SECRET=' "$api_env" | head -n1 | sed -E 's/^JWT_SECRET=//')"
+  if [[ -z "$jwt" ]]; then
+    echo "[remote-update] WARN: JWT_SECRET bo'sh; realtime ishlamasligi mumkin."
+    return 0
+  fi
+  if [[ ! -f "$rt_env" ]]; then
+    sudo install -o root -g root -m 600 /dev/null "$rt_env"
+  fi
+  sudo sed -i '/^JWT_SECRET=/d;/^SOCKET_IO_CORS_ORIGIN=/d;/^REALTIME_BIND=/d;/^REALTIME_PORT=/d' "$rt_env"
+  {
+    echo "JWT_SECRET=$jwt"
+    # HTTP + HTTPS apex + API domen (DNS bo'lgach socket ishlayveradi)
+    echo "SOCKET_IO_CORS_ORIGIN=http://online-imtixon.uz,https://online-imtixon.uz,https://api.online-imtixon.uz"
+    echo "REALTIME_BIND=127.0.0.1"
+    echo "REALTIME_PORT=9082"
+  } | sudo tee -a "$rt_env" >/dev/null
+  sudo chmod 600 "$rt_env"
+  echo "[remote-update] realtime.env JWT/CORS yangilandi."
+}
+
+ensure_frontend_env() {
+  local f="$ROOT/frontend/.env.production"
+  if [[ ! -f "$f" ]]; then
+    cp "$ROOT/frontend/.env.production.example" "$f"
+    echo "[remote-update] frontend/.env.production yaratildi (namunadan)."
+  fi
+  if grep -qE 'api\.online-imtixon\.uz' "$f" 2>/dev/null; then
+    if grep -q '^VITE_API_BASE_URL=' "$f"; then
+      sed -i 's|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=|' "$f"
+    else
+      printf '\nVITE_API_BASE_URL=\n' >>"$f"
+    fi
+    if grep -q '^VITE_SOCKET_URL=' "$f"; then
+      sed -i 's|^VITE_SOCKET_URL=.*|VITE_SOCKET_URL=|' "$f"
+    else
+      printf '\nVITE_SOCKET_URL=\n' >>"$f"
+    fi
+    echo "[remote-update] VITE_*: api.online-imtixon.uz olib tashlandi (bir domen / nisbiy /api)."
+  fi
+}
+
+run_enable_nginx() {
+  if [[ ! -f "$ROOT/deploy/enable-nginx-onlinetest.sh" ]]; then
+    echo "[remote-update] WARN: enable-nginx-onlinetest.sh topilmadi."
+    return 0
+  fi
+  if [[ $(id -u) -eq 0 ]]; then
+    bash "$ROOT/deploy/enable-nginx-onlinetest.sh"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo bash "$ROOT/deploy/enable-nginx-onlinetest.sh"
+  else
+    echo "[remote-update] WARN: sudo yo'q — nginx: qo'lda sudo bash deploy/enable-nginx-onlinetest.sh"
+  fi
+}
+
 check_health() {
   local local_api="http://127.0.0.1:9081/api/health"
-  local public_api="https://api.online-imtixon.uz/api/health"
-  if command -v curl >/dev/null 2>&1; then
-    echo "[remote-update] Health tekshirilmoqda..."
-    curl -fsS --max-time 8 "$local_api" >/dev/null && echo "  - local api: OK" || echo "  - local api: FAIL ($local_api)"
-    curl -fsS --max-time 12 "$public_api" >/dev/null && echo "  - public api: OK" || echo "  - public api: FAIL ($public_api)"
+  if ! command -v curl >/dev/null 2>&1; then
+    return 0
   fi
+  echo "[remote-update] Health tekshirilmoqda..."
+  curl -fsS --max-time 8 "$local_api" >/dev/null && echo "  - gunicorn 9081: OK" || echo "  - gunicorn 9081: FAIL ($local_api)"
+  curl -fsS --max-time 8 -H 'Host: online-imtixon.uz' "http://127.0.0.1/api/health" >/dev/null \
+    && echo "  - nginx apex /api/health: OK" || echo "  - nginx apex /api/health: FAIL (Host: online-imtixon.uz)"
 }
 
 git_pull_safe
 
-# systemd/nginx shablonlarini serverga qo'llash
 if [[ -f "$ROOT/deploy/systemd/onlinetest-api.service" ]]; then
   sudo cp "$ROOT/deploy/systemd/onlinetest-api.service" /etc/systemd/system/onlinetest-api.service
 fi
 if [[ -f "$ROOT/deploy/systemd/onlinetest-realtime.service" ]]; then
   sudo cp "$ROOT/deploy/systemd/onlinetest-realtime.service" /etc/systemd/system/onlinetest-realtime.service
 fi
-if [[ -f "$ROOT/deploy/nginx/onlinetest.conf" ]]; then
-  sudo cp "$ROOT/deploy/nginx/onlinetest.conf" /etc/nginx/sites-available/fjsti-onlinetest.conf
-  sudo ln -sf /etc/nginx/sites-available/fjsti-onlinetest.conf /etc/nginx/sites-enabled/fjsti-onlinetest.conf
-fi
 sudo systemctl daemon-reload
 ensure_realtime_env
+load_api_env
 
 if [[ ! -d backend/.venv ]]; then
   python3 -m venv backend/.venv
@@ -105,13 +164,13 @@ fi
   cd backend
   ./.venv/bin/pip install -r requirements.txt -q
   ./.venv/bin/python manage.py migrate --noinput
+  if [[ "$RESET_ADMIN" -eq 1 ]]; then
+    ./.venv/bin/python manage.py reset_single_admin --yes
+  fi
   ./.venv/bin/python manage.py collectstatic --noinput
 )
 
-if [[ ! -f frontend/.env.production ]]; then
-  cp frontend/.env.production.example frontend/.env.production
-  echo "[remote-update] frontend/.env.production yaratildi (namunadan). Bir marta tekshiring."
-fi
+ensure_frontend_env
 (
   cd frontend
   npm ci
@@ -120,11 +179,13 @@ fi
 
 npm ci --omit=dev --prefix "$ROOT"
 
+run_enable_nginx
+
 if systemctl is-active --quiet onlinetest-api 2>/dev/null; then
   sudo systemctl restart onlinetest-api onlinetest-realtime
-  echo "[remote-update] systemd yangilandi."
+  echo "[remote-update] onlinetest-api va onlinetest-realtime qayta ishga tushirildi."
 else
-  echo "[remote-update] onlinetest-api systemd topilmadi — birinchi o‘rnatish: deploy/bootstrap-ubuntu-once.sh yoki deploy/DEPLOY.md"
+  echo "[remote-update] WARN: onlinetest-api aktiv emas — birinchi o'rnatish: deploy/bootstrap-ubuntu-once.sh"
 fi
 
 if command -v nginx >/dev/null 2>&1; then
