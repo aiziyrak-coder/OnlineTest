@@ -6,14 +6,37 @@
 const VIRTUAL_CAMERA_LABEL_RE =
   /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
 
+/** Noutbuk ichki kamerasi (ko'pincha mikrofon ham shu yerda) ustuvorligi */
+const DEFAULT_USER_FACING: MediaTrackConstraints = {
+  facingMode: { ideal: 'user' },
+};
+
 export async function openPreferredCameraStream(
   withAudio: boolean,
   video: true | MediaTrackConstraints
 ): Promise<MediaStream> {
-  const initial = await navigator.mediaDevices.getUserMedia({
-    video: video === true ? true : video,
-    audio: withAudio,
-  });
+  const videoConstraint: MediaTrackConstraints | boolean =
+    video === true ? DEFAULT_USER_FACING : video;
+  let initial: MediaStream;
+  try {
+    initial = await navigator.mediaDevices.getUserMedia({
+      video: videoConstraint,
+      audio: withAudio,
+    });
+  } catch (e) {
+    if (
+      video === true &&
+      e instanceof DOMException &&
+      (e.name === 'OverconstrainedError' || e.name === 'ConstraintNotSatisfiedError')
+    ) {
+      initial = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: withAudio,
+      });
+    } else {
+      throw e;
+    }
+  }
 
   let devices: MediaDeviceInfo[];
   try {
@@ -77,6 +100,7 @@ export async function attachDefaultMicrophone(videoStream: MediaStream): Promise
 }
 
 const PROCTOR_VIDEO: MediaTrackConstraints = {
+  facingMode: { ideal: 'user' },
   width: { ideal: 320 },
   height: { ideal: 240 },
   frameRate: { ideal: 15 },

@@ -10,6 +10,25 @@ import {
   openPreferredCameraStream,
 } from './lib/preferredCameraStream';
 
+const PASSIVE_LIVE_SAMPLES = 12;
+const PASSIVE_LIVE_GAP_MS = 260;
+const PASSIVE_LIVE_THRESHOLD = 400;
+
+/** Kadr yoritilishi/piksel yig'indisi o'zgarishi — foydalanuvchi harakat yoki tabiiy harakat */
+async function samplePassiveFrameMotion(captureFrame: () => number): Promise<boolean> {
+  let maxDelta = 0;
+  let prev = 0;
+  for (let i = 0; i < PASSIVE_LIVE_SAMPLES; i++) {
+    await new Promise((r) => setTimeout(r, PASSIVE_LIVE_GAP_MS));
+    const cur = captureFrame();
+    if (cur > 0 && prev > 0) {
+      maxDelta = Math.max(maxDelta, Math.abs(cur - prev));
+    }
+    if (cur > 0) prev = cur;
+  }
+  return maxDelta >= PASSIVE_LIVE_THRESHOLD;
+}
+
 export function PreExamCheck({
   exam,
   token,
@@ -36,13 +55,12 @@ export function PreExamCheck({
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState(false);
   const [livenessPassed, setLivenessPassed] = useState(false);
-  const [livenessStep, setLivenessStep] = useState(0);
-  // livenessActive: tugma bosilganda "kutilmoqda" holati
-  const [livenessActive, setLivenessActive] = useState(false);
+  const [livenessChecking, setLivenessChecking] = useState(false);
+  const [livenessRetryKey, setLivenessRetryKey] = useState(0);
+  const [livenessFailed, setLivenessFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const t = translations[lang];
-  const livenessSigRef = useRef<number>(0);
 
   /**
    * Kamera kadridan piksel yig'indisini hisoblaydi.
@@ -71,54 +89,6 @@ export function PreExamCheck({
       sum += (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
     }
     return sum;
-  };
-
-  /**
-   * Liveness bosqichini ishga tushiradi.
-   * Foydalanuvchi harakatini (ko'z yumish / tabassum) aniqlash uchun:
-   * - Boshlang'ich kadr olinadi
-   * - 2 soniya davomida bir necha kadr olinadi
-   * - Maksimal delta 4000+ bo'lsa harakat aniqlangan
-   */
-  const runLivenessStep = (nextStep: number, hint: string) => {
-    const base = captureFrame();
-    if (!base) {
-      setError(t.preExamLivenessFail);
-      return;
-    }
-    livenessSigRef.current = base;
-    setLivenessActive(true);
-    setError(hint);
-
-    let maxDelta = 0;
-    let checks = 0;
-    const TOTAL_CHECKS = 8;
-    const INTERVAL = 250; // ms
-
-    const checkInterval = window.setInterval(() => {
-      const current = captureFrame();
-      const delta = Math.abs(current - livenessSigRef.current);
-      if (delta > maxDelta) maxDelta = delta;
-      checks++;
-
-      if (checks >= TOTAL_CHECKS) {
-        window.clearInterval(checkInterval);
-        setLivenessActive(false);
-
-        // Ko'z yumish: kichikroq delta yetarli (yuz maydonining bir qismi o'zgaradi)
-        // Tabassum: og'iz atrofida o'zgarish
-        const threshold = nextStep === 1 ? 3500 : 2500;
-
-        if (maxDelta < threshold) {
-          setError(t.preExamLivenessFail);
-          // Qayta urinish uchun bosqichni reset qilmaymiz
-          return;
-        }
-        setError('');
-        setLivenessStep(nextStep);
-        if (nextStep >= 2) setLivenessPassed(true);
-      }
-    }, INTERVAL);
   };
 
   useEffect(() => {
@@ -242,6 +212,42 @@ export function PreExamCheck({
     };
   }, [lang]);
 
+  /** Shaxs tasdiqlandi — tugmasiz: kamera kadrlarida yengil harakat qidiriladi */
+  useEffect(() => {
+    if (!verified || livenessPassed || !cameraReady) return;
+
+    let cancelled = false;
+    const run = async () => {
+      setLivenessChecking(true);
+      setLivenessFailed(false);
+      setError('');
+      await new Promise((r) => setTimeout(r, 450));
+      for (let round = 0; round < 3; round++) {
+        if (cancelled) return;
+        const ok = await samplePassiveFrameMotion(() => captureFrame());
+        if (ok) {
+          if (!cancelled) {
+            setLivenessPassed(true);
+            setLivenessChecking(false);
+            setLivenessFailed(false);
+            setError('');
+          }
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (!cancelled) {
+        setLivenessChecking(false);
+        setLivenessFailed(true);
+        setError(translations[lang].preExamLivenessFail);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [verified, cameraReady, livenessPassed, livenessRetryKey, lang]);
+
   const verifyIdentity = async () => {
     if (!videoRef.current || !canvasRef.current || !user.profile_image) return;
     setVerifying(true);
@@ -338,8 +344,6 @@ export function PreExamCheck({
       setStarting(false);
     }
   };
-
-  // livenessStep: 0..2 (2 bosqich)
 
   return (
     <motion.div
@@ -446,85 +450,35 @@ export function PreExamCheck({
                       : t.identityVerifyBtn}
                   </Button>
 
-                  {/* Jonlilik tekshiruvi */}
-                  <div className="space-y-3">
-                    <p className="text-xs text-gray-700 font-semibold">{t.preExamLivenessTitle}</p>
-
-                    {/* Bosqich 1: Ko'z yumish */}
-                    <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
-                      livenessStep >= 1
-                        ? 'bg-green-50 border-green-200'
-                        : livenessActive && livenessStep === 0
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-white/50 border-gray-200'
-                    }`}>
-                      <span className={`text-xl flex-shrink-0 ${livenessStep >= 1 ? 'opacity-100' : 'opacity-50'}`}>
-                        {livenessStep >= 1 ? '✅' : livenessActive && livenessStep === 0 ? '👁️' : '👁️'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${livenessStep >= 1 ? 'text-green-700' : 'text-gray-700'}`}>
-                          {t.preExamLiveness1}
-                        </p>
-                        {livenessActive && livenessStep === 0 && t.preExamLivenessHint1.trim() ? (
-                          <p className="text-xs text-blue-600 mt-0.5 animate-pulse">{t.preExamLivenessHint1}</p>
-                        ) : null}
-                      </div>
-                      {livenessStep === 0 && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={!verified || livenessActive}
-                          onClick={() => runLivenessStep(1, t.preExamLivenessHint1)}
-                          className="flex-shrink-0 rounded-xl"
-                        >
-                          {livenessActive ? t.preExamLivenessWaiting : t.preExamLivenessStep1Btn}
-                        </Button>
-                      )}
-                      {livenessStep >= 1 && (
-                        <span className="text-green-600 text-sm font-bold flex-shrink-0">✓</span>
-                      )}
-                    </div>
-
-                    {/* Bosqich 2: Tabassum */}
-                    <div className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
-                      livenessStep >= 2
-                        ? 'bg-green-50 border-green-200'
-                        : livenessActive && livenessStep === 1
-                        ? 'bg-blue-50 border-blue-200'
-                        : 'bg-white/50 border-gray-200'
-                    }`}>
-                      <span className={`text-xl flex-shrink-0 ${livenessStep >= 2 ? 'opacity-100' : 'opacity-50'}`}>
-                        {livenessStep >= 2 ? '✅' : '😊'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${livenessStep >= 2 ? 'text-green-700' : 'text-gray-700'}`}>
-                          {t.preExamLiveness2}
-                        </p>
-                        {livenessActive && livenessStep === 1 && t.preExamLivenessHint2.trim() ? (
-                          <p className="text-xs text-blue-600 mt-0.5 animate-pulse">{t.preExamLivenessHint2}</p>
-                        ) : null}
-                      </div>
-                      {livenessStep === 1 && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={!verified || livenessActive}
-                          onClick={() => runLivenessStep(2, t.preExamLivenessHint2)}
-                          className="flex-shrink-0 rounded-xl"
-                        >
-                          {livenessActive ? t.preExamLivenessWaiting : t.preExamLivenessStep2Btn}
-                        </Button>
-                      )}
-                      {livenessStep >= 2 && (
-                        <span className="text-green-600 text-sm font-bold flex-shrink-0">✓</span>
-                      )}
-                    </div>
-
-                    {/* Umumiy holat */}
-                    {livenessPassed && (
-                      <p className="text-sm font-semibold text-green-700 text-center py-1">
-                        {t.preExamLivenessPassed}
+                  {/* Jonlilik: avtomatik, tugmasiz */}
+                  <div className="space-y-2 pt-1">
+                    <p className="text-xs text-gray-600">{t.preExamLivenessTitle}</p>
+                    {verified && !livenessPassed && (
+                      <p className="text-sm text-gray-700">{t.preExamLivenessSelfHint}</p>
+                    )}
+                    {verified && livenessChecking && (
+                      <p className="text-sm text-blue-700 flex items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                        {t.preExamLivenessWaiting}
                       </p>
+                    )}
+                    {livenessPassed && (
+                      <p className="text-sm font-semibold text-green-700">{t.preExamLivenessPassed}</p>
+                    )}
+                    {verified && !livenessPassed && livenessFailed && !livenessChecking && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl w-full"
+                        onClick={() => {
+                          setLivenessFailed(false);
+                          setError('');
+                          setLivenessRetryKey((k) => k + 1);
+                        }}
+                      >
+                        {t.preExamLivenessRetryBtn}
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -581,7 +535,7 @@ export function PreExamCheck({
                   !user.profile_image ||
                   !verified ||
                   !livenessPassed ||
-                  livenessActive
+                  livenessChecking
                 }
                 className="px-8 rounded-full shadow-lg shadow-black/10"
               >
