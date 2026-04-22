@@ -81,14 +81,18 @@ ensure_realtime_env() {
   local jwt
   jwt="$(grep -E '^JWT_SECRET=' "$api_env" | head -n1 | sed -E 's/^JWT_SECRET=//')"
   if [[ -z "$jwt" ]]; then
-    echo "[remote-update] WARN: JWT_SECRET bo'sh; realtime ishlamasligi mumkin."
+    jwt="$(grep -E '^DJANGO_SECRET_KEY=' "$api_env" | head -n1 | sed -E 's/^DJANGO_SECRET_KEY=//')"
+  fi
+  if [[ -z "$jwt" ]]; then
+    echo "[remote-update] WARN: api.env da JWT_SECRET yoki DJANGO_SECRET_KEY topilmadi; realtime JWT sinxroni o'tkazildi."
     return 0
   fi
   if [[ ! -f "$rt_env" ]]; then
     sudo install -o root -g root -m 600 /dev/null "$rt_env"
   fi
-  sudo sed -i '/^JWT_SECRET=/d;/^SOCKET_IO_CORS_ORIGIN=/d;/^REALTIME_BIND=/d;/^REALTIME_PORT=/d' "$rt_env"
+  sudo sed -i '/^NODE_ENV=/d;/^JWT_SECRET=/d;/^SOCKET_IO_CORS_ORIGIN=/d;/^REALTIME_BIND=/d;/^REALTIME_PORT=/d' "$rt_env"
   {
+    echo "NODE_ENV=production"
     echo "JWT_SECRET=$jwt"
     # HTTP + HTTPS apex + API domen (DNS bo'lgach socket ishlayveradi)
     echo "SOCKET_IO_CORS_ORIGIN=http://online-imtixon.uz,https://online-imtixon.uz,https://api.online-imtixon.uz"

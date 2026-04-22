@@ -91,10 +91,16 @@ if (jwtAuthEnabled) {
     }
   });
 } else if (isProd) {
-  console.error(
-    '[realtime] NODE_ENV=production da JWT_SECRET (yoki REALTIME_JWT_SECRET / DJANGO_SECRET_KEY, min 24 belgi) majburiy. /etc/onlinetest/realtime.env ni api.env bilan moslang.',
-  );
-  process.exit(1);
+  if (String(process.env.REALTIME_ALLOW_NO_JWT || '').trim() === '1') {
+    console.warn(
+      '[realtime] REALTIME_ALLOW_NO_JWT=1 — JWT tekshiruvsiz prod (faqat tuzatish / lab). Tezda JWT qo‘ying va o‘chiring.',
+    );
+  } else {
+    console.error(
+      '[realtime] NODE_ENV=production da JWT kaliti 24+ belgi emas yoki bo‘sh. api.env dagi JWT_SECRET (yoki DJANGO_SECRET_KEY) realtime.env ga yozilishi kerak: bash deploy/remote-update.sh yoki deploy/diagnose-realtime.sh. Vaqtinchalik: REALTIME_ALLOW_NO_JWT=1 (xavfli).',
+    );
+    process.exit(1);
+  }
 }
 
 io.on('connection', (socket) => {
