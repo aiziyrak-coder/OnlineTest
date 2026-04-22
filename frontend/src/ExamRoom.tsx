@@ -26,7 +26,7 @@ function compressToJpeg(video: HTMLVideoElement, quality = 0.55, maxW = 320): st
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d', { willReadFrequently: false });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return '';
   ctx.drawImage(video, 0, 0, w, h);
   return canvas.toDataURL('image/jpeg', quality);
@@ -387,8 +387,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         const socketOpts = {
           path: '/socket.io',
           auth: { token },
-          reconnectionDelay: 2500,
-          reconnectionDelayMax: 15000,
+          reconnectionDelay: 3000,
+          reconnectionDelayMax: 20000,
+          reconnectionAttempts: 12,
         };
         const socket = socketUrl ? io(socketUrl, socketOpts) : io(socketOpts);
         socketRef.current = socket;
@@ -452,9 +453,10 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         faceDetectorRef.current = await FaceDetector.createFromOptions(vision, {
           baseOptions: {
             modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
-            delegate: "GPU"
+            // CPU: GPU da ichki Canvas2D getImageData ogohlantirishlari kamroq; tezlik hali yetarli
+            delegate: "CPU",
           },
-          runningMode: "VIDEO"
+          runningMode: "VIDEO",
         });
 
         objectDetectorRef.current = await cocoSsd.load();
@@ -910,64 +912,74 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     const reasonLabel = t.violationReasonLabel;
 
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div
+        className="fixed inset-0 z-[9999] flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-y-contain px-3 py-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="violation-warn-title"
+      >
         <motion.div
-          initial={{ opacity: 0, scale: 0.85, y: 30 }}
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className={`w-full max-w-md rounded-3xl border-2 shadow-2xl p-8 ${
+          transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+          className={`w-full max-w-md max-h-[min(92dvh,calc(100dvh-1.25rem))] flex flex-col min-h-0 rounded-2xl sm:rounded-3xl border-2 shadow-2xl my-2 sm:my-0 ${
             isFinal ? 'border-red-400 bg-red-50' : 'border-orange-400 bg-orange-50'
           }`}
         >
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${isFinal ? 'bg-red-100' : 'bg-orange-100'}`}>
-            <svg className={`w-9 h-9 ${isFinal ? 'text-red-600' : 'text-orange-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                d="M12 9v3m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            </svg>
-          </div>
-
-          <h2 className={`text-xl font-bold text-center mb-3 ${isFinal ? 'text-red-700' : 'text-orange-700'}`}>
-            {warnTitle}
-          </h2>
-
-          <div className="bg-white/80 rounded-2xl px-5 py-4 mb-4 text-center border border-white/60">
-            <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide font-medium">{reasonLabel}</p>
-            <p className="text-base font-semibold text-gray-800">{violationWarning.reason}</p>
-          </div>
-
-          <div className="flex justify-center gap-3 mb-4">
-            {[1, 2, 3].map((n) => (
-              <div
-                key={n}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
-                  n <= warnNum
-                    ? isFinal
-                      ? 'bg-red-100 text-red-700 border-red-400'
-                      : 'bg-orange-100 text-orange-700 border-orange-400'
-                    : 'bg-gray-100 text-gray-400 border-gray-200'
-                }`}
-              >
-                {n <= warnNum ? '!' : n}
-              </div>
-            ))}
-          </div>
-
-          {isFinal && (
-            <div className="bg-red-100 border border-red-300 rounded-xl px-4 py-3 mb-4 text-center">
-              <p className="text-sm font-semibold text-red-700">{finalMsg}</p>
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-5 sm:p-7">
+            <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5 ${isFinal ? 'bg-red-100' : 'bg-orange-100'}`}>
+              <svg className={`w-7 h-7 sm:w-9 sm:h-9 ${isFinal ? 'text-red-600' : 'text-orange-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                  d="M12 9v3m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
             </div>
-          )}
 
-          <p className="text-xs text-gray-500 text-center mb-5">{t.violationFooterHonest}</p>
+            <h2 id="violation-warn-title" className={`text-lg sm:text-xl font-bold text-center mb-3 leading-snug ${isFinal ? 'text-red-700' : 'text-orange-700'}`}>
+              {warnTitle}
+            </h2>
 
-          <button
-            onClick={() => setViolationWarning(null)}
-            className={`w-full py-3.5 rounded-2xl font-semibold text-base transition-all active:scale-95 text-white ${
-              isFinal ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-500 hover:bg-orange-600'
-            }`}
-          >
-            {warnContinue}
-          </button>
+            <div className="bg-white/80 rounded-xl sm:rounded-2xl px-4 py-3 sm:px-5 sm:py-4 mb-4 text-center border border-white/60">
+              <p className="text-[10px] sm:text-xs text-gray-500 mb-1 uppercase tracking-wide font-medium">{reasonLabel}</p>
+              <p className="text-sm sm:text-base font-semibold text-gray-800 break-words">{violationWarning.reason}</p>
+            </div>
+
+            <div className="flex justify-center gap-2 sm:gap-3 mb-4">
+              {[1, 2, 3].map((n) => (
+                <div
+                  key={n}
+                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold border-2 transition-all ${
+                    n <= warnNum
+                      ? isFinal
+                        ? 'bg-red-100 text-red-700 border-red-400'
+                        : 'bg-orange-100 text-orange-700 border-orange-400'
+                      : 'bg-gray-100 text-gray-400 border-gray-200'
+                  }`}
+                >
+                  {n <= warnNum ? '!' : n}
+                </div>
+              ))}
+            </div>
+
+            {isFinal && (
+              <div className="bg-red-100 border border-red-300 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 mb-4 text-center">
+                <p className="text-xs sm:text-sm font-semibold text-red-700 leading-snug">{finalMsg}</p>
+              </div>
+            )}
+
+            <p className="text-[11px] sm:text-xs text-gray-500 text-center mb-4 sm:mb-5 leading-relaxed">{t.violationFooterHonest}</p>
+          </div>
+
+          <div className="shrink-0 border-t border-black/5 p-4 sm:p-5 pt-3 sm:pt-4 bg-white/40 rounded-b-2xl sm:rounded-b-3xl">
+            <button
+              type="button"
+              onClick={() => setViolationWarning(null)}
+              className={`w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base transition-all active:scale-[0.98] text-white ${
+                isFinal ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-500 hover:bg-orange-600'
+              }`}
+            >
+              {warnContinue}
+            </button>
+          </div>
         </motion.div>
       </div>
     );

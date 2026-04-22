@@ -36,8 +36,9 @@ export function LiveMonitor({ examId, token, onClose }: LiveMonitorProps) {
     const socketOpts = {
       path: '/socket.io',
       auth: { token },
-      reconnectionDelay: 2500,
-      reconnectionDelayMax: 15000,
+      reconnectionDelay: 3000,
+      reconnectionDelayMax: 20000,
+      reconnectionAttempts: 12,
     };
     const socket = socketUrl ? io(socketUrl, socketOpts) : io(socketOpts);
     socketRef.current = socket;
