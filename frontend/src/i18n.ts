@@ -156,6 +156,8 @@ export const translations = {
     identityVerifyError: "Tekshirishda xatolik. Qayta urinib ko‘ring.",
     identityVerifyServiceDown:
       "Yuzni solishtirish ishlamayapti: serverda GEMINI_API_KEY yo‘q yoki xizmat vaqtincha band. Administrator sozlamalarini tekshirsin.",
+    identityVerifyGeminiError:
+      "Google AI (Gemini) bilan aloqa yoki javob xatosi — kalit, kvota yoki tarmoq. Administrator /etc/onlinetest/api.env da GEMINI_API_KEY va internet chiqishini tekshirsin.",
     identityVerifyUnavailable: "Administratorga murojaat qiling.",
     virtualCameraBlocked:
       "Virtual / dasturiy kamera (OBS Virtual Camera, DroidCam va h.k.) imtihonda taqiqlangan. OBS va shunga o‘xshash ilovalarni yoping, USB yoki qurilmaga o‘rnatilgan haqiqiy kamerani tanlang.",
@@ -430,6 +432,8 @@ export const translations = {
     identityVerifyError: "Ошибка проверки. Попробуйте снова.",
     identityVerifyServiceDown:
       "Сравнение лиц недоступно: на сервере нет GEMINI_API_KEY или сервис временно недоступен. Обратитесь к администратору.",
+    identityVerifyGeminiError:
+      "Ошибка связи с Google AI (Gemini) — ключ, квота или сеть. Администратору: GEMINI_API_KEY в api.env и доступ в интернет.",
     identityVerifyUnavailable: "Обратитесь к администратору.",
     virtualCameraBlocked:
       "Виртуальная камера (OBS Virtual Camera, DroidCam и т.п.) на экзамене запрещена. Закройте OBS и подобные программы, выберите реальную USB- или встроенную камеру.",
@@ -702,6 +706,8 @@ export const translations = {
     identityVerifyError: "Verification failed. Please try again.",
     identityVerifyServiceDown:
       "Face comparison is unavailable: GEMINI_API_KEY is missing on the server or the service is temporarily down. Ask your administrator.",
+    identityVerifyGeminiError:
+      "Google AI (Gemini) request failed — API key, quota, or network. Administrator: check GEMINI_API_KEY in api.env and outbound HTTPS.",
     identityVerifyUnavailable: "Contact your administrator.",
     virtualCameraBlocked:
       "Virtual cameras (OBS Virtual Camera, DroidCam, etc.) are not allowed during the exam. Close OBS and similar apps and select a physical USB or built-in webcam.",

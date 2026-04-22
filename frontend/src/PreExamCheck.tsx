@@ -358,7 +358,9 @@ export function PreExamCheck({
         setError(
           code === 'GEMINI_UNAVAILABLE'
             ? t.identityVerifyServiceDown
-            : t.identityVerifyError
+            : code === 'GEMINI_ERROR'
+              ? t.identityVerifyGeminiError
+              : t.identityVerifyError
         );
         return;
       }
