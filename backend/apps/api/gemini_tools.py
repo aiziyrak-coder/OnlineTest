@@ -17,6 +17,10 @@ from typing import Any
 
 from django.conf import settings
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Client helpers
@@ -30,18 +34,73 @@ def _client():
     return genai.Client(api_key=key)
 
 
+def _model_not_found(exc: BaseException) -> bool:
+    """404 / not found — boshqa model bilan qayta urinish mumkin."""
+    code = getattr(exc, "status_code", None)
+    if code == 404:
+        return True
+    detail = str(exc).lower()
+    return (
+        "404" in detail
+        or "not_found" in detail
+        or "not found" in detail
+        or "no longer available" in detail
+        or "invalid model" in detail
+        or "does not exist" in detail
+        or "was not found" in detail
+        or "requested entity was not found" in detail
+    )
+
+
+def _gemini_model_candidates() -> list[str]:
+    """GEMINI_MODEL + GEMINI_MODEL_FALLBACKS — takrorlarsiz tartibda."""
+    primary = (getattr(settings, "GEMINI_MODEL", None) or "").strip()
+    raw_fb = (getattr(settings, "GEMINI_MODEL_FALLBACKS", None) or "").strip()
+    parts: list[str] = []
+    if primary:
+        parts.append(primary)
+    if raw_fb:
+        parts.extend(x.strip() for x in raw_fb.split(",") if x.strip())
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in parts:
+        key = p.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
 def _generate(client, prompt: str | None, contents=None, temperature: float = 0.0) -> str:
     """Matn yoki multimodal so'rov yuboradi, javob matnini qaytaradi."""
-    from google import genai as _genai
     from google.genai import types as _types
-    model = settings.GEMINI_MODEL
+    candidates = _gemini_model_candidates()
+    if not candidates:
+        raise RuntimeError("GEMINI_MODEL is empty")
     config = _types.GenerateContentConfig(temperature=temperature)
-    resp = client.models.generate_content(
-        model=model,
-        contents=contents if contents is not None else prompt,
-        config=config,
-    )
-    return resp.text or ""
+    contents_arg = contents if contents is not None else prompt
+    last_model_exc: BaseException | None = None
+    for model in candidates:
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=contents_arg,
+                config=config,
+            )
+            return resp.text or ""
+        except Exception as exc:
+            if _model_not_found(exc):
+                _logger.warning(
+                    "Gemini model %r rejected (%s); trying fallback if any.",
+                    model,
+                    exc,
+                )
+                last_model_exc = exc
+                continue
+            raise
+    if last_model_exc:
+        raise last_model_exc
+    raise RuntimeError("Gemini generate_content failed with no candidates")
 
 
 def _detect_image_mime(data: bytes) -> str:
@@ -62,9 +121,6 @@ def _detect_image_mime(data: bytes) -> str:
 
 def compare_faces(profile_b64: str, live_b64: str) -> dict:
     """Profile va live yuzni solishtiradi. Minimal token: faqat MATCH/NO_MATCH."""
-    import logging
-    logger = logging.getLogger(__name__)
-
     client = _client()
     if not client:
         return {"success": False, "code": "GEMINI_UNAVAILABLE"}
@@ -102,21 +158,9 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
         ok = _parse_strict_match_line(raw)
         return {"success": True, "match": ok}
     except Exception as exc:
-        logger.warning("compare_faces error: %s", exc)
+        _logger.warning("compare_faces error: %s", exc)
         detail = str(exc)[:400]
-        dl = detail.lower()
-        code = "GEMINI_ERROR"
-        # Model nomi noto'g'ri / eskirgan / kalitda yo'q — odatda 404 NOT_FOUND
-        if (
-            "404" in detail
-            or "not_found" in dl
-            or "not found" in dl
-            or "no longer available" in dl
-            or "invalid model" in dl
-            or "does not exist" in dl
-            or "was not found" in dl
-        ):
-            code = "GEMINI_MODEL_INVALID"
+        code = "GEMINI_MODEL_INVALID" if _model_not_found(exc) else "GEMINI_ERROR"
         return {"success": False, "code": code, "detail": detail}
 
 

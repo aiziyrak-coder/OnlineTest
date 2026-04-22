@@ -75,7 +75,8 @@ CORS_ALLOWED_ORIGINS=https://${FRONT_DOMAIN}
 PUBLIC_APP_URL=https://${FRONT_DOMAIN}
 SECURE_PROXY_SSL_HEADER=X-Forwarded-Proto:https
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL_FALLBACKS=gemini-2.5-pro,gemini-1.5-flash
 EOF
     chmod 600 "$f"
     umask 077
