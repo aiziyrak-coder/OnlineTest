@@ -18,33 +18,64 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
   const t = translations[lang];
 
   useEffect(() => {
-    fetchExams();
-    fetchResults();
-  }, []);
+    const tr = translations[lang];
+    const looksLikeBannedMessage = (err: string) => {
+      const low = err.toLowerCase();
+      return (
+        low.includes('banned') ||
+        low.includes('blocked') ||
+        low.includes('заблок') ||
+        low.includes('bloklangan')
+      );
+    };
 
-  const fetchExams = async () => {
-    const res = await fetch(apiUrl('/api/student/exams'), { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 403) {
-      setIsBanned(true);
-      return;
-    }
-    if (res.ok) {
-      const j = await readJsonSafe<any[]>(res);
-      setExams(Array.isArray(j) ? j : []);
-    }
-  };
+    let cancelled = false;
+    setError('');
 
-  const fetchResults = async () => {
-    const res = await fetch(apiUrl('/api/student/results'), { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 403) {
-      setIsBanned(true);
-      return;
-    }
-    if (res.ok) {
-      const j = await readJsonSafe<any[]>(res);
-      setResults(Array.isArray(j) ? j : []);
-    }
-  };
+    const handleStudentListRes = async (res: Response) => {
+      if (cancelled) return;
+      if (res.status === 401) {
+        setError(tr.studentSessionUnauthorized);
+        return;
+      }
+      if (res.status === 403) {
+        const j = await readJsonSafe<{ error?: string }>(res);
+        const err = String(j?.error || '');
+        if (looksLikeBannedMessage(err)) {
+          setIsBanned(true);
+          return;
+        }
+        setError(tr.studentDashboardApi403Body);
+        return;
+      }
+    };
+
+    (async () => {
+      const examsRes = await fetch(apiUrl('/api/student/exams'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await handleStudentListRes(examsRes);
+      if (cancelled) return;
+      if (examsRes.ok) {
+        const j = await readJsonSafe<any[]>(examsRes);
+        if (!cancelled) setExams(Array.isArray(j) ? j : []);
+      }
+      if (cancelled) return;
+      const resultsRes = await fetch(apiUrl('/api/student/results'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await handleStudentListRes(resultsRes);
+      if (cancelled) return;
+      if (resultsRes.ok) {
+        const j = await readJsonSafe<any[]>(resultsRes);
+        if (!cancelled) setResults(Array.isArray(j) ? j : []);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, lang]);
 
   const startExam = (exam: any) => {
     onStartExam(exam, 0); // 0 is a placeholder, will be set in PreExamCheck

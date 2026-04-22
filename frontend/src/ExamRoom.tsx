@@ -17,6 +17,10 @@ import {
 
 // Identity check: har 90 soniyada (45s → 90s: Gemini token tejash)
 const IDENTITY_CHECK_MS = 90_000;
+/** Yuz yo'q deb hisoblashdan oldin kutish (FACE_NOT_VISIBLE). */
+const NO_FACE_VIOLATION_MS = 4500;
+/** COCO: telefon/kitob/noutbuk uchun minimal ishonch. */
+const FORBIDDEN_OBJECT_MIN_SCORE = 0.52;
 
 // Rasm hajmini kamaytirish uchun (Gemini ga yuborishdan oldin)
 function compressToJpeg(video: HTMLVideoElement, quality = 0.55, maxW = 320): string {
@@ -565,7 +569,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           gazeRightStreakRef.current = 0;
           gazeUpStreakRef.current = 0;
           gazeDownStreakRef.current = 0;
-          if (Date.now() - lastFaceTimeRef.current > 6000) {
+          if (Date.now() - lastFaceTimeRef.current > NO_FACE_VIOLATION_MS) {
             void logViolationRef.current('FACE_NOT_VISIBLE');
             lastFaceTimeRef.current = Date.now();
           }
@@ -585,14 +589,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           if (bb && vw > 40 && vh > 40) {
             const cx = (bb.originX + bb.width / 2) / vw;
             const cy = (bb.originY + bb.height / 2) / vh;
-            if (cy < 0.36) {
+            if (cy < 0.38) {
               gazeUpStreakRef.current += 1;
               gazeDownStreakRef.current = 0;
               if (gazeUpStreakRef.current >= gazeFramesNeeded) {
                 gazeUpStreakRef.current = 0;
                 void logViolationRef.current('GAZE_AWAY_UP');
               }
-            } else if (cy > 0.64) {
+            } else if (cy > 0.62) {
               gazeDownStreakRef.current += 1;
               gazeUpStreakRef.current = 0;
               if (gazeDownStreakRef.current >= gazeFramesNeeded) {
@@ -603,14 +607,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
               gazeUpStreakRef.current = 0;
               gazeDownStreakRef.current = 0;
             }
-            if (cx < 0.35) {
+            if (cx < 0.4) {
               gazeLeftStreakRef.current += 1;
               gazeRightStreakRef.current = 0;
               if (gazeLeftStreakRef.current >= gazeFramesNeeded) {
                 gazeLeftStreakRef.current = 0;
                 void logViolationRef.current('GAZE_AWAY_LEFT');
               }
-            } else if (cx > 0.65) {
+            } else if (cx > 0.6) {
               gazeRightStreakRef.current += 1;
               gazeLeftStreakRef.current = 0;
               if (gazeRightStreakRef.current >= gazeFramesNeeded) {
@@ -640,21 +644,21 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }
         const avg = sum / dataArray.length;
         const spread = max - min;
-        if (avg > 48) {
+        if (avg > 42) {
           whisperStreakRef.current = 0;
           conversationPatternStreakRef.current = 0;
           void logViolationRef.current('SUSPICIOUS_AUDIO');
         } else if (singleFaceRef.current && spread > 88 && avg >= 18 && avg <= 50) {
           whisperStreakRef.current = 0;
           conversationPatternStreakRef.current += 1;
-          if (conversationPatternStreakRef.current >= 4) {
+          if (conversationPatternStreakRef.current >= 3) {
             conversationPatternStreakRef.current = 0;
             void logViolationRef.current('WHISPER_OR_CONVERSATION_SUSPECTED');
           }
         } else if (singleFaceRef.current && avg >= 18 && avg <= 52) {
           conversationPatternStreakRef.current = 0;
           whisperStreakRef.current += 1;
-          if (whisperStreakRef.current >= 4) {
+          if (whisperStreakRef.current >= 3) {
             whisperStreakRef.current = 0;
             void logViolationRef.current('WHISPER_OR_CONVERSATION_SUSPECTED');
           }
@@ -664,12 +668,12 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }
       }
 
-      // 3. Ob'ekt aniqlash (har 4-frame: ~6 soniyada) — og'ir model
-      if (frame % 4 === 0 && objectDetectorRef.current) {
+      // 3. Ob'ekt aniqlash (har 2-frame: ~3 soniyada) — og'ir model
+      if (frame % 2 === 0 && objectDetectorRef.current) {
         const predictions = await objectDetectorRef.current.detect(video);
         const forbidden = ['cell phone', 'book', 'laptop'];
         const found = predictions.find(
-          (p) => forbidden.includes(p.class) && p.score > 0.65
+          (p) => forbidden.includes(p.class) && p.score > FORBIDDEN_OBJECT_MIN_SCORE
         );
         if (found) {
           void logViolationRef.current(`FORBIDDEN_OBJECT_${found.class.replace(' ', '_').toUpperCase()}`);
@@ -719,6 +723,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }),
       });
       const data = (await readJsonSafe<{
+        error?: string;
+        code?: string;
         violationsCount?: number;
         banned?: boolean;
         warningNumber?: number;
@@ -727,6 +733,13 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         warningSuppressed?: boolean;
         officialWarnings?: number;
       }>(res)) || {};
+
+      if (!res.ok) {
+        const hint = data.violationReason || data.error || data.code || `HTTP ${res.status}`;
+        setWarningMsg(String(hint));
+        setTimeout(() => setWarningMsg(''), 5000);
+        return;
+      }
 
       if (data.warningSuppressed) {
         return;
@@ -932,7 +945,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
     return (
       <div
-        className="fixed inset-0 z-[9999] flex items-end justify-center sm:items-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-y-contain px-3 py-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-y-contain px-4 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="violation-warn-title"
@@ -941,7 +954,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           initial={{ opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-          className={`w-full max-w-md max-h-[min(92dvh,calc(100dvh-1.25rem))] flex flex-col min-h-0 rounded-2xl sm:rounded-3xl border-2 shadow-2xl my-2 sm:my-0 ${
+          className={`w-full max-w-lg max-h-[min(90dvh,calc(100dvh-2rem))] flex flex-col min-h-0 rounded-2xl sm:rounded-3xl border-2 shadow-2xl ${
             isFinal ? 'border-red-400 bg-red-50' : 'border-orange-400 bg-orange-50'
           }`}
         >
@@ -1012,12 +1025,13 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     const backLabel = t.banBackToDashboard;
 
     return (
+      <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-6">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="min-h-[80vh] flex items-center justify-center p-6"
+        className="w-full max-w-lg flex items-center justify-center"
       >
-        <Card className="max-w-md w-full text-center p-8 border-red-500/30 bg-red-50/80 backdrop-blur-xl shadow-2xl shadow-red-500/10">
+        <Card className="w-full text-center p-8 sm:p-10 border-red-500/30 bg-red-50/90 backdrop-blur-xl shadow-2xl shadow-red-500/10">
           <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1068,6 +1082,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           </div>
         </Card>
       </motion.div>
+      </div>
     );
   }
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import secrets
 import tempfile
@@ -75,6 +76,8 @@ from apps.core.models import (
     ViolationLog,
 )
 
+logger = logging.getLogger("apps.api")
+
 
 def _check_pw(plain: str, hashed: str) -> bool:
     try:
@@ -96,6 +99,18 @@ def _student_assigned_to_exam(user, exam_id: int) -> bool:
     if gid is None:
         return False
     return ExamGroup.objects.filter(exam_id=exam_id, group_id=gid).exists()
+
+
+def _request_user_role_norm(user) -> str:
+    """JWT / DB rollari uchun tekislash (BOM, bo‘shliq, registr)."""
+    raw = getattr(user, "role", None)
+    if raw is None:
+        return ""
+    return str(raw).strip().lower().replace("\ufeff", "").strip()
+
+
+def _is_student_user(user) -> bool:
+    return _request_user_role_norm(user) == "student"
 
 
 # --- Public / auth ---
@@ -221,7 +236,7 @@ def auth_login(request):
             {"error": "Teacher role is no longer supported. Use an admin or student account."},
             status=403,
         )
-    role_out = (user.role or "").strip().lower()
+    role_out = (user.role or "").strip().lower().replace("\ufeff", "").strip()
     return Response(
         {
             "token": issue_token(user),
@@ -244,7 +259,7 @@ def auth_login(request):
 @permission_classes([IsAuthenticated])
 def student_identity_compare(request):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     body = request.data or {}
     p_raw = body.get("profile_image_base64")
@@ -1396,7 +1411,7 @@ def admin_exam_retake_window_delete(request, pk: int, wid: int):
 @permission_classes([IsAuthenticated])
 def student_exams_list(request):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     if not u.group_id:
         return Response([])
@@ -1430,7 +1445,7 @@ def student_exams_list(request):
 @permission_classes([IsAuthenticated])
 def student_exams_start(request, pk: int):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     pin = (request.data or {}).get("pin")
     exam = Exam.objects.filter(pk=pk).first()
@@ -1598,7 +1613,7 @@ def student_exams_start(request, pk: int):
 @permission_classes([IsAuthenticated])
 def student_exams_submit(request, pk: int):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     answers = (request.data or {}).get("answers")
     flagged = (request.data or {}).get("flaggedQuestions")
@@ -1696,7 +1711,7 @@ def student_exams_submit(request, pk: int):
 @permission_classes([IsAuthenticated])
 def student_exam_clock(request, pk: int):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     exam = Exam.objects.filter(pk=pk).first()
     if not exam:
@@ -1722,7 +1737,7 @@ def student_exam_clock(request, pk: int):
 @permission_classes([IsAuthenticated])
 def student_exam_draft(request, pk: int):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     if not Exam.objects.filter(pk=pk).exists():
         return Response({"error": "Exam not found"}, status=404)
@@ -1747,7 +1762,7 @@ def student_exam_draft(request, pk: int):
 @permission_classes([IsAuthenticated])
 def student_exam_save_progress(request, pk: int):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     exam = Exam.objects.filter(pk=pk).first()
     if not exam:
@@ -1779,7 +1794,7 @@ def student_exam_save_progress(request, pk: int):
 @permission_classes([IsAuthenticated])
 def student_results(request):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     if not u.group_id:
         return Response([])
@@ -1869,7 +1884,7 @@ def _result_details_bundle(se: StudentExam, request, for_pdf: bool = False):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def student_result_details(request, exam_id: int):
-    if request.user.role != "student":
+    if not _is_student_user(request.user):
         return Response({"error": "Forbidden"}, status=403)
     se = (
         StudentExam.objects.filter(student_id=request.user.id, exam_id=exam_id)
@@ -1898,7 +1913,7 @@ def student_result_details(request, exam_id: int):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def student_certificate_pdf(request, exam_id: int):
-    if request.user.role != "student":
+    if not _is_student_user(request.user):
         return Response({"error": "Forbidden"}, status=403)
     se = (
         StudentExam.objects.filter(student_id=request.user.id, exam_id=exam_id)
@@ -2151,7 +2166,7 @@ def public_verify_ban_report(request):
 @permission_classes([IsAuthenticated])
 def student_violations(request):
     u = request.user
-    if u.role != "student":
+    if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
     d = request.data or {}
     exam_id, vtype_raw = d.get("exam_id"), d.get("violation_type")
@@ -2232,86 +2247,101 @@ def student_violations(request):
     WARN_SUPPRESS_SECONDS = 60
     MAX_WARNINGS_BEFORE_BAN = 3  # 3 ta modal; 4-chi rasmiy epizodda ban
 
-    with transaction.atomic():
-        se = (
-            StudentExam.objects.select_for_update()
-            .filter(student_id=u.id, exam_id=exam_id_int)
-            .first()
-        )
-        if se is None:
-            se = StudentExam.objects.create(student_id=u.id, exam_id=exam_id_int, status="Pending")
-            se = StudentExam.objects.select_for_update().get(pk=se.pk)
+    try:
+        with transaction.atomic():
+            se = (
+                StudentExam.objects.select_for_update()
+                .filter(student_id=u.id, exam_id=exam_id_int)
+                .first()
+            )
+            if se is None:
+                se = StudentExam.objects.create(student_id=u.id, exam_id=exam_id_int, status="Pending")
+                se = StudentExam.objects.select_for_update().get(pk=se.pk)
 
-        ViolationLog.objects.create(
-            student_id=u.id,
-            exam_id=exam_id_int,
-            violation_type=vtype,
-            timestamp=dj_tz.now(),
-            screenshot_url=screenshot,
-        )
-
-        cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
-
-        if vtype in instant_ban_types:
-            AppUser.objects.filter(pk=u.id).update(status="Banned")
-            StudentExam.objects.filter(pk=se.pk).update(status="Banned")
-            return Response(
-                {
-                    "banned": True,
-                    "violationsCount": cnt_all,
-                    "warningNumber": MAX_WARNINGS_BEFORE_BAN,
-                    "violationReason": reason_text,
-                    "isFinalWarning": False,
-                    "warningSuppressed": False,
-                    "officialWarnings": se.proctor_official_warnings,
-                }
+            ViolationLog.objects.create(
+                student_id=u.id,
+                exam_id=exam_id_int,
+                violation_type=vtype,
+                timestamp=dj_tz.now(),
+                screenshot_url=screenshot,
             )
 
-        now = dj_tz.now()
-        last = se.proctor_last_warning_at
-        if last is not None and (now - last) < timedelta(seconds=WARN_SUPPRESS_SECONDS):
+            cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
+
+            if vtype in instant_ban_types:
+                AppUser.objects.filter(pk=u.id).update(status="Banned")
+                StudentExam.objects.filter(pk=se.pk).update(status="Banned")
+                return Response(
+                    {
+                        "banned": True,
+                        "violationsCount": cnt_all,
+                        "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                        "violationReason": reason_text,
+                        "isFinalWarning": False,
+                        "warningSuppressed": False,
+                        "officialWarnings": se.proctor_official_warnings,
+                    }
+                )
+
+            now = dj_tz.now()
+            last = se.proctor_last_warning_at
+            if last is not None and (now - last) < timedelta(seconds=WARN_SUPPRESS_SECONDS):
+                return Response(
+                    {
+                        "banned": False,
+                        "warningSuppressed": True,
+                        "violationsCount": cnt_all,
+                        "warningNumber": 0,
+                        "violationReason": reason_text,
+                        "isFinalWarning": False,
+                        "officialWarnings": se.proctor_official_warnings,
+                    }
+                )
+
+            se.proctor_official_warnings = int(se.proctor_official_warnings or 0) + 1
+            se.proctor_last_warning_at = now
+
+            if se.proctor_official_warnings >= 4:
+                AppUser.objects.filter(pk=u.id).update(status="Banned")
+                se.status = "Banned"
+                se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at", "status"])
+                return Response(
+                    {
+                        "banned": True,
+                        "violationsCount": cnt_all,
+                        "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                        "violationReason": reason_text,
+                        "isFinalWarning": False,
+                        "warningSuppressed": False,
+                        "officialWarnings": se.proctor_official_warnings,
+                    }
+                )
+
+            se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at"])
+            cnt_warn = se.proctor_official_warnings
+            is_final = cnt_warn == MAX_WARNINGS_BEFORE_BAN
             return Response(
                 {
                     "banned": False,
-                    "warningSuppressed": True,
-                    "violationsCount": cnt_all,
-                    "warningNumber": 0,
-                    "violationReason": reason_text,
-                    "isFinalWarning": False,
-                    "officialWarnings": se.proctor_official_warnings,
-                }
-            )
-
-        se.proctor_official_warnings = int(se.proctor_official_warnings or 0) + 1
-        se.proctor_last_warning_at = now
-
-        if se.proctor_official_warnings >= 4:
-            AppUser.objects.filter(pk=u.id).update(status="Banned")
-            se.status = "Banned"
-            se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at", "status"])
-            return Response(
-                {
-                    "banned": True,
-                    "violationsCount": cnt_all,
-                    "warningNumber": MAX_WARNINGS_BEFORE_BAN,
-                    "violationReason": reason_text,
-                    "isFinalWarning": False,
                     "warningSuppressed": False,
-                    "officialWarnings": se.proctor_official_warnings,
+                    "violationsCount": cnt_all,
+                    "warningNumber": cnt_warn,
+                    "violationReason": reason_text,
+                    "isFinalWarning": is_final,
+                    "officialWarnings": cnt_warn,
                 }
             )
-
-        se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at"])
-        cnt_warn = se.proctor_official_warnings
-        is_final = cnt_warn == MAX_WARNINGS_BEFORE_BAN
+    except Exception:
+        logger.exception(
+            "student_violations: saqlashda xato exam_id=%s vtype=%s student_id=%s",
+            exam_id_int,
+            vtype,
+            getattr(u, "id", None),
+        )
         return Response(
             {
-                "banned": False,
-                "warningSuppressed": False,
-                "violationsCount": cnt_all,
-                "warningNumber": cnt_warn,
-                "violationReason": reason_text,
-                "isFinalWarning": is_final,
-                "officialWarnings": cnt_warn,
-            }
+                "error": "Could not record violation",
+                "code": "VIOLATION_PERSIST_FAILED",
+            },
+            status=500,
         )

@@ -184,6 +184,9 @@ export const translations = {
     studentAccountBannedTitle: "Akkaunt bloklangan",
     studentAccountBannedBody:
       "Imtihon paytida qoidalar bir necha marta buzilgani uchun akkauntingiz vaqtincha to‘xtatildi. Batafsil uchun administrator bilan bog‘laning.",
+    studentDashboardApi403Body:
+      "Talaba paneli ma’lumotlarini olish rad etildi (403). Chiqib qayta kiring; muammo davom etsa — administratorga murojaat qiling (rol yoki guruh tekshirilsin).",
+    studentSessionUnauthorized: "Sessiya yaroq emas. «Chiqish»dan keyin qayta kiring.",
     examPinRequiredBadge: "PIN talab qilinadi",
     minutesShort: "daq.",
     examStateUpcoming: "Kutilmoqda",
@@ -463,6 +466,9 @@ export const translations = {
     studentAccountBannedTitle: "Аккаунт заблокирован",
     studentAccountBannedBody:
       "Аккаунт временно заблокирован из‑за многократных нарушений правил на экзамене. Обратитесь к администратору за подробностями.",
+    studentDashboardApi403Body:
+      "Доступ к списку экзаменов запрещён (403). Выйдите и войдите снова; если не поможет — администратору (роль или группа).",
+    studentSessionUnauthorized: "Сессия недействительна. Выйдите и войдите снова.",
     examPinRequiredBadge: "Требуется PIN",
     minutesShort: "мин",
     examStateUpcoming: "Скоро",
@@ -742,6 +748,9 @@ export const translations = {
     studentAccountBannedTitle: "Account blocked",
     studentAccountBannedBody:
       "Your account has been temporarily blocked due to repeated rule violations during exams. Please contact your administrator for details.",
+    studentDashboardApi403Body:
+      "Student data was denied (403). Log out and log in again; if it persists, ask an admin to check your role and group.",
+    studentSessionUnauthorized: "Session invalid. Log out and sign in again.",
     examPinRequiredBadge: "PIN required",
     minutesShort: "min",
     examStateUpcoming: "Upcoming",

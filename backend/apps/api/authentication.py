@@ -49,7 +49,7 @@ class JWTAuthentication(BaseAuthentication):
         if user.status == "Banned":
             raise AuthenticationFailed("Banned")
         # DB da "Admin", bo'shliq yoki boshqa registr — admin endpointlar 403 bermasligi uchun
-        role_norm = (user.role or "").strip().lower()
+        role_norm = (user.role or "").strip().lower().replace("\ufeff", "").strip()
         jwt_user = JWTUser(uid, role_norm, user.name, user.group_id)
         return (jwt_user, None)
 
@@ -65,7 +65,7 @@ def issue_token(user: AppUser) -> str:
     hours = max(1, min(hours, 168))
     now = datetime.now(timezone.utc)
     exp = now + timedelta(hours=hours)
-    role_norm = (user.role or "").strip().lower()
+    role_norm = (user.role or "").strip().lower().replace("\ufeff", "").strip()
     payload = {
         "id": user.id,
         "role": role_norm,
