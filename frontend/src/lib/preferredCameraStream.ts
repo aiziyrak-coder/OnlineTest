@@ -6,11 +6,22 @@
 const VIRTUAL_CAMERA_LABEL_RE =
   /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
 
+/**
+ * `video: true` o'rniga yengil cheklovlar: to'liq HD birinchi ochilishi ba'zi USB/Windows
+ * konfiguratsiyalarida NotReadableError ("Could not start video source") beradi.
+ */
+export const LIGHT_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 320, max: 1280 },
+  height: { ideal: 240, max: 720 },
+  frameRate: { ideal: 15, max: 30 },
+};
+
 export async function openPreferredCameraStream(
   withAudio: boolean,
   video: true | MediaTrackConstraints
 ): Promise<MediaStream> {
-  const videoConstraint: MediaTrackConstraints | boolean = video === true ? true : video;
+  const videoConstraint: MediaTrackConstraints | boolean =
+    video === true ? LIGHT_VIDEO_CONSTRAINTS : video;
   const initial = await navigator.mediaDevices.getUserMedia({
     video: videoConstraint,
     audio: withAudio,
@@ -38,7 +49,8 @@ export async function openPreferredCameraStream(
   const currentId = currentTrack?.getSettings?.().deviceId;
   if (currentId && currentId === preferred.deviceId) return initial;
 
-  const base: MediaTrackConstraints = video === true ? {} : { ...video };
+  const base: MediaTrackConstraints =
+    video === true ? { ...LIGHT_VIDEO_CONSTRAINTS } : { ...(video as MediaTrackConstraints) };
   const switchedVideo: MediaTrackConstraints = {
     ...base,
     deviceId: { exact: preferred.deviceId },
@@ -109,7 +121,7 @@ function uniqueVideoInputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
  * qurilmalar orasida qisqa kutish bilan sinaymiz (Chrome: "Could not start video source").
  */
 export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
-  await sleep(280);
+  await sleep(420);
   const devices = await navigator.mediaDevices.enumerateDevices();
   const videoInputs = uniqueVideoInputs(devices);
   let lastErr: unknown;
@@ -133,7 +145,24 @@ export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
     },
     {
       video: {
+        deviceId: { exact: id },
+        width: { max: 320 },
+        height: { max: 240 },
+        frameRate: { max: 15 },
+      },
+      audio: false,
+    },
+    {
+      video: {
         deviceId: { ideal: id },
+        width: { ideal: 160 },
+        height: { ideal: 120 },
+      },
+      audio: false,
+    },
+    {
+      video: {
+        deviceId: { exact: id },
         width: { ideal: 160 },
         height: { ideal: 120 },
       },
@@ -146,24 +175,29 @@ export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
       if (skipVirtual && VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')) continue;
       for (const constraints of variantsForDevice(d.deviceId)) {
         try {
-          await sleep(200);
+          await sleep(320);
           return await tryConstraints(constraints);
         } catch (e) {
           lastErr = e;
         }
       }
-      await sleep(120);
+      await sleep(180);
     }
   }
 
   const globalFallbacks: MediaStreamConstraints[] = [
-    { video: { width: { max: 320 }, height: { max: 240 }, frameRate: { max: 10 } }, audio: false },
-    { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+    { video: { facingMode: 'user' }, audio: false },
+    { video: LIGHT_VIDEO_CONSTRAINTS, audio: false },
+    {
+      video: { width: { max: 320 }, height: { max: 240 }, frameRate: { max: 10 } },
+      audio: false,
+    },
+    { video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { max: 24 } }, audio: false },
     { video: true, audio: false },
   ];
   for (const constraints of globalFallbacks) {
     try {
-      await sleep(300);
+      await sleep(380);
       return await tryConstraints(constraints);
     } catch (e) {
       lastErr = e;
@@ -175,11 +209,7 @@ export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
     : new DOMException('Could not open any camera', 'NotReadableError');
 }
 
-const PROCTOR_VIDEO: MediaTrackConstraints = {
-  width: { ideal: 320 },
-  height: { ideal: 240 },
-  frameRate: { ideal: 15 },
-};
+const PROCTOR_VIDEO: MediaTrackConstraints = LIGHT_VIDEO_CONSTRAINTS;
 
 /**
  * Imtihon xonasi: avval video, keyin mikrofon (Windows'da birgalikdagi NotReadable kamayadi).

@@ -82,7 +82,9 @@ if (jwtAuthEnabled) {
         return next(new Error('Unauthorized: invalid payload'));
       }
       socket.data.userId = String(userId);
-      socket.data.role = String(payload.role || '');
+      socket.data.role = String(payload.role ?? '')
+        .trim()
+        .toLowerCase();
       return next();
     } catch {
       return next(new Error('Unauthorized: invalid token'));

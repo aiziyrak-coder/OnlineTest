@@ -65,9 +65,10 @@ def issue_token(user: AppUser) -> str:
     hours = max(1, min(hours, 168))
     now = datetime.now(timezone.utc)
     exp = now + timedelta(hours=hours)
+    role_norm = (user.role or "").strip().lower()
     payload = {
         "id": user.id,
-        "role": user.role,
+        "role": role_norm,
         "name": user.name,
         "group_id": user.group_id,
         "iat": now,

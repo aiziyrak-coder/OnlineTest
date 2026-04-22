@@ -164,11 +164,6 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
                       <CardTitle className="flex justify-between items-start gap-4 flex-wrap">
                         <span className="text-xl font-bold leading-tight">{e.title}</span>
                         <div className="flex flex-wrap gap-1.5 justify-end shrink-0">
-                          {e.exam_mode === 'bank_mixed' && (
-                            <span className="text-[9px] font-semibold bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full uppercase tracking-wide border border-indigo-200/60">
-                              {t.bankExamBadge}
-                            </span>
-                          )}
                           <span className="text-[10px] font-bold bg-black/5 text-black/60 px-2.5 py-1 rounded-full uppercase tracking-wider">
                             {e.language}
                           </span>
