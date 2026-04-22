@@ -236,6 +236,9 @@ export const translations = {
     timeWarningBody: "",
     connectionLostTitle: "Aloqa uzildi",
     connectionLostBody: "",
+    realtimeSyncOfflineTitle: "Jonli sinxronizatsiya vaqtincha ishlamayapti",
+    realtimeSyncOfflineBody:
+      "Proktor ulanishi (Socket.io) serverga ulanmadi. Savollarga javob berish va vaqt davom etadi; administrator serverdagi «onlinetest-realtime» xizmatini tekshirishi kerak.",
     proctorWarningTitle: "Ogohlantirish",
     preExamTitle: "Imtihon oldidan tekshiruv",
     preExamSysReq: "Tizim talablari",
@@ -512,6 +515,9 @@ export const translations = {
     timeWarningBody: "",
     connectionLostTitle: "Связь потеряна",
     connectionLostBody: "",
+    realtimeSyncOfflineTitle: "Живая синхронизация временно недоступна",
+    realtimeSyncOfflineBody:
+      "Подключение проктора (Socket.io) к серверу не установлено. Ответы на вопросы и таймер продолжают работать; администратору нужно проверить службу «onlinetest-realtime».",
     proctorWarningTitle: "Внимание",
     preExamTitle: "Проверка перед экзаменом",
     preExamSysReq: "Системные требования",
@@ -788,6 +794,9 @@ export const translations = {
     timeWarningBody: "",
     connectionLostTitle: "Connection lost",
     connectionLostBody: "",
+    realtimeSyncOfflineTitle: "Live proctor sync is temporarily unavailable",
+    realtimeSyncOfflineBody:
+      "The proctor channel (Socket.io) could not reach the server. You can still answer questions and the timer keeps running; ask an admin to check the «onlinetest-realtime» service.",
     proctorWarningTitle: "Warning",
     preExamTitle: "Pre-Exam Check",
     preExamSysReq: "System Requirements",

@@ -98,6 +98,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<number[]>([]);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  /** Internet bor, lekin Socket.io (proktor/realtime) ulanmagan yoki uzilgan. */
+  const [realtimeSyncOffline, setRealtimeSyncOffline] = useState(false);
   const [banned, setBanned] = useState(false);
   const [timeLeft, setTimeLeft] = useState(() => initialSecondsLeft(exam));
   const [showTimeWarning, setShowTimeWarning] = useState(false);
@@ -279,7 +281,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [qIndex, setQIndex] = useState(0);
   const answeredCount = Object.keys(answers).length;
   const totalQuestions = exam.questions.length;
-  const progress = (answeredCount / totalQuestions) * 100;
+  const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
   const currentQ = exam.questions[qIndex];
   const currentQParsed = extractQuestionImages(currentQ?.text || '');
 
@@ -394,8 +396,24 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         const socket = socketUrl ? io(socketUrl, socketOpts) : io(socketOpts);
         socketRef.current = socket;
 
+        const socketEverConnectedRef = { current: false };
+        socket.on('connect', () => {
+          socketEverConnectedRef.current = true;
+          setRealtimeSyncOffline(false);
+        });
+        socket.on('disconnect', () => {
+          if (socketEverConnectedRef.current) setRealtimeSyncOffline(true);
+        });
+        socket.on('reconnect', () => {
+          setRealtimeSyncOffline(false);
+        });
+        socket.on('reconnect_failed', () => {
+          setRealtimeSyncOffline(true);
+        });
+
         let socketExplainLogged = false;
         socket.on('connect_error', () => {
+          setRealtimeSyncOffline(true);
           if (socketExplainLogged) return;
           socketExplainLogged = true;
           console.warn(
@@ -490,6 +508,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       }
 
       if (socketRef.current) {
+        socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
       }
       Object.values(peerConnectionsRef.current).forEach(pc => pc.close());
@@ -1127,6 +1146,20 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
               <div>
                 <strong className="font-semibold block">{t.connectionLostTitle}</strong>
                 {t.connectionLostBody.trim() ? <span className="text-sm">{t.connectionLostBody}</span> : null}
+              </div>
+            </motion.div>
+          )}
+          {!isOffline && realtimeSyncOffline && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-amber-500/10 border border-amber-500/25 text-amber-900 px-6 py-4 rounded-2xl relative backdrop-blur-md flex items-center gap-3 shadow-sm"
+            >
+              <svg className="w-6 h-6 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <div>
+                <strong className="font-semibold block">{t.realtimeSyncOfflineTitle}</strong>
+                <span className="text-sm">{t.realtimeSyncOfflineBody}</span>
               </div>
             </motion.div>
           )}
