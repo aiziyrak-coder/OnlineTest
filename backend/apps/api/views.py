@@ -273,12 +273,24 @@ def student_identity_compare(request):
     result = compare_faces(p_raw, l_raw)
     if not result.get("success"):
         code = result.get("code") or "GEMINI_ERROR"
-        if code == "GEMINI_UNAVAILABLE":
-            # Kalit sozlanmagan — tekshiruv ixtiyoriy, o'tkazib yuboramiz
+        bypass = os.environ.get("ALLOW_IDENTITY_VERIFY_BYPASS", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if bypass and code in ("GEMINI_UNAVAILABLE", "GEMINI_ERROR"):
             return Response({"match": True, "skipped": True, "code": code}, status=200)
-        # GEMINI_ERROR: vaqtinchalik texnik xato — ixtiyoriy, o'tkazib yuboramiz
-        return Response({"match": True, "skipped": True, "code": code}, status=200)
-    return Response({"match": bool(result.get("match"))})
+        # Prod: solishtirish bo'lmasa — tasdiqlanmaydi (boshqa odamni tasdiqlash xavfi)
+        return Response(
+            {
+                "match": False,
+                "skipped": False,
+                "code": code,
+                "detail": "Face verification service unavailable or failed.",
+            },
+            status=503,
+        )
+    return Response({"match": bool(result.get("match")), "skipped": False})
 
 
 # --- Admin: users ---

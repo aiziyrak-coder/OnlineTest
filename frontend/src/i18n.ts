@@ -152,6 +152,8 @@ export const translations = {
     identityVerifyBtn: "Yuzni tekshirish",
     identityVerifyFailed: "Profil rasmingiz bilan mos kelmedi. Yuzingiz yaxshi yoritilgan va kamerada aniq ko‘rinsin.",
     identityVerifyError: "Tekshirishda xatolik. Qayta urinib ko‘ring.",
+    identityVerifyServiceDown:
+      "Yuzni solishtirish ishlamayapti: serverda GEMINI_API_KEY yo‘q yoki xizmat vaqtincha band. Administrator sozlamalarini tekshirsin.",
     identityVerifyUnavailable: "Administratorga murojaat qiling.",
     profilePhotoMissingExam:
       "Profil rasmi yo‘q. Administrator foydalanuvchiga surat yuklashi kerak. Imtihon boshlanmaydi.",
@@ -422,6 +424,8 @@ export const translations = {
     identityVerifyBtn: "Проверить лицо",
     identityVerifyFailed: "Не совпадает с фото профиля. Убедитесь, что лицо хорошо видно.",
     identityVerifyError: "Ошибка проверки. Попробуйте снова.",
+    identityVerifyServiceDown:
+      "Сравнение лиц недоступно: на сервере нет GEMINI_API_KEY или сервис временно недоступен. Обратитесь к администратору.",
     identityVerifyUnavailable: "Обратитесь к администратору.",
     profilePhotoMissingExam: "Нет фото профиля. Обратитесь к администратору. Экзамен недоступен.",
     profilePhotoRequiredStudent: "Для студента обязательно фото профиля.",
@@ -690,6 +694,8 @@ export const translations = {
     identityVerifyBtn: "Verify face",
     identityVerifyFailed: "Does not match your profile photo. Ensure your face is clearly visible.",
     identityVerifyError: "Verification failed. Please try again.",
+    identityVerifyServiceDown:
+      "Face comparison is unavailable: GEMINI_API_KEY is missing on the server or the service is temporarily down. Ask your administrator.",
     identityVerifyUnavailable: "Contact your administrator.",
     profilePhotoMissingExam: "No profile photo. Ask your administrator to upload one. You cannot start the exam.",
     profilePhotoRequiredStudent: "Profile photo is required for students.",

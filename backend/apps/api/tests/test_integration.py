@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import os
 from datetime import timedelta
 from unittest import mock
 
@@ -491,6 +492,58 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, 403)
+
+    @mock.patch("apps.api.views.compare_faces")
+    def test_identity_compare_503_when_gemini_unavailable(self, mock_cf):
+        mock_cf.return_value = {"success": False, "code": "GEMINI_UNAVAILABLE"}
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        r = self.client.post(
+            "/api/student/identity-compare",
+            {
+                "exam_id": self.exam_a.id,
+                "profile_image_base64": PROFILE,
+                "live_capture_base64": PROFILE,
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 503)
+        self.assertFalse(r.json().get("match"))
+
+    @mock.patch("apps.api.views.compare_faces")
+    def test_identity_compare_200_when_match(self, mock_cf):
+        mock_cf.return_value = {"success": True, "match": True}
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        r = self.client.post(
+            "/api/student/identity-compare",
+            {
+                "exam_id": self.exam_a.id,
+                "profile_image_base64": PROFILE,
+                "live_capture_base64": PROFILE,
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json().get("match"))
+        self.assertFalse(r.json().get("skipped", True))
+
+    @mock.patch("apps.api.views.compare_faces")
+    def test_identity_compare_bypass_when_env_allow(self, mock_cf):
+        mock_cf.return_value = {"success": False, "code": "GEMINI_UNAVAILABLE"}
+        with mock.patch.dict(os.environ, {"ALLOW_IDENTITY_VERIFY_BYPASS": "1"}, clear=False):
+            self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+            r = self.client.post(
+                "/api/student/identity-compare",
+                {
+                    "exam_id": self.exam_a.id,
+                    "profile_image_base64": PROFILE,
+                    "live_capture_base64": PROFILE,
+                },
+                format="json",
+            )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body.get("match"))
+        self.assertTrue(body.get("skipped"))
 
     def test_unban_requires_reason_and_evidence(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")

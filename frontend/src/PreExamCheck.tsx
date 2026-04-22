@@ -340,20 +340,20 @@ export function PreExamCheck({
       const data = (await readJsonSafe<{ match?: boolean; skipped?: boolean; code?: string }>(response)) || {};
       if (response.status === 503) {
         const code = data?.code || '';
-        if (code === 'GEMINI_UNAVAILABLE') {
-          setVerified(true);
-          setError('');
-        } else {
-          setError(t.identityVerifyError);
-        }
+        setError(
+          code === 'GEMINI_UNAVAILABLE'
+            ? t.identityVerifyServiceDown
+            : t.identityVerifyError
+        );
         return;
       }
       if (!response.ok) {
         setError(t.identityVerifyError);
         return;
       }
-      if (data.match || data.skipped) {
+      if (data.match === true) {
         setVerified(true);
+        setError('');
       } else {
         setError(t.identityVerifyFailed);
       }

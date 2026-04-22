@@ -93,16 +93,34 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
 
         # Minimal prompt — faqat ikki so'z javob
         contents = [
-            "Same person? Image1=profile, Image2=live. Reply: MATCH or NO_MATCH only.",
+            "Compare faces: Image1=id photo, Image2=live capture.\n"
+            "Reply with EXACTLY one word on the first line only: MATCH (same person) or NO_MATCH (different person). No other text.",
             types.Part.from_bytes(data=p_bytes, mime_type=p_mime),
             types.Part.from_bytes(data=l_bytes, mime_type=l_mime),
         ]
-        raw = _generate(client, None, contents=contents).strip().upper()
-        ok = raw == "MATCH" or ("MATCH" in raw and "NO_MATCH" not in raw)
+        raw = _generate(client, None, contents=contents)
+        ok = _parse_strict_match_line(raw)
         return {"success": True, "match": ok}
     except Exception as exc:
         logger.warning("compare_faces error: %s", exc)
         return {"success": False, "code": "GEMINI_ERROR", "detail": str(exc)[:200]}
+
+
+def _parse_strict_match_line(raw: str) -> bool:
+    """
+    Faqat birinchi qatordagi MATCH / NO_MATCH — noyob javobda xavfsizlik uchun rad.
+    """
+    import string
+
+    if not (raw or "").strip():
+        return False
+    first = raw.strip().splitlines()[0].strip().upper()
+    first = first.strip(string.punctuation + "•–—")
+    if first == "MATCH":
+        return True
+    if first in ("NO_MATCH", "NO MATCH", "NOMATCH"):
+        return False
+    return False
 
 
 def _resize_image_if_large(data: bytes, max_kb: int = 100) -> bytes:
