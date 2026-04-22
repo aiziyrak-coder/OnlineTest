@@ -9,6 +9,7 @@ import {
   attachDefaultMicrophone,
   openCameraByTryingVideoInputs,
   openPreferredCameraStream,
+  VIRTUAL_CAMERA_BLOCKED_MESSAGE,
 } from './lib/preferredCameraStream';
 
 const PASSIVE_LIVE_SAMPLES = 12;
@@ -153,6 +154,10 @@ export function PreExamCheck({
       } catch (e0: unknown) {
         const n0 = domName(e0);
         if (n0 === 'NotAllowedError' || n0 === 'PermissionDeniedError') {
+          if (e0 instanceof DOMException && e0.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+            setError(t.virtualCameraBlocked);
+            return;
+          }
           setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
           return;
         }
@@ -185,7 +190,9 @@ export function PreExamCheck({
         if (s.getAudioTracks().length === 0) setMediaHint(t.preExamMicOnlyFailed);
       } catch (e1: unknown) {
         const n1 = domName(e1);
-        if (n1 === 'NotReadableError' || n1 === 'TrackStartError' || n1 === 'NotAllowedError') {
+        if (e1 instanceof DOMException && e1.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+          setError(t.virtualCameraBlocked);
+        } else if (n1 === 'NotReadableError' || n1 === 'TrackStartError' || n1 === 'NotAllowedError') {
           let vOnly: MediaStream | null = null;
           try {
             vOnly = await openPreferredCameraStream(false, true);
@@ -198,7 +205,11 @@ export function PreExamCheck({
             const ni = domName(innerErr);
             const ref = ni || n1;
             if (ref === 'NotAllowedError' || ref === 'PermissionDeniedError') {
-              setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
+              if (innerErr instanceof DOMException && innerErr.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+                setError(t.virtualCameraBlocked);
+              } else {
+                setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
+              }
             } else if (ref === 'SecurityError') {
               setError(t.preExamRequiresHttps);
             } else if (ref === 'NotFoundError' || ref === 'DevicesNotFoundError') {
@@ -232,7 +243,11 @@ export function PreExamCheck({
         } else if (n1 === 'NotFoundError' || n1 === 'DevicesNotFoundError') {
           setError(t.preExamMediaNotFound);
         } else if (n1 === 'NotAllowedError' || n1 === 'PermissionDeniedError') {
-          setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
+          if (e1 instanceof DOMException && e1.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+            setError(t.virtualCameraBlocked);
+          } else {
+            setError(`${t.preExamPermissionDenied}\n\n${t.preExamSiteSettingsHint}`);
+          }
         } else {
           setError(t.preExamCameraError);
         }

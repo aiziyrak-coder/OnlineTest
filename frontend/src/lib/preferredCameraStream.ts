@@ -1,10 +1,95 @@
 /**
- * Virtual kamera (DroidCam, OBS va h.k.) dan qochish: ruxsatdan keyin real qurilmani tanlash.
- * Ikkinchi getUserMedia (deviceId: exact) ba'zi Windows/Chrome konfiguratsiyalarida
- * NotReadableError beradi — birinchi muvaffaqiyatli oqimni yo'qotmaslik kerak.
+ * Virtual kamera (OBS, DroidCam va h.k.) dan himoya — imtihonda haqiqiy qurilmani talab qilish (VAC security).
+ *
+ * Lab rejimi: frontend/.env da VITE_ALLOW_VIRTUAL_CAMERA=true bo'lsa virtuall qurilmaga fallback qaytadi (faqat ichki test).
  */
-const VIRTUAL_CAMERA_LABEL_RE =
-  /(droidcam|epoccam|iriun|ivcam|obs|virtual|manycam|splitcam)/i;
+
+/** Brauzer blokirovkasi — DOMException.message bilan solishtirish uchun */
+export const VIRTUAL_CAMERA_BLOCKED_MESSAGE = 'VAC_VIRTUAL_BLOCKED';
+
+/** Lab ichki test uchun virtual kamerani yoqilish (prod build da odatda yozilmaydi) */
+const ALLOW_VIRTUAL_FALLBACK =
+  String(import.meta.env.VITE_ALLOW_VIRTUAL_CAMERA || '').toLowerCase().trim() === 'true';
+
+/**
+ * Qurilma nomlarida tez-tez uchraydigan virtual/dasturiy webcam belgilari (kichik harf).
+ * Uzunligi — ortiqcha false positive bermasligi uchun substring sifatida.
+ */
+const VIRTUAL_CAMERA_MARKERS = [
+  'droidcam',
+  'epoccam',
+  'iriun',
+  'iriun webcam',
+  'ivcam',
+  'e2esoft ivcam',
+  'obs virtual',
+  'obs-camera',
+  'obs camera',
+  'virtual camera',
+  'virtualcamera',
+  'manycam',
+  'splitcam',
+  'split cam',
+  'webcamoid',
+  'chromacam',
+  'chroma cam',
+  'akvcam',
+  'snap camera',
+  'ndi webcam',
+  'ndi virtual',
+  'ndi webcamera',
+  'unitycapture',
+  'unity capture',
+  'xsplit',
+  'vcam',
+  'streamlabs virtual',
+  'eos webcam utility',
+  'dslr webcam',
+  'dslr webcam utility',
+  'canon webcam utility',
+  'finecam',
+  'youcam',
+  'cyberlink',
+  'perfectcam',
+  'perfect cam',
+  'nvidia broadcast',
+  'mmhmm',
+  'kinoni',
+  'webcamera for obs',
+  'smartphone as webcam',
+  'ndi hx',
+  'vmix',
+  'mmhmm virtual',
+];
+
+/** Brauzer "" qaytarganda aniqlash mumkin emas — false */
+export function isVirtualCameraLabel(label: string): boolean {
+  const L = (label || '').toLowerCase();
+  if (!L.trim()) return false;
+
+  if (/\bobs virtual\b|\bobs-camera\b|\bvirtualcam\b|\bvirtual cam\b|\bndi webcam\b|\bndi virtual\b/i.test(L)) {
+    return true;
+  }
+
+  /* "OBS Virtual Camera", "OBS-Camera", "OBS Studio Virtual" */
+  if (/\bobs\b/i.test(L) && /virtual|studio|camera|cam/i.test(L)) {
+    return true;
+  }
+
+  return VIRTUAL_CAMERA_MARKERS.some((m) => L.includes(m));
+}
+
+export function streamLooksLikeVirtualCamera(stream: MediaStream | null | undefined): boolean {
+  const track = stream?.getVideoTracks?.()?.[0];
+  return Boolean(track?.label && isVirtualCameraLabel(track.label));
+}
+
+/** Virtual bo'lsa tracklarni to'xtatadi va DOMException uchiradi */
+export function rejectVirtualCameraStream(stream: MediaStream): void {
+  if (!streamLooksLikeVirtualCamera(stream)) return;
+  stream.getTracks().forEach((t) => t.stop());
+  throw new DOMException(VIRTUAL_CAMERA_BLOCKED_MESSAGE, 'NotAllowedError');
+}
 
 /**
  * `video: true` o'rniga yengil cheklovlar: to'liq HD birinchi ochilishi ba'zi USB/Windows
@@ -16,9 +101,22 @@ export const LIGHT_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
   frameRate: { ideal: 15, max: 30 },
 };
 
+/** Virtual bo'lsa va qat'iy rejim bo'lsa — stream to'xtatiladi va xato; lab rejimida ogohlantirish. */
+function finalizePhysicalStream(stream: MediaStream, ctx: string): MediaStream {
+  if (!streamLooksLikeVirtualCamera(stream)) return stream;
+  if (ALLOW_VIRTUAL_FALLBACK) {
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[VAC]', ctx, 'virtual camera allowed (VITE_ALLOW_VIRTUAL_CAMERA=true)');
+    }
+    return stream;
+  }
+  rejectVirtualCameraStream(stream);
+  return stream;
+}
+
 export async function openPreferredCameraStream(
   withAudio: boolean,
-  video: true | MediaTrackConstraints
+  video: true | MediaTrackConstraints,
 ): Promise<MediaStream> {
   const videoConstraint: MediaTrackConstraints | boolean =
     video === true ? LIGHT_VIDEO_CONSTRAINTS : video;
@@ -29,25 +127,26 @@ export async function openPreferredCameraStream(
 
   const currentTrack = initial.getVideoTracks()[0];
   const currentLabel = currentTrack?.label || '';
-  // Virtual emas, yoritilgan nom bo'lsa — qayta deviceId ochish ko'pincha NotReadable beradi; saqlaymiz
-  if (currentLabel && !VIRTUAL_CAMERA_LABEL_RE.test(currentLabel)) {
-    return initial;
+  if (currentLabel && !isVirtualCameraLabel(currentLabel)) {
+    return finalizePhysicalStream(initial, 'openPreferred initial ok');
   }
 
   let devices: MediaDeviceInfo[];
   try {
     devices = await navigator.mediaDevices.enumerateDevices();
   } catch {
-    return initial;
+    return finalizePhysicalStream(initial, 'enumerateDevices failed');
   }
 
   const preferred = devices.find(
-    (d) => d.kind === 'videoinput' && !VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')
+    (d) => d.kind === 'videoinput' && !isVirtualCameraLabel(d.label || ''),
   );
-  if (!preferred?.deviceId) return initial;
+  if (!preferred?.deviceId) {
+    return finalizePhysicalStream(initial, 'no non-virtual device id');
+  }
 
   const currentId = currentTrack?.getSettings?.().deviceId;
-  if (currentId && currentId === preferred.deviceId) return initial;
+  if (currentId && currentId === preferred.deviceId) return finalizePhysicalStream(initial, 'same device');
 
   const base: MediaTrackConstraints =
     video === true ? { ...LIGHT_VIDEO_CONSTRAINTS } : { ...(video as MediaTrackConstraints) };
@@ -62,16 +161,12 @@ export async function openPreferredCameraStream(
       audio: withAudio,
     });
     initial.getTracks().forEach((t) => t.stop());
-    return switched;
+    return finalizePhysicalStream(switched, 'switched device');
   } catch {
-    return initial;
+    return finalizePhysicalStream(initial, 'switch failed');
   }
 }
 
-/**
- * Mavjud video oqimiga default mikrofon izini qo'shadi.
- * Windows/Chrome da qattiq `audio: true` yiqilsa, qayta sinov — echoCancellation va h.k. o'chirilgan.
- */
 export async function attachDefaultMicrophone(videoStream: MediaStream): Promise<boolean> {
   try {
     const a = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -119,6 +214,7 @@ function uniqueVideoInputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
 /**
  * Default kamera NotReadable bo'lsa — har bir videoinput ni bir necha cheklov bilan,
  * qurilmalar orasida qisqa kutish bilan sinaymiz (Chrome: "Could not start video source").
+ * Prod: virtual kameraga fallback yo'q (faqat VITE_ALLOW_VIRTUAL_CAMERA=true).
  */
 export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
   await sleep(420);
@@ -126,8 +222,19 @@ export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
   const videoInputs = uniqueVideoInputs(devices);
   let lastErr: unknown;
 
+  const skipVirtualPasses = ALLOW_VIRTUAL_FALLBACK ? [true, false] : [true];
+
   const tryConstraints = async (constraints: MediaStreamConstraints): Promise<MediaStream> => {
     const s = await navigator.mediaDevices.getUserMedia(constraints);
+    if (streamLooksLikeVirtualCamera(s)) {
+      if (ALLOW_VIRTUAL_FALLBACK) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[VAC] openCameraByTryingVideoInputs: virtual stream allowed (lab)');
+        }
+      } else {
+        rejectVirtualCameraStream(s);
+      }
+    }
     await attachDefaultMicrophone(s);
     return s;
   };
@@ -170,9 +277,9 @@ export async function openCameraByTryingVideoInputs(): Promise<MediaStream> {
     },
   ];
 
-  for (const skipVirtual of [true, false]) {
+  for (const skipVirtual of skipVirtualPasses) {
     for (const d of videoInputs) {
-      if (skipVirtual && VIRTUAL_CAMERA_LABEL_RE.test(d.label || '')) continue;
+      if (skipVirtual && isVirtualCameraLabel(d.label || '')) continue;
       for (const constraints of variantsForDevice(d.deviceId)) {
         try {
           await sleep(320);
@@ -219,7 +326,7 @@ export async function openPreferredProctorStream(): Promise<MediaStream> {
   try {
     const v = await openPreferredCameraStream(false, PROCTOR_VIDEO);
     await attachDefaultMicrophone(v);
-    return v;
+    return finalizePhysicalStream(v, 'proctor v0');
   } catch (e0: unknown) {
     const n0 =
       e0 instanceof DOMException ? e0.name : e0 instanceof Error ? e0.name : '';
@@ -232,22 +339,29 @@ export async function openPreferredProctorStream(): Promise<MediaStream> {
     ) {
       throw e0;
     }
+    if (e0 instanceof DOMException && e0.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+      throw e0;
+    }
   }
 
   try {
     const s = await openPreferredCameraStream(true, PROCTOR_VIDEO);
     await attachDefaultMicrophone(s);
-    return s;
+    return finalizePhysicalStream(s, 'proctor audio+video');
   } catch (e: unknown) {
     const name =
       e instanceof DOMException ? e.name : e instanceof Error ? e.name : '';
+    if (e instanceof DOMException && e.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+      throw e;
+    }
     if (name === 'NotReadableError' || name === 'TrackStartError') {
       try {
         const v = await openPreferredCameraStream(false, PROCTOR_VIDEO);
         await attachDefaultMicrophone(v);
-        return v;
+        return finalizePhysicalStream(v, 'proctor retry video');
       } catch {
-        return openCameraByTryingVideoInputs();
+        const fallback = await openCameraByTryingVideoInputs();
+        return finalizePhysicalStream(fallback, 'proctor openCameraByTryingVideoInputs');
       }
     }
     throw e;

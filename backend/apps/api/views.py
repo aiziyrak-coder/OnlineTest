@@ -2178,6 +2178,7 @@ def student_violations(request):
             "SUSPICIOUS_AUDIO",
             "WHISPER_OR_CONVERSATION_SUSPECTED",
             "CAMERA_MIC_ACCESS_FAILED",
+            "VIRTUAL_WEBCAM_SUSPECTED",
             "FACE_NOT_VISIBLE",
             "MULTIPLE_FACES",
             "GAZE_AWAY_LEFT",
@@ -2224,6 +2225,7 @@ def student_violations(request):
         "GAZE_AWAY_DOWN": "Pastga uzoq qaraldi (nojo'ya harakat)",
         "WHISPER_OR_CONVERSATION_SUSPECTED": "Past ovoz / gapirish yoki suhbat shubhasi",
         "CAMERA_MIC_ACCESS_FAILED": "Kamera yoki mikrofonni ishga tushirib bo'lmadi",
+        "VIRTUAL_WEBCAM_SUSPECTED": "Virtual / dasturiy kamera ishlatilishi aniqlanishi mumkin (OBS va h.k.)",
     }
     reason_text = violation_reason_map.get(vtype, vtype)
 

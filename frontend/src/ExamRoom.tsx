@@ -10,7 +10,10 @@ import { translations, Language } from './i18n';
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import type { ExamResultPayload } from './components/ExamResultSummary';
-import { openPreferredProctorStream } from './lib/preferredCameraStream';
+import {
+  openPreferredProctorStream,
+  VIRTUAL_CAMERA_BLOCKED_MESSAGE,
+} from './lib/preferredCameraStream';
 
 // Identity check: har 90 soniyada (45s → 90s: Gemini token tejash)
 const IDENTITY_CHECK_MS = 90_000;
@@ -436,8 +439,13 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         animationFrameRef.current = requestAnimationFrame(processFrame);
 
       } catch (err) {
-        console.error("Failed to setup AI proctoring:", err);
-        void logViolationRef.current('CAMERA_MIC_ACCESS_FAILED');
+        if (err instanceof DOMException && err.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+          setWarningMsg(translations[lang].virtualCameraBlocked);
+          void logViolationRef.current('VIRTUAL_WEBCAM_SUSPECTED');
+        } else {
+          console.error('Failed to setup AI proctoring:', err);
+          void logViolationRef.current('CAMERA_MIC_ACCESS_FAILED');
+        }
       }
     };
 
@@ -469,7 +477,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         audioContextRef.current.close().catch(() => {});
       }
     };
-  }, [banned, exam.id, token, user.id]);
+  }, [banned, exam.id, token, user.id, lang]);
 
   // Frame counter — object detection ni kamroq chaqirish uchun
   const frameCountRef = useRef(0);

@@ -1,3 +1,5 @@
+import { VIRTUAL_CAMERA_BLOCKED_MESSAGE } from './lib/preferredCameraStream';
+
 export const translations = {
   uz: {
     login: "Tizimga kirish",
@@ -155,6 +157,8 @@ export const translations = {
     identityVerifyServiceDown:
       "Yuzni solishtirish ishlamayapti: serverda GEMINI_API_KEY yo‘q yoki xizmat vaqtincha band. Administrator sozlamalarini tekshirsin.",
     identityVerifyUnavailable: "Administratorga murojaat qiling.",
+    virtualCameraBlocked:
+      "Virtual / dasturiy kamera (OBS Virtual Camera, DroidCam va h.k.) imtihonda taqiqlangan. OBS va shunga o‘xshash ilovalarni yoping, USB yoki qurilmaga o‘rnatilgan haqiqiy kamerani tanlang.",
     profilePhotoMissingExam:
       "Profil rasmi yo‘q. Administrator foydalanuvchiga surat yuklashi kerak. Imtihon boshlanmaydi.",
     profilePhotoRequiredStudent: "Talaba qo‘shishda profil surati majburiy.",
@@ -427,6 +431,8 @@ export const translations = {
     identityVerifyServiceDown:
       "Сравнение лиц недоступно: на сервере нет GEMINI_API_KEY или сервис временно недоступен. Обратитесь к администратору.",
     identityVerifyUnavailable: "Обратитесь к администратору.",
+    virtualCameraBlocked:
+      "Виртуальная камера (OBS Virtual Camera, DroidCam и т.п.) на экзамене запрещена. Закройте OBS и подобные программы, выберите реальную USB- или встроенную камеру.",
     profilePhotoMissingExam: "Нет фото профиля. Обратитесь к администратору. Экзамен недоступен.",
     profilePhotoRequiredStudent: "Для студента обязательно фото профиля.",
     profilePhotoLabel: "Фото профиля",
@@ -697,6 +703,8 @@ export const translations = {
     identityVerifyServiceDown:
       "Face comparison is unavailable: GEMINI_API_KEY is missing on the server or the service is temporarily down. Ask your administrator.",
     identityVerifyUnavailable: "Contact your administrator.",
+    virtualCameraBlocked:
+      "Virtual cameras (OBS Virtual Camera, DroidCam, etc.) are not allowed during the exam. Close OBS and similar apps and select a physical USB or built-in webcam.",
     profilePhotoMissingExam: "No profile photo. Ask your administrator to upload one. You cannot start the exam.",
     profilePhotoRequiredStudent: "Profile photo is required for students.",
     profilePhotoLabel: "Profile photo",
@@ -831,6 +839,10 @@ function domExceptionInfo(err: unknown): { name: string; message: string } {
 export function formatPreExamMediaAccessFailure(err: unknown, lang: Language): string {
   const t = translations[lang];
   const { name, message } = domExceptionInfo(err);
+  // Virtual camera security (preferredCameraStream.ts)
+  if (message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+    return `${t.preExamMediaFailedIntro}\n\n${t.virtualCameraBlocked}`;
+  }
   let hint: string;
   switch (name) {
     case 'NotReadableError':
