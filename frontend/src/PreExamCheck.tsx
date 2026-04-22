@@ -15,6 +15,8 @@ import {
 const PASSIVE_LIVE_SAMPLES = 12;
 const PASSIVE_LIVE_GAP_MS = 260;
 const PASSIVE_LIVE_THRESHOLD = 400;
+const LIVENESS_W = 80;
+const LIVENESS_H = 60;
 
 /** Kadr yoritilishi/piksel yig'indisi o'zgarishi — foydalanuvchi harakat yoki tabiiy harakat */
 async function samplePassiveFrameMotion(captureFrame: () => number): Promise<boolean> {
@@ -76,9 +78,10 @@ export function PreExamCheck({
     const video = videoRef.current;
     const canvas = livenessCanvasRef.current;
     if (!video.videoWidth || !video.videoHeight) return 0;
-    // Faqat yuz joylashgan markaziy qism (yuqori 60%)
-    canvas.width = 80;
-    canvas.height = 60;
+    // O'lchamni faqat o'zgartirganda yangilaymiz — har kadrda width/height qayta yazilganda
+    // canvas tozalanadi va Chromium willReadFrequently ogohlantirishini beradi.
+    if (canvas.width !== LIVENESS_W) canvas.width = LIVENESS_W;
+    if (canvas.height !== LIVENESS_H) canvas.height = LIVENESS_H;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return 0;
     // Markaziy yuz zonasini olish

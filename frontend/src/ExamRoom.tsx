@@ -348,17 +348,28 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     document.addEventListener('paste', handleCopyPaste);
     document.addEventListener('keydown', handleKeyDown);
 
-    // Force fullscreen — blur ignore 3 soniya (fullscreen dialog paytida)
-    const enterFullscreen = () => {
+    // requestFullscreen faqat foydalanuvchi jesti (click/touch) bilan — useEffect o'zi "user gesture" emas
+    const onFirstUserGesture = () => {
+      if (document.fullscreenElement) {
+        window.removeEventListener('pointerdown', onFirstUserGesture, true);
+        return;
+      }
       if (document.documentElement.requestFullscreen) {
         fullscreenRequestedRef.current = true;
         blurIgnoreUntilRef.current = Date.now() + 3000;
-        document.documentElement.requestFullscreen().catch(() => {
-          fullscreenRequestedRef.current = false;
-        });
+        void document.documentElement.requestFullscreen().then(
+          () => {
+            window.removeEventListener('pointerdown', onFirstUserGesture, true);
+          },
+          () => {
+            fullscreenRequestedRef.current = false;
+          }
+        );
+      } else {
+        window.removeEventListener('pointerdown', onFirstUserGesture, true);
       }
     };
-    enterFullscreen();
+    window.addEventListener('pointerdown', onFirstUserGesture, { capture: true });
 
     const setupAI = async () => {
       try {
@@ -373,10 +384,23 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         const socketUrl =
           (import.meta.env.VITE_SOCKET_URL as string | undefined)?.trim() ||
           (import.meta.env.DEV ? 'http://127.0.0.1:3001' : undefined);
-        const socket = socketUrl
-          ? io(socketUrl, { path: '/socket.io', auth: { token } })
-          : io({ path: '/socket.io', auth: { token } });
+        const socketOpts = {
+          path: '/socket.io',
+          auth: { token },
+          reconnectionDelay: 2500,
+          reconnectionDelayMax: 15000,
+        };
+        const socket = socketUrl ? io(socketUrl, socketOpts) : io(socketOpts);
         socketRef.current = socket;
+
+        let socketExplainLogged = false;
+        socket.on('connect_error', () => {
+          if (socketExplainLogged) return;
+          socketExplainLogged = true;
+          console.warn(
+            '[ExamRoom] Socket.io ulanmadi (502: onlinetest-realtime o\'chiq yoki nginx → 127.0.0.1:9082). Server: sudo systemctl status onlinetest-realtime'
+          );
+        });
 
         socket.emit('join-exam', exam.id, 'student', user.id);
 
@@ -453,6 +477,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
     // Cleanup
     return () => {
+      window.removeEventListener('pointerdown', onFirstUserGesture, true);
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleCopyPaste);
       document.removeEventListener('paste', handleCopyPaste);

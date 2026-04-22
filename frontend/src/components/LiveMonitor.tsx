@@ -33,10 +33,23 @@ export function LiveMonitor({ examId, token, onClose }: LiveMonitorProps) {
     const socketUrl =
       (import.meta.env.VITE_SOCKET_URL as string | undefined)?.trim() ||
       (import.meta.env.DEV ? 'http://127.0.0.1:3001' : undefined);
-    const socket = socketUrl
-      ? io(socketUrl, { path: '/socket.io', auth: { token } })
-      : io({ path: '/socket.io', auth: { token } });
+    const socketOpts = {
+      path: '/socket.io',
+      auth: { token },
+      reconnectionDelay: 2500,
+      reconnectionDelayMax: 15000,
+    };
+    const socket = socketUrl ? io(socketUrl, socketOpts) : io(socketOpts);
     socketRef.current = socket;
+
+    let socketExplainLogged = false;
+    socket.on('connect_error', () => {
+      if (socketExplainLogged) return;
+      socketExplainLogged = true;
+      console.warn(
+        '[LiveMonitor] Socket.io ulanmadi (502: realtime xizmati serverda ishlamayapti). Tekshirish: sudo systemctl status onlinetest-realtime'
+      );
+    });
 
     socket.emit('join-exam', examId, 'proctor', viewerId);
 
