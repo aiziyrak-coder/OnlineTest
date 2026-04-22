@@ -281,15 +281,7 @@ def student_identity_compare(request):
         if bypass and code in ("GEMINI_UNAVAILABLE", "GEMINI_ERROR"):
             return Response({"match": True, "skipped": True, "code": code}, status=200)
         # Prod: solishtirish bo'lmasa — tasdiqlanmaydi (boshqa odamni tasdiqlash xavfi)
-        return Response(
-            {
-                "match": False,
-                "skipped": False,
-                "code": code,
-                "detail": "Face verification service unavailable or failed.",
-            },
-            status=503,
-        )
+        return Response({"match": False, "skipped": False, "code": code}, status=503)
     return Response({"match": bool(result.get("match")), "skipped": False})
 
 

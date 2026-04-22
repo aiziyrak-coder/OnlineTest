@@ -101,7 +101,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-            ],
+            ], 
         },
     },
 ]
@@ -130,6 +130,25 @@ else:
             },
         }
     }
+
+# Prod: tasodifiy SQLite yoki yuz-tekshiruvni chetlatish — ochiq qoldirilmasin
+if not DEBUG:
+    _engine = DATABASES["default"].get("ENGINE", "")
+    if "sqlite" in _engine:
+        _allow_sqlite = os.environ.get("DATABASE_ALLOW_SQLITE_PROD", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if not _allow_sqlite:
+            raise RuntimeError(
+                "Production: DATABASE_URL (PostgreSQL) majburiy — SQLite bilan prod odatda ishlamasligi kerak. "
+                "Faqat maqsadli lab/CI: DATABASE_ALLOW_SQLITE_PROD=1."
+            )
+    if os.environ.get("ALLOW_IDENTITY_VERIFY_BYPASS", "").strip().lower() in ("1", "true", "yes"):
+        raise RuntimeError(
+            "Production: ALLOW_IDENTITY_VERIFY_BYPASS taqiqlangan — yuz tekshiruvini chetlatadi."
+        )
 
 LANGUAGE_CODE = "uz"
 TIME_ZONE = "Asia/Tashkent"

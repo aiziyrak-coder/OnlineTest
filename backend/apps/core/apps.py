@@ -21,4 +21,6 @@ class CoreConfig(AppConfig):
     verbose_name = "Core"
 
     def ready(self):
+        from . import checks  # noqa: F401 — @register() system checks
+
         connection_created.connect(_sqlite_enable_wal)

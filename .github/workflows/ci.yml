@@ -87,6 +87,8 @@ jobs:
           CSRF_TRUSTED_ORIGINS: https://app.example.org,https://api.example.org
           DJANGO_SECURE_SSL: "1"
           SECURE_PROXY_SSL_HEADER: X-Forwarded-Proto:https
+          DATABASE_ALLOW_SQLITE_PROD: "1"
+          GEMINI_API_KEY: ci-placeholder-gemini-key-for-deploy-check-only
         run: python manage.py check --deploy
 
       - name: Tests
