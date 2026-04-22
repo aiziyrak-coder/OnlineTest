@@ -235,7 +235,8 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 52_428_800
 
 PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# gemini-2.0-* yangi kalitlar uchun 404 beradi. Gemini 3.x Pro vorisi; ishlamasa env da gemini-2.5-pro qo‘ying.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
 
 if not DEBUG:
     _log_json = os.environ.get("LOG_JSON", "").strip().lower() in ("1", "true", "yes")
