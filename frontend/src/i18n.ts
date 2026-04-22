@@ -158,6 +158,8 @@ export const translations = {
       "Yuzni solishtirish ishlamayapti: serverda GEMINI_API_KEY yo‘q yoki xizmat vaqtincha band. Administrator sozlamalarini tekshirsin.",
     identityVerifyGeminiError:
       "Google AI (Gemini) bilan aloqa yoki javob xatosi — kalit, kvota yoki tarmoq. Administrator /etc/onlinetest/api.env da GEMINI_API_KEY va internet chiqishini tekshirsin.",
+    identityVerifyGeminiModelInvalid:
+      "Gemini model nomi noto‘g‘ri yoki kalitingizda yo‘q (404). /etc/onlinetest/api.env da GEMINI_MODEL=gemini-2.5-pro yoki gemini-2.5-flash qilib qo‘ying, so‘ng: sudo systemctl restart onlinetest-api.",
     identityVerifyUnavailable: "Administratorga murojaat qiling.",
     virtualCameraBlocked:
       "Virtual / dasturiy kamera (OBS Virtual Camera, DroidCam va h.k.) imtihonda taqiqlangan. OBS va shunga o‘xshash ilovalarni yoping, USB yoki qurilmaga o‘rnatilgan haqiqiy kamerani tanlang.",
@@ -434,6 +436,8 @@ export const translations = {
       "Сравнение лиц недоступно: на сервере нет GEMINI_API_KEY или сервис временно недоступен. Обратитесь к администратору.",
     identityVerifyGeminiError:
       "Ошибка связи с Google AI (Gemini) — ключ, квота или сеть. Администратору: GEMINI_API_KEY в api.env и доступ в интернет.",
+    identityVerifyGeminiModelInvalid:
+      "Неверное имя модели Gemini или модель недоступна для ключа (404). В api.env: GEMINI_MODEL=gemini-2.5-pro или gemini-2.5-flash, затем restart onlinetest-api.",
     identityVerifyUnavailable: "Обратитесь к администратору.",
     virtualCameraBlocked:
       "Виртуальная камера (OBS Virtual Camera, DroidCam и т.п.) на экзамене запрещена. Закройте OBS и подобные программы, выберите реальную USB- или встроенную камеру.",
@@ -708,6 +712,8 @@ export const translations = {
       "Face comparison is unavailable: GEMINI_API_KEY is missing on the server or the service is temporarily down. Ask your administrator.",
     identityVerifyGeminiError:
       "Google AI (Gemini) request failed — API key, quota, or network. Administrator: check GEMINI_API_KEY in api.env and outbound HTTPS.",
+    identityVerifyGeminiModelInvalid:
+      "Gemini model name is invalid or not enabled for your key (404). Set GEMINI_MODEL=gemini-2.5-pro or gemini-2.5-flash in api.env, then restart onlinetest-api.",
     identityVerifyUnavailable: "Contact your administrator.",
     virtualCameraBlocked:
       "Virtual cameras (OBS Virtual Camera, DroidCam, etc.) are not allowed during the exam. Close OBS and similar apps and select a physical USB or built-in webcam.",

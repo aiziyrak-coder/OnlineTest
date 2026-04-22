@@ -103,7 +103,21 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
         return {"success": True, "match": ok}
     except Exception as exc:
         logger.warning("compare_faces error: %s", exc)
-        return {"success": False, "code": "GEMINI_ERROR", "detail": str(exc)[:200]}
+        detail = str(exc)[:400]
+        dl = detail.lower()
+        code = "GEMINI_ERROR"
+        # Model nomi noto'g'ri / eskirgan / kalitda yo'q — odatda 404 NOT_FOUND
+        if (
+            "404" in detail
+            or "not_found" in dl
+            or "not found" in dl
+            or "no longer available" in dl
+            or "invalid model" in dl
+            or "does not exist" in dl
+            or "was not found" in dl
+        ):
+            code = "GEMINI_MODEL_INVALID"
+        return {"success": False, "code": code, "detail": detail}
 
 
 def _parse_strict_match_line(raw: str) -> bool:
