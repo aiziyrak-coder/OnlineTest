@@ -96,7 +96,7 @@ export function PublicVerifyResult() {
       : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-emerald-50/40 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-emerald-50/40 py-4 sm:py-8 px-2 sm:px-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
       <ExamResultSummary data={data} publicPdfUrl={pdfUrl} />
     </div>
   );

@@ -110,12 +110,14 @@ export function StudentDashboard({ token, onStartExam, lang }: { token: string, 
   return (
     <div className="p-6 max-w-5xl mx-auto relative">
       {detailPayload && (
-        <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/50 backdrop-blur-sm p-4">
-          <ExamResultSummary
-            data={detailPayload}
-            token={token}
-            onBack={() => setDetailPayload(null)}
-          />
+        <div className="fixed inset-0 z-[100] flex flex-col overflow-y-auto overscroll-y-contain bg-slate-900/50 backdrop-blur-sm px-3 py-[max(0.75rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex-1 min-h-0 w-full max-w-4xl mx-auto py-2">
+            <ExamResultSummary
+              data={detailPayload}
+              token={token}
+              onBack={() => setDetailPayload(null)}
+            />
+          </div>
         </div>
       )}
       <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">

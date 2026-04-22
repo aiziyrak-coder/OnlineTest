@@ -121,7 +121,7 @@ function AppContent() {
   const t = translations[lang];
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden">
+    <div className="min-h-screen flex flex-col relative overflow-x-hidden">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/40 backdrop-blur-3xl border-b border-white/40 shadow-[0_4px_30px_rgb(0,0,0,0.03)] px-6 py-4 flex justify-between items-center transition-all duration-500">
         <div className="flex items-center gap-3">
           <InstituteLogo size="sm" className="shrink-0" />
@@ -150,7 +150,7 @@ function AppContent() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto pt-28 pb-4 px-4 sm:px-6 relative z-10">
+      <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto pt-24 sm:pt-28 pb-6 sm:pb-8 px-3 sm:px-6 relative z-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={user.role + examStatus}

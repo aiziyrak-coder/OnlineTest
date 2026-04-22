@@ -76,11 +76,11 @@ export function ExamResultSummary({ data, token, publicPdfUrl, onBack }: Props) 
   const pct = data.percentage ?? (data.total > 0 ? Math.round((data.score / data.total) * 100) : 0);
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 space-y-8">
+    <div className="w-full max-w-4xl mx-auto min-h-0 px-2 sm:px-4 py-4 sm:py-6 md:py-8 space-y-5 sm:space-y-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 shadow-[0_20px_60px_-15px_rgba(15,23,42,0.12)]"
+        className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 shadow-[0_20px_60px_-15px_rgba(15,23,42,0.12)]"
       >
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.07]"
@@ -88,28 +88,36 @@ export function ExamResultSummary({ data, token, publicPdfUrl, onBack }: Props) 
             backgroundImage: `repeating-linear-gradient(-45deg, transparent, transparent 12px, #0f172a 12px, #0f172a 13px)`,
           }}
         />
-        <div className="relative p-6 sm:p-10">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
-            <div className="flex items-start gap-4">
-              <div className="opacity-90">
+        <div className="relative p-4 sm:p-8 md:p-10">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5 sm:gap-6">
+            <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+              <div className="opacity-90 shrink-0">
                 <InstituteLogo size="md" />
               </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.12em] sm:tracking-[0.2em] text-slate-500 leading-snug">
                   Farg‘ona jamoat salomatligi tibbiyot instituti
                 </p>
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mt-1">Test natijasi</h1>
-                {data.exam_title && <p className="text-slate-600 mt-1 font-medium">{data.exam_title}</p>}
-                {data.student_name && <p className="text-sm text-slate-500 mt-0.5">Talaba: {data.student_name}</p>}
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 tracking-tight mt-1 leading-tight">
+                  Test natijasi
+                </h1>
+                {data.exam_title && (
+                  <p className="text-slate-600 mt-1 font-medium text-sm sm:text-base break-words">{data.exam_title}</p>
+                )}
+                {data.student_name && (
+                  <p className="text-xs sm:text-sm text-slate-500 mt-0.5 break-words">Talaba: {data.student_name}</p>
+                )}
               </div>
             </div>
-            <div className="flex flex-col items-center gap-2 bg-white/80 backdrop-blur rounded-2xl p-4 border border-slate-200/60 shadow-sm">
-              <QRCodeSVG value={data.verify_url} size={112} level="M" includeMargin={false} />
-              <span className="text-[10px] text-slate-500 text-center max-w-[140px] leading-tight">Tekshirish uchun QR</span>
+            <div className="flex flex-col items-center gap-2 bg-white/80 backdrop-blur rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-200/60 shadow-sm shrink-0 mx-auto sm:mx-0 sm:ml-auto">
+              <QRCodeSVG value={data.verify_url} size={100} level="M" includeMargin={false} />
+              <span className="text-[10px] text-slate-500 text-center max-w-[140px] leading-tight">
+                Tekshirish uchun QR
+              </span>
             </div>
           </div>
 
-          <div className="mt-8 grid sm:grid-cols-3 gap-4">
+          <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="rounded-2xl bg-white/90 border border-slate-200/80 p-4 shadow-sm">
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Natija ID</p>
               <p className="text-lg font-bold text-indigo-900 font-mono mt-1 break-all">{data.result_public_id}</p>
@@ -133,12 +141,12 @@ export function ExamResultSummary({ data, token, publicPdfUrl, onBack }: Props) 
             </p>
           )}
 
-          <div className="mt-6 flex flex-wrap gap-3 justify-center sm:justify-start">
-            <Button className="rounded-full" onClick={downloadPdf} disabled={pdfBusy}>
+          <div className="mt-5 sm:mt-6 flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 sm:justify-start">
+            <Button className="rounded-full w-full sm:w-auto shrink-0" onClick={downloadPdf} disabled={pdfBusy}>
               {pdfBusy ? 'Yuklanmoqda…' : 'PDF yuklab olish'}
             </Button>
             {onBack && (
-              <Button variant="outline" className="rounded-full" onClick={onBack}>
+              <Button variant="outline" className="rounded-full w-full sm:w-auto" onClick={onBack}>
                 Dashboard
               </Button>
             )}
