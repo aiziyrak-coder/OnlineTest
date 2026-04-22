@@ -26,7 +26,7 @@ function compressToJpeg(video: HTMLVideoElement, quality = 0.55, maxW = 320): st
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: false });
   if (!ctx) return '';
   ctx.drawImage(video, 0, 0, w, h);
   return canvas.toDataURL('image/jpeg', quality);

@@ -61,7 +61,10 @@ export function PreExamCheck({
   const [livenessRetryKey, setLivenessRetryKey] = useState(0);
   const [livenessFailed, setLivenessFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  /** Identity snapshot (JPEG) — faqat verifyIdentity */
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** Liveness getImageData — alohida canvas (bir canvas da kontekst aralashmasin) */
+  const livenessCanvasRef = useRef<HTMLCanvasElement>(null);
   const t = translations[lang];
 
   /**
@@ -69,9 +72,9 @@ export function PreExamCheck({
    * Ko'z yumish yoki tabassum paytida yuz maydoni o'zgaradi — delta katta bo'ladi.
    */
   const captureFrame = (): number => {
-    if (!videoRef.current || !canvasRef.current) return 0;
+    if (!videoRef.current || !livenessCanvasRef.current) return 0;
     const video = videoRef.current;
-    const canvas = canvasRef.current;
+    const canvas = livenessCanvasRef.current;
     if (!video.videoWidth || !video.videoHeight) return 0;
     // Faqat yuz joylashgan markaziy qism (yuqori 60%)
     canvas.width = 80;
@@ -330,7 +333,7 @@ export function PreExamCheck({
       const video = videoRef.current;
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: false });
       if (!ctx) return;
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
@@ -468,7 +471,8 @@ export function PreExamCheck({
               className="w-full h-full object-cover"
               style={{ transform: 'scaleX(-1)' }}
             />
-            <canvas ref={canvasRef} className="hidden" />
+            <canvas ref={canvasRef} className="hidden" aria-hidden />
+            <canvas ref={livenessCanvasRef} className="hidden" aria-hidden />
             {!cameraReady && (
               <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-medium bg-white/50 backdrop-blur-sm">
                 {t.preExamWaitCamera}
