@@ -7,7 +7,16 @@ import { TestBankTab } from './TestBankTab';
 import { ImtixonTab } from './ImtixonTab';
 import { apiUrl } from '../lib/apiUrl';
 
-export function AdminDashboard({ token, lang }: { token: string; lang: Language }) {
+export function AdminDashboard({
+  token,
+  lang,
+  adminUserId,
+}: {
+  token: string;
+  lang: Language;
+  /** Mas'ul sifatida «Men (admin)» uchun JWT dagi id */
+  adminUserId?: string;
+}) {
   const t = translations[lang];
   const [tab, setTab] = useState<'kontingent' | 'testBank' | 'imtixon'>('kontingent');
 
@@ -73,7 +82,7 @@ export function AdminDashboard({ token, lang }: { token: string; lang: Language 
         <motion.div variants={item}>
           {tab === 'kontingent' && <KontingentTab token={token} lang={lang} />}
           {tab === 'testBank' && <TestBankTab token={token} lang={lang} />}
-          {tab === 'imtixon' && <ImtixonTab token={token} lang={lang} />}
+          {tab === 'imtixon' && <ImtixonTab token={token} lang={lang} adminUserId={adminUserId} />}
         </motion.div>
       </motion.div>
     </div>

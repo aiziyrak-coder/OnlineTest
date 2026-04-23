@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../components/ui';
-import { translations, Language, type TranslationBundle } from '../i18n';
+import { translations, Language } from '../i18n';
 import { readJsonSafe, parseAdminUsersList } from '../lib/http';
 import { apiUrl } from '../lib/apiUrl';
 
@@ -25,7 +25,7 @@ type StudentRow = {
   group_name?: string | null;
 };
 
-type MainTab = 'kontingent' | 'students' | 'banned';
+type MainTab = 'kontingent' | 'students' | 'banned' | 'staff';
 
 const anim = {
   hidden: { opacity: 0, y: 10 },
@@ -60,6 +60,12 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
   // ── Bloklangan ─────────────────────────────────────────────────────────────
   const [banList, setBanList] = useState<StudentRow[]>([]);
   const [banSearch, setBanSearch] = useState('');
+  const [banAppeals, setBanAppeals] = useState<any[]>([]);
+  const [reviewQueue, setReviewQueue] = useState<any[]>([]);
+
+  // ── Hodimlar ───────────────────────────────────────────────────────────────
+  const [staffList, setStaffList] = useState<StudentRow[]>([]);
+  const [staffAddMsg, setStaffAddMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // ── Umumiy tab ─────────────────────────────────────────────────────────────
   const [mainTab, setMainTab] = useState<MainTab>('kontingent');
@@ -109,14 +115,46 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
     setBanList(parseAdminUsersList<StudentRow>(j));
   }, [token]);
 
+  const loadBanAppeals = useCallback(async () => {
+    const res = await fetch(apiUrl('/api/admin/ban-appeals?status=Pending'), { headers: h });
+    const j = await readJsonSafe<any[]>(res);
+    setBanAppeals(Array.isArray(j) ? j : []);
+  }, [token]);
+
+  const loadReviewQueue = useCallback(async () => {
+    const res = await fetch(apiUrl('/api/admin/review-queue?limit=40'), { headers: h });
+    const j = await readJsonSafe<{ results?: any[] }>(res);
+    setReviewQueue(Array.isArray(j?.results) ? j.results : []);
+  }, [token]);
+
+  const loadStaffList = useCallback(async () => {
+    const res = await fetch(apiUrl('/api/admin/users?role=staff'), { headers: h });
+    const j = await readJsonSafe<unknown>(res);
+    setStaffList(parseAdminUsersList<StudentRow>(j));
+  }, [token]);
+
   const reloadAll = useCallback(() => {
     loadStats();
     loadLevels();
     loadGroups();
     loadAllStudents();
     loadBanned();
+    loadBanAppeals();
+    loadReviewQueue();
+    loadStaffList();
     if (selectedGroup) loadGroupStudents(selectedGroup.id);
-  }, [loadStats, loadLevels, loadGroups, loadAllStudents, loadBanned, selectedGroup, loadGroupStudents]);
+  }, [
+    loadStats,
+    loadLevels,
+    loadGroups,
+    loadAllStudents,
+    loadBanned,
+    loadBanAppeals,
+    loadReviewQueue,
+    loadStaffList,
+    selectedGroup,
+    loadGroupStudents,
+  ]);
 
   useEffect(() => {
     loadStats();
@@ -135,7 +173,10 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
   useEffect(() => {
     if (mainTab === 'students') loadAllStudents();
     if (mainTab === 'banned') loadBanned();
-  }, [mainTab]);
+    if (mainTab === 'banned') loadBanAppeals();
+    if (mainTab === 'banned') loadReviewQueue();
+    if (mainTab === 'staff') loadStaffList();
+  }, [mainTab, loadAllStudents, loadBanned, loadBanAppeals, loadReviewQueue, loadStaffList]);
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
   const addLevel = async (e: React.FormEvent) => {
@@ -163,6 +204,32 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
       body: JSON.stringify(body),
     });
     if (res.ok) { setNewGroupName(''); loadGroups(); }
+  };
+
+  const addStaffUser = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setStaffAddMsg(null);
+    const formEl = e.currentTarget;
+    const fd = new FormData(formEl);
+    const res = await fetch(apiUrl('/api/admin/users'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...h },
+      body: JSON.stringify({
+        id: fd.get('id'),
+        password: fd.get('password'),
+        role: 'staff',
+        name: fd.get('name'),
+        group_id: null,
+      }),
+    });
+    const data = (await readJsonSafe<{ error?: string }>(res)) || {};
+    if (!res.ok) {
+      setStaffAddMsg({ type: 'err', text: data.error || t.errorGeneric });
+      return;
+    }
+    formEl.reset();
+    setStaffAddMsg({ type: 'ok', text: t.hodimAddedOk });
+    reloadAll();
   };
 
   const addStudent = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -199,7 +266,7 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
   };
 
   const deleteUser = async (u: StudentRow) => {
-    if (!confirm(`"${u.name}" (${u.id}) ni o'chirasizmi? Bu amalni qaytarib bo'lmaydi.`)) return;
+    if (!confirm(t.userDeleteConfirm.replace('{name}', u.name).replace('{id}', u.id))) return;
     const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(u.id)}`), {
       method: 'DELETE', headers: h,
     });
@@ -298,6 +365,7 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
         {([
           ['kontingent', t.kontingentTitle],
           ['students', t.kontingentStudents],
+          ['staff', t.kontingentStaffTab],
           ['banned', `${t.bannedUsers}${banList.length > 0 ? ` (${banList.length})` : ''}`],
         ] as [MainTab, string][]).map(([tab, label]) => (
           <Button
@@ -305,7 +373,9 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
             type="button"
             variant={mainTab === tab ? 'default' : 'outline'}
             size="sm"
-            className={`rounded-full ${tab === 'banned' && banList.length > 0 ? 'border-red-300 text-red-700' : ''}`}
+            className={`rounded-full ${
+              tab === 'banned' && banList.length > 0 ? 'border-red-300 text-red-700' : ''
+            } ${tab === 'staff' && mainTab !== 'staff' ? 'border-emerald-200 text-emerald-800' : ''}`}
             onClick={() => setMainTab(tab)}
           >
             {label}
@@ -625,6 +695,180 @@ export function KontingentTab({ token, lang }: { token: string; lang: Language }
                                   {t.delete}
                                 </Button>
                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="pt-4 border-t border-red-100">
+                  <div className="mb-4 p-3 rounded-xl border border-indigo-200 bg-indigo-50/40">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-indigo-900">Review queue (risk-based)</p>
+                      <span className="text-xs text-indigo-700">{reviewQueue.length}</span>
+                    </div>
+                    {reviewQueue.length === 0 ? (
+                      <p className="text-sm text-indigo-700/80 mt-1">Queue bo'sh.</p>
+                    ) : (
+                      <div className="mt-2 max-h-44 overflow-y-auto space-y-1.5">
+                        {reviewQueue.slice(0, 8).map((q: any, idx: number) => (
+                          <div key={`${q.exam_id}-${q.student_id}-${idx}`} className="text-xs px-2 py-1.5 rounded-lg bg-white/70 border border-indigo-100 flex items-center justify-between gap-2">
+                            <span className="truncate">{q.student_name} · {q.exam_title}</span>
+                            <span className={`px-1.5 py-0.5 rounded ${q.sla_bucket === 'urgent' ? 'bg-red-100 text-red-700' : q.sla_bucket === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                              {q.sla_bucket}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-gray-900">Pending ban appeals</h4>
+                    <span className="text-xs text-gray-500">{banAppeals.length}</span>
+                  </div>
+                  {banAppeals.length === 0 ? (
+                    <p className="text-sm text-gray-500">Hozircha pending appeal yo'q.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {banAppeals.map((a: any) => (
+                        <div key={a.id} className="p-3 rounded-xl border border-amber-200/80 bg-amber-50/40">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-medium text-gray-900">{a.student_name} ({a.student_id})</p>
+                              <p className="text-xs text-gray-600 mt-0.5">{a.exam_title || 'Exam'} · {new Date(a.created_at).toLocaleString()}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={async () => {
+                                  const note = prompt('Approve note (optional):') || '';
+                                  await fetch(apiUrl(`/api/admin/ban-appeals/${a.id}/resolve`), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', ...h },
+                                    body: JSON.stringify({ decision: 'approve', note }),
+                                  });
+                                  loadBanAppeals();
+                                  loadBanned();
+                                }}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-200"
+                                onClick={async () => {
+                                  const note = prompt('Reject reason (required):') || '';
+                                  if (!note.trim()) return;
+                                  await fetch(apiUrl(`/api/admin/ban-appeals/${a.id}/resolve`), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', ...h },
+                                    body: JSON.stringify({ decision: 'reject', note }),
+                                  });
+                                  loadBanAppeals();
+                                }}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{a.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* ── TAB: HODIMLAR ── */}
+      {mainTab === 'staff' && (
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{ show: { transition: { staggerChildren: 0.05 } } }}
+          className="space-y-4"
+        >
+          <motion.div variants={anim}>
+            <Card className="border-emerald-200/70 bg-gradient-to-br from-emerald-50/50 via-white/40 to-teal-50/25">
+              <CardHeader>
+                <CardTitle className="text-emerald-950">{t.addHodimCardTitle}</CardTitle>
+                <p className="text-sm text-emerald-900/75 mt-1">{t.staffPortalSubtitle}</p>
+              </CardHeader>
+              <CardContent>
+                {staffAddMsg && (
+                  <div
+                    className={`text-sm rounded-2xl px-4 py-3 border mb-4 ${
+                      staffAddMsg.type === 'ok'
+                        ? 'bg-emerald-50 text-emerald-900 border-emerald-100'
+                        : 'bg-red-50 text-red-800 border-red-100'
+                    }`}
+                  >
+                    {staffAddMsg.text}
+                  </div>
+                )}
+                <form onSubmit={addStaffUser} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label className="text-sm font-medium text-emerald-900/80 block mb-1">ID</label>
+                    <Input name="id" required className="mt-0.5" autoComplete="username" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-emerald-900/80 block mb-1">{t.userFullName}</label>
+                    <Input name="name" required className="mt-0.5" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-emerald-900/80 block mb-1">{t.password}</label>
+                    <Input name="password" type="password" required minLength={10} autoComplete="new-password" className="mt-0.5" />
+                  </div>
+                  <p className="text-xs text-emerald-800/80 sm:col-span-3">{t.addHodimHint}</p>
+                  <Button type="submit" className="sm:col-span-3 w-full sm:w-auto rounded-full bg-emerald-700 hover:bg-emerald-800">
+                    {t.addHodimCardTitle}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </motion.div>
+          <motion.div variants={anim}>
+            <Card>
+              <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle>{t.kontingentStaffTab}</CardTitle>
+                <span className="text-sm text-gray-500">{staffList.length}</span>
+              </CardHeader>
+              <CardContent>
+                {staffList.length === 0 ? (
+                  <p className="text-center text-gray-500 py-10 text-sm">{t.staffListEmpty}</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-gray-500 border-b border-gray-200">
+                          <th className="p-3 text-left font-medium">{t.userFullName}</th>
+                          <th className="p-3 text-left font-medium">ID</th>
+                          <th className="p-3 text-left font-medium">{t.userStatus}</th>
+                          <th className="p-3 text-right font-medium">{t.delete}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {staffList.map((u) => (
+                          <tr key={u.id} className="border-b border-emerald-100/40 hover:bg-emerald-50/20">
+                            <td className="p-3 font-medium text-gray-900">{u.name}</td>
+                            <td className="p-3 font-mono text-xs text-gray-600">{u.id}</td>
+                            <td className="p-3 text-xs">{u.status}</td>
+                            <td className="p-3 text-right">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 border-red-200 hover:bg-red-50 rounded-full"
+                                onClick={() => deleteUser(u)}
+                              >
+                                {t.delete}
+                              </Button>
                             </td>
                           </tr>
                         ))}

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocat
 import { AnimatePresence, motion } from 'motion/react';
 import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { StaffDashboard } from './pages/StaffDashboard';
 import { StudentDashboard } from './pages/StudentDashboard';
 import { PublicVerifyResult } from './pages/PublicVerifyResult';
 import { ExamResultSummary, type ExamResultPayload } from './components/ExamResultSummary';
@@ -120,12 +121,26 @@ function AppContent() {
 
   const t = translations[lang];
 
+  const headerShell =
+    user.role === 'student'
+      ? 'border-b border-sky-200/50 bg-gradient-to-r from-sky-50/90 via-white/50 to-indigo-50/40'
+      : user.role === 'staff'
+        ? 'border-b border-emerald-200/50 bg-gradient-to-r from-emerald-50/90 via-white/50 to-teal-50/35'
+        : 'border-b border-violet-200/40 bg-gradient-to-r from-slate-50/90 via-white/50 to-violet-50/30';
+
   return (
     <div className="min-h-screen flex flex-col relative overflow-x-hidden">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/40 backdrop-blur-3xl border-b border-white/40 shadow-[0_4px_30px_rgb(0,0,0,0.03)] px-6 py-4 flex justify-between items-center transition-all duration-500">
-        <div className="flex items-center gap-3">
-          <InstituteLogo size="sm" className="shrink-0" />
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900 hidden sm:block">{t.appBrandTitle}</h1>
+      <header
+        className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-3xl shadow-[0_4px_30px_rgb(0,0,0,0.04)] px-4 sm:px-6 py-3 sm:py-4 flex justify-between items-center transition-all duration-500 ${headerShell}`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <InstituteLogo size="sm" className="shrink-0" />
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 truncate">{t.appBrandTitle}</h1>
+          </div>
+          <p className="text-[11px] sm:text-xs text-gray-600 max-w-md leading-snug hidden sm:block truncate border-l border-gray-200/60 sm:pl-3">
+            {user.role === 'student' ? t.roleZoneStudent : user.role === 'staff' ? t.roleZoneStaff : t.roleZoneAdmin}
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <select 
@@ -159,9 +174,16 @@ function AppContent() {
             exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
-            {user.role === 'admin' && <AdminDashboard token={token} lang={lang} />}
+            {user.role === 'admin' && (
+              <div className="rounded-3xl border border-violet-200/50 bg-gradient-to-br from-violet-50/40 via-white/30 to-slate-50/20 p-3 sm:p-5 shadow-sm">
+                <AdminDashboard token={token} lang={lang} adminUserId={user?.id ? String(user.id) : undefined} />
+              </div>
+            )}
+            {user.role === 'staff' && <StaffDashboard token={token} lang={lang} />}
             {user.role === 'student' && examStatus === 'pending' && (
-              <StudentDashboard token={token} onStartExam={startExamCheck} lang={lang} />
+              <div className="rounded-3xl border border-sky-200/50 bg-gradient-to-br from-sky-50/35 via-white/40 to-indigo-50/25 p-3 sm:p-5 shadow-sm">
+                <StudentDashboard token={token} onStartExam={startExamCheck} lang={lang} />
+              </div>
             )}
             {user.role === 'student' && examStatus === 'checking' && activeExam && (
               <PreExamCheck 

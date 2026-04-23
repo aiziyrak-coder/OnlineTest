@@ -7,6 +7,7 @@ import { apiUrl } from '../lib/apiUrl';
 import { AdminExamsTab } from './AdminExamsTab';
 
 type StudentRow = { id: string; name: string; group_id: number | null };
+type StaffRow = { id: string; name: string; role: string };
 
 function toIsoOrNull(localValue: string): string | null {
   const d = new Date(localValue);
@@ -14,7 +15,15 @@ function toIsoOrNull(localValue: string): string | null {
   return d.toISOString();
 }
 
-export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
+export function ImtixonTab({
+  token,
+  lang,
+  adminUserId,
+}: {
+  token: string;
+  lang: Language;
+  adminUserId?: string;
+}) {
   const t = translations[lang];
   const h = { Authorization: `Bearer ${token}` };
   const [groups, setGroups] = useState<any[]>([]);
@@ -35,16 +44,22 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
   const [poolStudents, setPoolStudents] = useState<StudentRow[]>([]);
   const [exMap, setExMap] = useState<Record<string, { on: boolean; reason: string }>>({});
   const [examKey, setExamKey] = useState(0);
+  const [staffUsers, setStaffUsers] = useState<StaffRow[]>([]);
+  /** Bo'sh = joriy admin mas'ul; aks holda tanlangan hodim ID */
+  const [responsibleStaffId, setResponsibleStaffId] = useState('');
 
   const loadMeta = useCallback(async () => {
-    const [gr, cr] = await Promise.all([
+    const [gr, cr, st] = await Promise.all([
       fetch(apiUrl('/api/admin/groups'), { headers: h }),
       fetch(apiUrl('/api/admin/test-bank/categories'), { headers: h }),
+      fetch(apiUrl('/api/admin/users?role=staff'), { headers: h }),
     ]);
     const gj = gr.ok ? await readJsonSafe<any[]>(gr) : null;
     const cj = cr.ok ? await readJsonSafe<any[]>(cr) : null;
+    const sj = st.ok ? await readJsonSafe<unknown>(st) : null;
     setGroups(Array.isArray(gj) ? gj : []);
     setCategories(Array.isArray(cj) ? cj : []);
+    setStaffUsers(parseAdminUsersList<StaffRow>(sj));
   }, [token]);
 
   useEffect(() => {
@@ -129,7 +144,7 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
     const effectiveBankCount = Math.min(normalizedBankCount, selectedPoolCount);
     setBusy(true);
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         title: title.trim(),
         start_time: startIso,
         end_time: endIso,
@@ -143,6 +158,9 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
         group_ids: selGroups,
         exam_exceptions: exceptionsPayload,
       };
+      if (responsibleStaffId.trim()) {
+        body.teacher_id = responsibleStaffId.trim();
+      }
       const res = await fetch(apiUrl('/api/admin/exams'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...h },
@@ -165,6 +183,7 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
       setSelCats([]);
       setSelGroups([]);
       setExMap({});
+      setResponsibleStaffId('');
       setExamKey((k) => k + 1);
     } finally {
       setBusy(false);
@@ -206,6 +225,26 @@ export function ImtixonTab({ token, lang }: { token: string; lang: Language }) {
                     <option value="ru">{t.langRussian}</option>
                     <option value="en">{t.langEnglish}</option>
                   </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-sm font-medium text-gray-700">{t.examResponsibleLabel}</label>
+                  <select
+                    value={responsibleStaffId}
+                    onChange={(e) => setResponsibleStaffId(e.target.value)}
+                    className="mt-1 w-full h-12 rounded-2xl border border-white/50 bg-white/50 px-3 text-sm"
+                  >
+                    <option value="">
+                      {adminUserId ? `${t.examResponsibleSelf} (${adminUserId})` : t.examResponsibleSelf}
+                    </option>
+                    {staffUsers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} · {s.id}
+                      </option>
+                    ))}
+                  </select>
+                  {staffUsers.length === 0 && (
+                    <p className="text-xs text-amber-700 mt-1.5">{t.examNoStaffRosterHint}</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">{t.startTime}</label>

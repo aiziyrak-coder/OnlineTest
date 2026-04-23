@@ -103,6 +103,15 @@ class StudentExam(models.Model):
     result_public_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
     result_verify_secret = models.CharField(max_length=128, blank=True, null=True)
     ai_summary_json = models.TextField(blank=True, null=True)
+    # VAC: imtihon birinchi boshlangan qurilma fingerprintiga sessiyani bog'lash
+    device_fingerprint = models.CharField(max_length=128, blank=True, default="")
+    device_bound_at = models.DateTimeField(null=True, blank=True)
+    # VAC next phase: request-level imzo uchun per-session secret
+    session_signing_key = models.CharField(max_length=128, blank=True, default="")
+    # VAC sequence chain: har request ketma-ketligi tekshiriladi
+    session_request_seq = models.PositiveIntegerField(default=1)
+    # VAC challenge chain: har requestdan keyin yangilanadigan bir martalik challenge
+    session_challenge = models.CharField(max_length=64, blank=True, default="")
     # Proktorlik: rasmiy ogohlantirish (1 daqiqada bir nechta qonunbuzarlik = 1 ta); 4-chi epizodda ban
     proctor_official_warnings = models.PositiveSmallIntegerField(default=0)
     proctor_last_warning_at = models.DateTimeField(null=True, blank=True)
@@ -140,6 +149,51 @@ class UnbanEvidence(models.Model):
 
     class Meta:
         db_table = "unban_evidence"
+
+
+class BanAppeal(models.Model):
+    student = models.ForeignKey(AppUser, on_delete=models.CASCADE, db_column="student_id", to_field="id")
+    exam = models.ForeignKey(Exam, on_delete=models.SET_NULL, null=True, blank=True, db_column="exam_id")
+    reason = models.TextField()
+    evidence_name = models.CharField(max_length=255, blank=True, default="")
+    evidence_mime = models.CharField(max_length=100, blank=True, default="")
+    evidence_base64 = models.TextField(blank=True, default="")
+    evidence_sha256 = models.CharField(max_length=64, blank=True, default="")
+    status = models.CharField(max_length=20, default="Pending")
+    review_note = models.TextField(blank=True, default="")
+    reviewed_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="reviewed_by",
+        related_name="ban_appeals_reviewed",
+        to_field="id",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "ban_appeals"
+        indexes = [
+            models.Index(fields=["student", "status"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+
+class BanAppealEvent(models.Model):
+    appeal = models.ForeignKey(BanAppeal, on_delete=models.CASCADE, db_column="appeal_id")
+    actor = models.ForeignKey(AppUser, on_delete=models.SET_NULL, null=True, blank=True, db_column="actor_id", to_field="id")
+    action = models.CharField(max_length=40)
+    note = models.TextField(blank=True, default="")
+    meta_json = models.TextField(blank=True, default="{}")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "ban_appeal_events"
+        indexes = [
+            models.Index(fields=["appeal", "created_at"]),
+        ]
 
 
 class TestBankCategory(models.Model):

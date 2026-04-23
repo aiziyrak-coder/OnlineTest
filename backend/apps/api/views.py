@@ -8,6 +8,9 @@ import secrets
 import tempfile
 import base64
 import math
+import hashlib
+import hmac
+import time
 from datetime import datetime, timedelta
 from django.core import signing
 import jwt
@@ -15,9 +18,10 @@ import jwt
 import bcrypt
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, F
 from django.http import HttpResponse
 from django.utils import timezone as dj_tz
+from django.core.cache import cache
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -63,6 +67,8 @@ from apps.api.services import (
 from apps.api.view_utils import norm_answers, parse_iso_datetime, safe_json_loads
 from apps.core.models import (
     AppUser,
+    BanAppeal,
+    BanAppealEvent,
     Exam,
     ExamGroup,
     ExamRetakeWindow,
@@ -113,6 +119,29 @@ def _is_student_user(user) -> bool:
     return _request_user_role_norm(user) == "student"
 
 
+def _is_admin_user(user) -> bool:
+    return _request_user_role_norm(user) == "admin"
+
+
+def _is_staff_user(user) -> bool:
+    return _request_user_role_norm(user) == "staff"
+
+
+def _resolve_exam_teacher_id(request, d: dict) -> str:
+    """Imtihon yaratishda mas'ul: admin yoki staff; aks holda joriy admin."""
+    raw = d.get("teacher_id")
+    if raw in (None, ""):
+        return str(request.user.id)
+    tid = str(raw).strip()
+    assignee = AppUser.objects.filter(pk=tid).first()
+    if not assignee:
+        return str(request.user.id)
+    rn = _request_user_role_norm(assignee)
+    if rn in ("admin", "staff"):
+        return tid
+    return str(request.user.id)
+
+
 # --- Public / auth ---
 
 
@@ -122,6 +151,313 @@ def _health_build_ref() -> str | None:
 
 def _request_id(request) -> str | None:
     return getattr(request, "request_id", None)
+
+
+def _device_fp_from_request(request) -> str:
+    raw = (request.META.get("HTTP_X_DEVICE_FINGERPRINT") or "").strip()
+    if not raw:
+        return ""
+    return raw[:128]
+
+
+def _enforce_bound_device_or_403(se: StudentExam, request) -> Response | None:
+    """Imtihon sessiyasi faqat bir qurilmada davom etishini ta'minlaydi."""
+    if not se:
+        return None
+    expected = (se.device_fingerprint or "").strip()
+    if not expected:
+        return None
+    got = _device_fp_from_request(request)
+    if not got:
+        return Response({"error": "Missing device fingerprint", "code": "DEVICE_FINGERPRINT_REQUIRED"}, status=403)
+    if got != expected:
+        return Response(
+            {
+                "error": "This exam session is locked to another device",
+                "code": "DEVICE_MISMATCH",
+            },
+            status=403,
+        )
+    return None
+
+
+def _verify_exam_hmac_or_403(se: StudentExam, request) -> Response | None:
+    """
+    Imtihon davomida request imzosini tekshiradi:
+    - X-Exam-Ts (unix sec)
+    - X-Exam-Nonce (unikal, qisqa TTL)
+    - X-Exam-Signature (HMAC-SHA256)
+    """
+    enabled_hmac = str(os.environ.get("VAC_HMAC_GUARD", "0")).strip() in ("1", "true", "True")
+    enabled_seq = str(os.environ.get("VAC_SEQ_GUARD", "0")).strip() in ("1", "true", "True")
+    enabled_challenge = str(os.environ.get("VAC_CHALLENGE_GUARD", "0")).strip() in ("1", "true", "True")
+    if not enabled_hmac and not enabled_seq and not enabled_challenge:
+        return None
+    if not se or not se.session_signing_key:
+        return Response({"error": "Session signing key missing", "code": "VAC_HMAC_SESSION_MISSING"}, status=403)
+    seq_raw = str(request.META.get("HTTP_X_EXAM_SEQ") or "").strip()
+    if enabled_seq:
+        if not seq_raw:
+            return Response({"error": "Missing seq header", "code": "VAC_SEQ_REQUIRED"}, status=403)
+        try:
+            seq_i = int(seq_raw)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid seq", "code": "VAC_SEQ_INVALID"}, status=403)
+        if seq_i != int(se.session_request_seq or 1):
+            return Response(
+                {
+                    "error": "Request sequence mismatch",
+                    "code": "VAC_SEQ_MISMATCH",
+                    "expected_seq": int(se.session_request_seq or 1),
+                },
+                status=403,
+            )
+
+    if enabled_challenge:
+        got_challenge = str(request.META.get("HTTP_X_EXAM_CHALLENGE") or "").strip().lower()
+        seed = str(se.session_challenge or "").strip()
+        if not seed:
+            return Response({"error": "Session challenge missing", "code": "VAC_CHALLENGE_SESSION_MISSING"}, status=403)
+        if not got_challenge:
+            return Response({"error": "Missing challenge header", "code": "VAC_CHALLENGE_REQUIRED"}, status=403)
+        expected_challenge = hashlib.sha256(f"{seed}:{int(se.session_request_seq or 1)}".encode("utf-8")).hexdigest()
+        if got_challenge != expected_challenge:
+            return Response({"error": "Invalid challenge", "code": "VAC_CHALLENGE_MISMATCH"}, status=403)
+
+    if enabled_hmac:
+        ts_raw = str(request.META.get("HTTP_X_EXAM_TS") or "").strip()
+        nonce = str(request.META.get("HTTP_X_EXAM_NONCE") or "").strip()[:64]
+        sig = str(request.META.get("HTTP_X_EXAM_SIGNATURE") or "").strip().lower()
+        if not ts_raw or not nonce or not sig:
+            return Response({"error": "Missing signed headers", "code": "VAC_HMAC_REQUIRED"}, status=403)
+    else:
+        ts_raw = "0"
+        nonce = ""
+        sig = ""
+    if enabled_hmac:
+        try:
+            ts_i = int(ts_raw)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid ts", "code": "VAC_HMAC_TS_INVALID"}, status=403)
+        max_drift = max(20, int(os.environ.get("VAC_HMAC_MAX_DRIFT_SEC", "90")))
+        now_i = int(time.time())
+        if abs(now_i - ts_i) > max_drift:
+            return Response({"error": "Signed request expired", "code": "VAC_HMAC_TS_EXPIRED"}, status=403)
+        cache_key = f"vac:hmac:nonce:{se.id}:{nonce}"
+        if not cache.add(cache_key, 1, timeout=max_drift * 2):
+            return Response({"error": "Replay detected", "code": "VAC_HMAC_REPLAY"}, status=403)
+        msg = f"{se.id}:{se.student_id}:{se.exam_id}:{ts_i}:{nonce}:{request.method}:{request.path}"
+        exp = hmac.new(se.session_signing_key.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(exp, sig):
+            return Response({"error": "Invalid signature", "code": "VAC_HMAC_INVALID"}, status=403)
+
+    if enabled_seq:
+        updated = StudentExam.objects.filter(pk=se.pk, session_request_seq=se.session_request_seq).update(
+            session_request_seq=F("session_request_seq") + 1
+        )
+        if not updated:
+            return Response({"error": "Request sequence race", "code": "VAC_SEQ_RACE"}, status=403)
+        se.session_request_seq = int(se.session_request_seq or 1) + 1
+    if enabled_seq:
+        setattr(request, "_vac_next_seq", int(se.session_request_seq or 1))
+    return None
+
+
+def _attach_vac_response_headers(resp: Response, request) -> Response:
+    nxt_seq = getattr(request, "_vac_next_seq", None)
+    nxt_ch = getattr(request, "_vac_next_challenge", None)
+    if nxt_seq is not None:
+        resp["X-Exam-Seq-Next"] = str(nxt_seq)
+    if nxt_ch:
+        resp["X-Exam-Challenge-Next"] = str(nxt_ch)
+    return resp
+
+
+def _violation_priority(vtype: str) -> str:
+    """Violationlarni review prioritetiga ajratish (admin triage tezlashadi)."""
+    critical = {
+        "IDENTITY_SUBSTITUTION",
+        "REMOTE_CONTROL_SUSPECTED",
+        "FORBIDDEN_OBJECT_CELL_PHONE",
+        "FORBIDDEN_OBJECT_LAPTOP",
+        "FORBIDDEN_OBJECT_BOOK",
+    }
+    high = {
+        "TAB_SWITCH_HARD",
+        "FULLSCREEN_EXIT_HARD",
+        "MULTIPLE_FACES",
+        "WHISPER_OR_CONVERSATION_SUSPECTED",
+        "VIRTUAL_WEBCAM_SUSPECTED",
+        "CLIPBOARD_ATTEMPT",
+        "PRINT_SCREEN",
+    }
+    if vtype in critical:
+        return "critical"
+    if vtype in high:
+        return "high"
+    return "medium"
+
+
+def _violations_with_priority(exam_id: int) -> list[dict]:
+    rows = list(
+        ViolationLog.objects.filter(exam_id=exam_id).values("student_id", "violation_type", "timestamp")
+    )
+    out: list[dict] = []
+    for v in rows:
+        ts = v.get("timestamp")
+        out.append(
+            {
+                "student_id": v.get("student_id"),
+                "violation_type": v.get("violation_type"),
+                "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else ts,
+                "priority": _violation_priority(str(v.get("violation_type") or "")),
+            }
+        )
+    return out
+
+
+def _priority_weight(priority: str) -> int:
+    if priority == "critical":
+        return 5
+    if priority == "high":
+        return 3
+    return 1
+
+
+def _student_risk_summary(violations: list[dict]) -> dict[str, dict]:
+    per_student: dict[str, dict] = {}
+    rank = {"critical": 3, "high": 2, "medium": 1}
+    for v in violations:
+        sid = str(v.get("student_id") or "")
+        if not sid:
+            continue
+        p = str(v.get("priority") or "medium")
+        if sid not in per_student:
+            per_student[sid] = {
+                "violations_count": 0,
+                "risk_score": 0,
+                "highest_priority": "medium",
+                "recommended_review": False,
+            }
+        row = per_student[sid]
+        row["violations_count"] += 1
+        row["risk_score"] += _priority_weight(p)
+        if rank.get(p, 1) > rank.get(str(row["highest_priority"]), 1):
+            row["highest_priority"] = p
+    for sid, row in per_student.items():
+        row["recommended_review"] = bool(
+            row["highest_priority"] in ("critical", "high") or int(row["violations_count"]) >= 3
+        )
+    return per_student
+
+
+def _question_risk_timeline(se: StudentExam, exam: Exam) -> list[dict]:
+    questions = safe_json_loads(se.session_questions_json or exam.questions_json, [])
+    answers = norm_answers(safe_json_loads(se.answers_json or "{}", {}))
+    flagged = set(safe_json_loads(se.flagged_questions_json or "[]", []))
+    out: list[dict] = []
+    for idx, q in enumerate(questions):
+        qid = q.get("id")
+        if qid is None:
+            continue
+        qid_s = str(qid)
+        student_answer = answers.get(qid_s)
+        correct = q.get("correctAnswer")
+        is_incorrect = bool(student_answer and student_answer != correct)
+        is_flagged = qid in flagged
+        risk_score = (2 if is_flagged else 0) + (1 if is_incorrect else 0)
+        if risk_score <= 0:
+            continue
+        out.append(
+            {
+                "question_id": qid,
+                "question_no": idx + 1,
+                "flagged": is_flagged,
+                "incorrect": is_incorrect,
+                "risk_score": risk_score,
+            }
+        )
+    out.sort(key=lambda x: (x["risk_score"], -x["question_no"]), reverse=True)
+    return out[:20]
+
+
+def _review_queue_rows(limit: int = 100) -> list[dict]:
+    rows = list(
+        ViolationLog.objects.values("exam_id", "student_id", "violation_type")
+        .annotate(cnt=Count("id"))
+    )
+    by_key: dict[tuple[int, str], dict] = {}
+    rank = {"critical": 3, "high": 2, "medium": 1}
+    for r in rows:
+        exam_id = int(r["exam_id"])
+        student_id = str(r["student_id"])
+        vtype = str(r["violation_type"])
+        cnt = int(r["cnt"] or 0)
+        p = _violation_priority(vtype)
+        key = (exam_id, student_id)
+        if key not in by_key:
+            by_key[key] = {
+                "exam_id": exam_id,
+                "student_id": student_id,
+                "violations_count": 0,
+                "risk_score": 0,
+                "highest_priority": "medium",
+            }
+        row = by_key[key]
+        row["violations_count"] += cnt
+        row["risk_score"] += _priority_weight(p) * cnt
+        if rank.get(p, 1) > rank.get(row["highest_priority"], 1):
+            row["highest_priority"] = p
+
+    out: list[dict] = []
+    for (exam_id, student_id), row in by_key.items():
+        se = (
+            StudentExam.objects.filter(exam_id=exam_id, student_id=student_id)
+            .select_related("student", "exam")
+            .first()
+        )
+        if not se:
+            continue
+        pending_appeals = BanAppeal.objects.filter(
+            student_id=student_id, exam_id=exam_id, status="Pending"
+        ).count()
+        status = str(se.status or "")
+        if status == "Banned":
+            sla = "urgent"
+        elif row["highest_priority"] == "critical":
+            sla = "high"
+        elif row["highest_priority"] == "high":
+            sla = "normal"
+        else:
+            sla = "low"
+        out.append(
+            {
+                "exam_id": exam_id,
+                "exam_title": se.exam.title,
+                "student_id": student_id,
+                "student_name": se.student.name,
+                "status": status,
+                "risk_score": row["risk_score"],
+                "violations_count": row["violations_count"],
+                "highest_priority": row["highest_priority"],
+                "pending_appeals": pending_appeals,
+                "sla_bucket": sla,
+                "recommended_review": bool(
+                    status == "Banned"
+                    or row["highest_priority"] in ("critical", "high")
+                    or row["violations_count"] >= 3
+                ),
+            }
+        )
+    out.sort(
+        key=lambda x: (
+            3 if x["sla_bucket"] == "urgent" else 2 if x["sla_bucket"] == "high" else 1 if x["sla_bucket"] == "normal" else 0,
+            x["risk_score"],
+            x["violations_count"],
+        ),
+        reverse=True,
+    )
+    return out[:limit]
 
 
 @api_view(["GET"])
@@ -233,7 +569,10 @@ def auth_login(request):
         return Response({"error": "Your account is banned. Contact administrator."}, status=403)
     if user.role == "teacher":
         return Response(
-            {"error": "Teacher role is no longer supported. Use an admin or student account."},
+            {
+                "error": "Teacher account is disabled. Create a «staff» (hodim) user in admin panel and use that login.",
+                "code": "TEACHER_DEPRECATED",
+            },
             status=403,
         )
     role_out = (user.role or "").strip().lower().replace("\ufeff", "").strip()
@@ -285,6 +624,14 @@ def student_identity_compare(request):
             return Response({"error": "Exam not found"}, status=404)
         if not _student_assigned_to_exam(u, eid):
             return Response({"error": "Forbidden"}, status=403)
+        se = StudentExam.objects.filter(student_id=u.id, exam_id=eid).first()
+        mismatch = _enforce_bound_device_or_403(se, request)
+        if mismatch is not None:
+            return mismatch
+        if se and se.status == "In Progress":
+            sig_err = _verify_exam_hmac_or_403(se, request)
+            if sig_err is not None:
+                return sig_err
     result = compare_faces(p_raw, l_raw)
     if not result.get("success"):
         code = result.get("code") or "GEMINI_ERROR"
@@ -362,8 +709,8 @@ def admin_users(request):
             {"error": f"Parol kamida {MIN_APP_PASSWORD_LEN} belgi bo‘lishi kerak"},
             status=400,
         )
-    if role not in ("admin", "student"):
-        return Response({"error": "Role must be admin or student"}, status=400)
+    if role not in ("admin", "student", "staff"):
+        return Response({"error": "Role must be admin, student, or staff"}, status=400)
     if role == "student" and (not profile_image or len(str(profile_image)) < 50):
         return Response({"error": "Talaba uchun profil rasmi majburiy"}, status=400)
     if AppUser.objects.filter(pk=uid).exists():
@@ -401,9 +748,9 @@ def admin_user_detail(request, user_id: str):
     d = request.data or {}
     next_role = d["role"] if "role" in d else row.role
     next_profile = d["profile_image"] if "profile_image" in d else row.profile_image
-    if "role" in d and d["role"] not in ("admin", "student"):
+    if "role" in d and d["role"] not in ("admin", "student", "staff"):
         return Response({"error": "Invalid role"}, status=400)
-    if row.role == "admin" and next_role == "student":
+    if row.role == "admin" and next_role in ("student", "staff"):
         if AppUser.objects.filter(role="admin").count() <= 1:
             return Response({"error": "Cannot demote the last admin"}, status=400)
     if next_role == "student" and (not next_profile or len(str(next_profile)) < 50):
@@ -465,7 +812,15 @@ def admin_users_unban(request, user_id: str):
         return Response({"error": "JPG fayl yuklang"}, status=400)
     with transaction.atomic():
         AppUser.objects.filter(pk=user_id).update(status="Active")
-        StudentExam.objects.filter(student_id=user_id, status="Banned").update(status="Pending")
+        StudentExam.objects.filter(student_id=user_id, status="Banned").update(
+            status="Pending",
+            proctor_official_warnings=0,
+            proctor_last_warning_at=None,
+            device_fingerprint="",
+            device_bound_at=None,
+            session_signing_key="",
+            session_request_seq=1,
+        )
         UnbanEvidence.objects.create(
             student_id=user_id,
             admin_id=request.user.id,
@@ -482,7 +837,7 @@ def admin_users_unban(request, user_id: str):
 def admin_student_exams_retake(request, pk: int):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
-    # Express: faqat status, answers_json, score — qayta topshirish uchun
+    # Express: qayta topshirishda javoblar + proktor ogohlantirish holatini tozalash.
     updated = StudentExam.objects.filter(pk=pk).update(
         status="Pending",
         answers_json="",
@@ -490,10 +845,214 @@ def admin_student_exams_retake(request, pk: int):
         draft_answers_json="{}",
         draft_flagged_json="[]",
         draft_updated_at=None,
+        proctor_official_warnings=0,
+        proctor_last_warning_at=None,
+        device_fingerprint="",
+        device_bound_at=None,
+        session_signing_key="",
+        session_request_seq=1,
     )
     if not updated:
         return Response({"error": "Not found"}, status=404)
     return Response({"success": True})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def student_ban_appeals(request):
+    if not _is_student_user(request.user):
+        return Response({"error": "Forbidden"}, status=403)
+    u = request.user
+    if request.method == "GET":
+        rows = (
+            BanAppeal.objects.filter(student_id=u.id)
+            .select_related("exam", "reviewed_by")
+            .order_by("-created_at")[:50]
+        )
+        out = []
+        for r in rows:
+            out.append(
+                {
+                    "id": r.id,
+                    "exam_id": r.exam_id,
+                    "exam_title": r.exam.title if r.exam_id else None,
+                    "status": r.status,
+                    "reason": r.reason,
+                    "review_note": r.review_note,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                    "reviewed_by": r.reviewed_by_id,
+                }
+            )
+        return Response(out)
+
+    d = request.data or {}
+    exam_id = d.get("exam_id")
+    reason = str(d.get("reason") or "").strip()
+    if not exam_id or not reason:
+        return Response({"error": "exam_id and reason are required"}, status=400)
+    if len(reason) < 12:
+        return Response({"error": "Appeal reason is too short"}, status=400)
+    try:
+        exam_id_int = int(exam_id)
+    except (TypeError, ValueError):
+        return Response({"error": "Invalid exam_id"}, status=400)
+
+    se = StudentExam.objects.filter(student_id=u.id, exam_id=exam_id_int, status="Banned").first()
+    if not se and u.status != "Banned":
+        return Response({"error": "No banned record found for this exam"}, status=400)
+    if BanAppeal.objects.filter(student_id=u.id, exam_id=exam_id_int, status="Pending").exists():
+        return Response({"error": "Pending appeal already exists for this exam"}, status=400)
+
+    evidence_data = str(d.get("evidence_base64") or "")
+    evidence_name = str(d.get("evidence_name") or "")[:255]
+    evidence_mime = str(d.get("evidence_mime") or "")[:100]
+    if evidence_data and len(evidence_data) > 2_500_000:
+        return Response({"error": "Evidence payload too large"}, status=400)
+    evidence_sha256 = ""
+    if evidence_data:
+        try:
+            if "," in evidence_data:
+                raw_b64 = evidence_data.split(",", 1)[1]
+            else:
+                raw_b64 = evidence_data
+            raw_bytes = base64.b64decode(raw_b64, validate=False)
+            evidence_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+        except Exception:
+            evidence_sha256 = hashlib.sha256(evidence_data.encode("utf-8")).hexdigest()
+
+    row = BanAppeal.objects.create(
+        student_id=u.id,
+        exam_id=exam_id_int,
+        reason=reason[:5000],
+        evidence_name=evidence_name,
+        evidence_mime=evidence_mime,
+        evidence_base64=evidence_data,
+        evidence_sha256=evidence_sha256,
+        status="Pending",
+    )
+    BanAppealEvent.objects.create(
+        appeal_id=row.id,
+        actor_id=u.id,
+        action="CREATED",
+        note=reason[:500],
+        meta_json=json.dumps({"exam_id": exam_id_int, "evidence_sha256": evidence_sha256}),
+    )
+    return Response({"success": True, "id": row.id})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_ban_appeals(request):
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    status_f = (request.query_params.get("status") or "").strip()
+    qs = BanAppeal.objects.select_related("student", "exam", "reviewed_by").order_by("-created_at")
+    if status_f:
+        qs = qs.filter(status=status_f)
+    out = []
+    for r in qs[:200]:
+        out.append(
+            {
+                "id": r.id,
+                "student_id": r.student_id,
+                "student_name": r.student.name,
+                "exam_id": r.exam_id,
+                "exam_title": r.exam.title if r.exam_id else None,
+                "status": r.status,
+                "reason": r.reason,
+                "review_note": r.review_note,
+                "evidence_name": r.evidence_name,
+                "evidence_mime": r.evidence_mime,
+                "evidence_sha256": r.evidence_sha256,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                "reviewed_by": r.reviewed_by_id,
+            }
+        )
+    return Response(out)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def admin_ban_appeal_resolve(request, pk: int):
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    row = BanAppeal.objects.filter(pk=pk).select_related("student").first()
+    if not row:
+        return Response({"error": "Appeal not found"}, status=404)
+    if row.status != "Pending":
+        return Response({"error": "Appeal already resolved"}, status=400)
+    d = request.data or {}
+    decision = str(d.get("decision") or "").strip().lower()
+    note = str(d.get("note") or "").strip()
+    if decision not in ("approve", "reject"):
+        return Response({"error": "decision must be approve/reject"}, status=400)
+    if decision == "reject" and len(note) < 8:
+        return Response({"error": "Reject note min 8 chars"}, status=400)
+
+    now = dj_tz.now()
+    with transaction.atomic():
+        if decision == "approve":
+            AppUser.objects.filter(pk=row.student_id).update(status="Active")
+            StudentExam.objects.filter(student_id=row.student_id, status="Banned").update(
+                status="Pending",
+                proctor_official_warnings=0,
+                proctor_last_warning_at=None,
+            )
+            row.status = "Approved"
+        else:
+            row.status = "Rejected"
+        row.review_note = note[:5000]
+        row.reviewed_by_id = request.user.id
+        row.reviewed_at = now
+        row.save(update_fields=["status", "review_note", "reviewed_by", "reviewed_at"])
+        BanAppealEvent.objects.create(
+            appeal_id=row.id,
+            actor_id=request.user.id,
+            action="RESOLVED_APPROVE" if decision == "approve" else "RESOLVED_REJECT",
+            note=note[:1000],
+            meta_json=json.dumps({"status": row.status}),
+        )
+    return Response({"success": True, "status": row.status})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_ban_appeal_events(request, pk: int):
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    if not BanAppeal.objects.filter(pk=pk).exists():
+        return Response({"error": "Appeal not found"}, status=404)
+    rows = BanAppealEvent.objects.filter(appeal_id=pk).order_by("created_at")
+    out = []
+    for e in rows:
+        out.append(
+            {
+                "id": e.id,
+                "appeal_id": e.appeal_id,
+                "actor_id": e.actor_id,
+                "action": e.action,
+                "note": e.note,
+                "meta": safe_json_loads(e.meta_json, {}),
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+        )
+    return Response(out)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_review_queue(request):
+    if request.user.role not in ("admin", "staff"):
+        return Response({"error": "Forbidden"}, status=403)
+    try:
+        limit = int(request.query_params.get("limit", 80))
+    except (TypeError, ValueError):
+        limit = 80
+    limit = max(1, min(limit, 300))
+    queue = _review_queue_rows(limit=limit)
+    return Response({"results": queue, "total": len(queue)})
 
 
 @api_view(["GET"])
@@ -1165,6 +1724,10 @@ def admin_exam_detail(request, pk: int):
             e.custom_rules = rules or ""
             e.bank_category_ids = bank_cats_json
             e.bank_question_count = bank_count
+            if "teacher_id" in d:
+                tu = AppUser.objects.filter(pk=str(d["teacher_id"]).strip()).first()
+                if tu and _request_user_role_norm(tu) in ("admin", "staff"):
+                    e.teacher_id = tu.id
             e.save()
             if d.get("group_ids") is not None:
                 gids = d["group_ids"]
@@ -1187,8 +1750,19 @@ def admin_exams_results(request, pk: int):
     e = Exam.objects.filter(pk=pk).first()
     if not e:
         return Response({"error": "Exam not found"}, status=404)
+    violations = _violations_with_priority(pk)
+    risk_by_student = _student_risk_summary(violations)
     results = []
     for se in StudentExam.objects.filter(exam_id=pk).select_related("student"):
+        risk = risk_by_student.get(
+            str(se.student_id),
+            {
+                "violations_count": 0,
+                "risk_score": 0,
+                "highest_priority": "medium",
+                "recommended_review": False,
+            },
+        )
         results.append(
             {
                 "id": se.id,
@@ -1202,18 +1776,23 @@ def admin_exams_results(request, pk: int):
                 "flagged_questions_json": se.flagged_questions_json,
                 "session_questions_json": se.session_questions_json,
                 "questions_json": se.session_questions_json or e.questions_json,
+                "risk_score": risk["risk_score"],
+                "violations_count": risk["violations_count"],
+                "highest_priority": risk["highest_priority"],
+                "recommended_review": risk["recommended_review"],
+                "question_risk_timeline": _question_risk_timeline(se, e),
             }
         )
-    violations = list(
-        ViolationLog.objects.filter(exam_id=pk).values("student_id", "violation_type", "timestamp")
-    )
-    for v in violations:
-        if hasattr(v["timestamp"], "isoformat"):
-            v["timestamp"] = v["timestamp"].isoformat()
+    review_priority_counts = {
+        "critical": sum(1 for v in violations if v.get("priority") == "critical"),
+        "high": sum(1 for v in violations if v.get("priority") == "high"),
+        "medium": sum(1 for v in violations if v.get("priority") == "medium"),
+    }
     return Response(
         {
             "results": results,
             "violations": violations,
+            "review_priority_counts": review_priority_counts,
             "questions_json": e.questions_json,
             "exam_mode": e.exam_mode,
         }
@@ -1301,7 +1880,7 @@ def _admin_exams_create_impl(request):
 
     with transaction.atomic():
         ex = Exam.objects.create(
-            teacher_id=request.user.id,
+            teacher_id=_resolve_exam_teacher_id(request, d),
             title=title,
             start_time=st,
             end_time=et,
@@ -1456,6 +2035,19 @@ def student_exams_start(request, pk: int):
     if not ExamGroup.objects.filter(exam_id=pk, group_id=u.group_id).exists():
         return Response({"error": "Exam not assigned to your group"}, status=403)
 
+    vac_pc_only = str(os.environ.get("VAC_PC_ONLY", "1")).strip() not in ("0", "false", "False")
+    if vac_pc_only:
+        ua = (request.META.get("HTTP_USER_AGENT") or "").lower()
+        mobile_markers = ("android", "iphone", "ipad", "ipod", "mobile", "windows phone")
+        if any(m in ua for m in mobile_markers):
+            return Response(
+                {
+                    "error": "Faqat kompyuter (desktop/laptop) orqali imtihon topshirish ruxsat etiladi.",
+                    "code": "VAC_PC_ONLY",
+                },
+                status=403,
+            )
+
     ex_row = ExamStudentException.objects.filter(exam_id=pk, student_id=u.id).first()
     if ex_row:
         return Response({"error": ex_row.reason, "code": "EXAM_BLOCKED"}, status=403)
@@ -1479,20 +2071,75 @@ def student_exams_start(request, pk: int):
             status=403,
         )
 
+    vac_device_lock = str(os.environ.get("VAC_DEVICE_LOCK", "1")).strip() not in ("0", "false", "False")
+    device_fp = _device_fp_from_request(request)
+    if vac_device_lock and not device_fp:
+        return Response(
+            {"error": "Device fingerprint is required", "code": "DEVICE_FINGERPRINT_REQUIRED"},
+            status=403,
+        )
+
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
     if not se:
+        session_key = secrets.token_hex(32)
+        session_challenge = secrets.token_hex(16)
         se = StudentExam.objects.create(
             student_id=u.id,
             exam_id=pk,
             status="In Progress",
             started_at=dj_tz.now(),
+            device_fingerprint=device_fp if vac_device_lock else "",
+            device_bound_at=dj_tz.now() if vac_device_lock and device_fp else None,
+            session_signing_key=session_key,
+            session_request_seq=1,
+            session_challenge=session_challenge,
         )
     elif se.status in ("Banned", "Completed"):
         return Response({"error": f"Exam already {se.status}"}, status=403)
     elif se.status == "Pending":
         se.status = "In Progress"
         se.started_at = se.started_at or dj_tz.now()
-        se.save(update_fields=["status", "started_at"])
+        if not se.session_signing_key:
+            se.session_signing_key = secrets.token_hex(32)
+        if not se.session_request_seq:
+            se.session_request_seq = 1
+        if not se.session_challenge:
+            se.session_challenge = secrets.token_hex(16)
+        if vac_device_lock and not se.device_fingerprint and device_fp:
+            se.device_fingerprint = device_fp
+            se.device_bound_at = dj_tz.now()
+            se.save(
+                update_fields=[
+                    "status",
+                    "started_at",
+                    "device_fingerprint",
+                    "device_bound_at",
+                    "session_signing_key",
+                    "session_request_seq",
+                    "session_challenge",
+                ]
+            )
+        else:
+            se.save(
+                update_fields=["status", "started_at", "session_signing_key", "session_request_seq", "session_challenge"]
+            )
+    elif se.status == "In Progress" and not se.session_signing_key:
+        se.session_signing_key = secrets.token_hex(32)
+        if not se.session_request_seq:
+            se.session_request_seq = 1
+        if not se.session_challenge:
+            se.session_challenge = secrets.token_hex(16)
+        se.save(update_fields=["session_signing_key", "session_request_seq", "session_challenge"])
+    elif se.status == "In Progress" and not se.session_challenge:
+        se.session_challenge = secrets.token_hex(16)
+        if not se.session_request_seq:
+            se.session_request_seq = 1
+        se.save(update_fields=["session_challenge", "session_request_seq"])
+
+    if vac_device_lock:
+        mismatch = _enforce_bound_device_or_403(se, request)
+        if mismatch is not None:
+            return mismatch
 
     retake_only = in_retake and not in_general
     if retake_only and exam.exam_mode == "bank_mixed" and se:
@@ -1605,6 +2252,9 @@ def student_exams_start(request, pk: int):
             "exam": exam_out,
             "studentExamId": se.id,
             "startedAt": se.started_at.isoformat() if se.started_at else None,
+            "sessionKey": se.session_signing_key,
+            "sessionSeqStart": int(se.session_request_seq or 1),
+            "sessionChallenge": se.session_challenge,
         }
     )
 
@@ -1633,6 +2283,12 @@ def student_exams_submit(request, pk: int):
         )
         if not se or se.status != "In Progress":
             return Response({"error": "Cannot submit exam"}, status=403)
+        mismatch = _enforce_bound_device_or_403(se, request)
+        if mismatch is not None:
+            return mismatch
+        sig_err = _verify_exam_hmac_or_403(se, request)
+        if sig_err is not None:
+            return sig_err
         exam = se.exam
         deadline = submission_deadline(exam, se)
         if deadline and dj_tz.now() > deadline:
@@ -1721,6 +2377,12 @@ def student_exam_clock(request, pk: int):
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
     if not se or se.status != "In Progress":
         return Response({"error": "No active session"}, status=400)
+    mismatch = _enforce_bound_device_or_403(se, request)
+    if mismatch is not None:
+        return mismatch
+    sig_err = _verify_exam_hmac_or_403(se, request)
+    if sig_err is not None:
+        return sig_err
     deadline = submission_deadline(exam, se)
     now = dj_tz.now()
     sec = seconds_until_deadline(exam, se)
@@ -1746,6 +2408,12 @@ def student_exam_draft(request, pk: int):
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
     if not se or se.status != "In Progress":
         return Response({"answers": {}, "flaggedQuestions": [], "updated_at": None})
+    mismatch = _enforce_bound_device_or_403(se, request)
+    if mismatch is not None:
+        return mismatch
+    sig_err = _verify_exam_hmac_or_403(se, request)
+    if sig_err is not None:
+        return sig_err
     answers = safe_json_loads(se.draft_answers_json, {})
     flagged = safe_json_loads(se.draft_flagged_json, [])
     return Response(
@@ -1772,6 +2440,12 @@ def student_exam_save_progress(request, pk: int):
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
     if not se or se.status != "In Progress":
         return Response({"error": "No active session"}, status=400)
+    mismatch = _enforce_bound_device_or_403(se, request)
+    if mismatch is not None:
+        return mismatch
+    sig_err = _verify_exam_hmac_or_403(se, request)
+    if sig_err is not None:
+        return sig_err
     deadline = submission_deadline(exam, se)
     if deadline and dj_tz.now() > deadline:
         return Response({"error": "Imtihon vaqti tugagan"}, status=403)
@@ -1825,6 +2499,91 @@ def student_results(request):
             }
         )
     return Response(out)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def staff_exams_list(request):
+    """Hodim: faqat o'ziga biriktirilgan (teacher_id) imtihonlar."""
+    u = request.user
+    if not _is_staff_user(u):
+        return Response({"error": "Forbidden"}, status=403)
+    out = []
+    for e in Exam.objects.filter(teacher_id=u.id).select_related("teacher").order_by("-start_time"):
+        gids = list(ExamGroup.objects.filter(exam_id=e.id).values_list("group_id", flat=True))
+        out.append(
+            {
+                "id": e.id,
+                "title": e.title,
+                "start_time": e.start_time.isoformat() if e.start_time else None,
+                "end_time": e.end_time.isoformat() if e.end_time else None,
+                "duration_minutes": e.duration_minutes,
+                "language": e.language,
+                "exam_mode": e.exam_mode,
+                "bank_question_count": e.bank_question_count,
+                "group_ids": gids,
+            }
+        )
+    return Response(out)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def staff_exams_results(request, pk: int):
+    """Hodim: faqat o'z imtihoni uchun natijalar (admin bilan bir xil struktura, faqat o'qish)."""
+    u = request.user
+    if not _is_staff_user(u):
+        return Response({"error": "Forbidden"}, status=403)
+    e = Exam.objects.filter(pk=pk, teacher_id=u.id).first()
+    if not e:
+        return Response({"error": "Exam not found"}, status=404)
+    violations = _violations_with_priority(pk)
+    risk_by_student = _student_risk_summary(violations)
+    results = []
+    for se in StudentExam.objects.filter(exam_id=pk).select_related("student"):
+        risk = risk_by_student.get(
+            str(se.student_id),
+            {
+                "violations_count": 0,
+                "risk_score": 0,
+                "highest_priority": "medium",
+                "recommended_review": False,
+            },
+        )
+        results.append(
+            {
+                "id": se.id,
+                "student_id": se.student_id,
+                "name": se.student.name,
+                "status": se.status,
+                "score": se.score,
+                "started_at": se.started_at.isoformat() if se.started_at else None,
+                "completed_at": se.completed_at.isoformat() if se.completed_at else None,
+                "answers_json": se.answers_json,
+                "flagged_questions_json": se.flagged_questions_json,
+                "session_questions_json": se.session_questions_json,
+                "questions_json": se.session_questions_json or e.questions_json,
+                "risk_score": risk["risk_score"],
+                "violations_count": risk["violations_count"],
+                "highest_priority": risk["highest_priority"],
+                "recommended_review": risk["recommended_review"],
+                "question_risk_timeline": _question_risk_timeline(se, e),
+            }
+        )
+    review_priority_counts = {
+        "critical": sum(1 for v in violations if v.get("priority") == "critical"),
+        "high": sum(1 for v in violations if v.get("priority") == "high"),
+        "medium": sum(1 for v in violations if v.get("priority") == "medium"),
+    }
+    return Response(
+        {
+            "results": results,
+            "violations": violations,
+            "review_priority_counts": review_priority_counts,
+            "questions_json": e.questions_json,
+            "exam_mode": e.exam_mode,
+        }
+    )
 
 
 def _result_details_bundle(se: StudentExam, request, for_pdf: bool = False):
@@ -2179,11 +2938,19 @@ def student_violations(request):
         return Response({"error": "Invalid violation_type"}, status=400)
     screenshot = str(d.get("screenshot_url") or "")[:50_000]
 
-    instant_ban_types = frozenset(
-        {
-            "IDENTITY_SUBSTITUTION",
-            "REMOTE_CONTROL_SUSPECTED",
-        }
+    vac_strict_mode = str(os.environ.get("VAC_STRICT_MODE", "1")).strip() not in ("0", "false", "False")
+    # Strict rejimda ayrim violationlar darhol ban; aks holda 1-3 warning oqimi ishlaydi.
+    instant_ban_types = (
+        frozenset(
+            {
+                "IDENTITY_SUBSTITUTION",
+                "REMOTE_CONTROL_SUSPECTED",
+                "VIRTUAL_WEBCAM_SUSPECTED",
+                "DEVTOOLS_OPEN",
+            }
+        )
+        if vac_strict_mode
+        else frozenset()
     )
     warn_types = frozenset(
         {
@@ -2205,6 +2972,9 @@ def student_violations(request):
             "FORBIDDEN_OBJECT_BOOK",
             "CLIPBOARD_ATTEMPT",
             "PRINT_SCREEN",
+            "DEVTOOLS_OPEN",
+            "REMOTE_CONTROL_SUSPECTED",
+            "IDENTITY_SUBSTITUTION",
         }
     )
     if vtype not in instant_ban_types and vtype not in warn_types:
@@ -2218,6 +2988,14 @@ def student_violations(request):
         return Response({"error": "Exam not found"}, status=404)
     if not _student_assigned_to_exam(u, exam_id_int):
         return Response({"error": "Forbidden"}, status=403)
+    se_for_device = StudentExam.objects.filter(student_id=u.id, exam_id=exam_id_int).first()
+    mismatch = _enforce_bound_device_or_403(se_for_device, request)
+    if mismatch is not None:
+        return mismatch
+    if se_for_device and se_for_device.status == "In Progress":
+        sig_err = _verify_exam_hmac_or_403(se_for_device, request)
+        if sig_err is not None:
+            return sig_err
 
     # Violation sababini matn sifatida qaytarish
     violation_reason_map = {
@@ -2231,6 +3009,7 @@ def student_violations(request):
         "TAB_SWITCH_HARD": "Imtihon oynasidan chiqib ketildi",
         "CLIPBOARD_ATTEMPT": "Nusxa ko'chirish urinishi",
         "PRINT_SCREEN": "Ekran surati urinishi",
+        "DEVTOOLS_OPEN": "Developer tools ochish urinishi",
         "FULLSCREEN_EXIT_HARD": "To'liq ekrandan chiqildi",
         "REMOTE_CONTROL_SUSPECTED": "Masofaviy boshqaruv aniqlandi",
         "IDENTITY_SUBSTITUTION": "Boshqa shaxs aniqlandi",
@@ -2244,8 +3023,13 @@ def student_violations(request):
     }
     reason_text = violation_reason_map.get(vtype, vtype)
 
-    WARN_SUPPRESS_SECONDS = 60
+    WARN_SUPPRESS_SECONDS = max(10, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "60")))
+    # Imtihon startida texnik tebranishlar sababli birdan ogohlantirish ketmasligi uchun grace.
+    STARTUP_GRACE_SECONDS = max(0, int(os.environ.get("PROCTOR_STARTUP_GRACE_SECONDS", "20")))
     MAX_WARNINGS_BEFORE_BAN = 3  # 3 ta modal; 4-chi rasmiy epizodda ban
+    HARDENED_MODE = str(os.environ.get("PROCTOR_HARDENED_MODE", "1")).strip() not in ("0", "false", "False")
+    HARDENED_WINDOW_MIN = max(3, int(os.environ.get("PROCTOR_HARD_WINDOW_MIN", "10")))
+    HARDENED_MAX_POINTS = max(8, int(os.environ.get("PROCTOR_HARD_MAX_POINTS", "14")))
 
     try:
         with transaction.atomic():
@@ -2258,15 +3042,66 @@ def student_violations(request):
                 se = StudentExam.objects.create(student_id=u.id, exam_id=exam_id_int, status="Pending")
                 se = StudentExam.objects.select_for_update().get(pk=se.pk)
 
+            now = dj_tz.now()
+            if se.started_at and (now - se.started_at) < timedelta(seconds=STARTUP_GRACE_SECONDS):
+                return Response(
+                    {
+                        "banned": False,
+                        "warningSuppressed": True,
+                        "violationsCount": ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count(),
+                        "warningNumber": 0,
+                        "violationReason": f"Startup grace ({STARTUP_GRACE_SECONDS}s): {reason_text}",
+                        "isFinalWarning": False,
+                        "officialWarnings": se.proctor_official_warnings,
+                    }
+                )
+
             ViolationLog.objects.create(
                 student_id=u.id,
                 exam_id=exam_id_int,
                 violation_type=vtype,
-                timestamp=dj_tz.now(),
+                timestamp=now,
                 screenshot_url=screenshot,
             )
 
             cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
+
+            if HARDENED_MODE:
+                win_from = now - timedelta(minutes=HARDENED_WINDOW_MIN)
+                recent = list(
+                    ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int, timestamp__gte=win_from).values(
+                        "violation_type", "timestamp"
+                    )
+                )
+                hard_points = 0
+                seen_types = set()
+                for rr in recent:
+                    tp = str(rr.get("violation_type") or "")
+                    seen_types.add(tp)
+                    hard_points += _priority_weight(_violation_priority(tp))
+
+                combo_ban = (
+                    ("TAB_SWITCH_HARD" in seen_types and "FULLSCREEN_EXIT_HARD" in seen_types)
+                    or ("DEVTOOLS_OPEN" in seen_types and "CLIPBOARD_ATTEMPT" in seen_types)
+                    or ("MULTIPLE_FACES" in seen_types and "WHISPER_OR_CONVERSATION_SUSPECTED" in seen_types)
+                )
+                if combo_ban or hard_points >= HARDENED_MAX_POINTS:
+                    AppUser.objects.filter(pk=u.id).update(status="Banned")
+                    se.status = "Banned"
+                    se.save(update_fields=["status"])
+                    return Response(
+                        {
+                            "banned": True,
+                            "violationsCount": cnt_all,
+                            "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                            "violationReason": f"{reason_text} (hardened)",
+                            "isFinalWarning": False,
+                            "warningSuppressed": False,
+                            "officialWarnings": se.proctor_official_warnings,
+                            "hardenedRiskPoints": hard_points,
+                            "hardenedCombo": combo_ban,
+                        }
+                    )
 
             if vtype in instant_ban_types:
                 AppUser.objects.filter(pk=u.id).update(status="Banned")
@@ -2283,7 +3118,6 @@ def student_violations(request):
                     }
                 )
 
-            now = dj_tz.now()
             last = se.proctor_last_warning_at
             if last is not None and (now - last) < timedelta(seconds=WARN_SUPPRESS_SECONDS):
                 return Response(

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiUrl } from '../lib/apiUrl';
 import { readJsonSafe } from '../lib/http';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '../components/ui';
@@ -25,10 +25,13 @@ export function AdminExamsTab({
   token,
   lang,
   hideExamSettings,
+  apiVariant = 'admin',
 }: {
   token: string;
   lang: Language;
   hideExamSettings?: boolean;
+  /** hodim: faqat o'z imtihonlari, tahrirlash va qayta topshirish yo'q */
+  apiVariant?: 'admin' | 'staff';
 }) {
   const [exams, setExams] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
@@ -36,43 +39,51 @@ export function AdminExamsTab({
   const [results, setResults] = useState<any>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [recommendedOnly, setRecommendedOnly] = useState(false);
   const [activeMonitorExamId, setActiveMonitorExamId] = useState<number | null>(null);
   const [editingExamId, setEditingExamId] = useState<number | null>(null);
   const t = translations[lang];
+  const examsListUrl = apiVariant === 'staff' ? '/api/staff/exams' : '/api/admin/exams';
+  const resultsUrl = (examId: number) =>
+    apiVariant === 'staff' ? `/api/staff/exams/${examId}/results` : `/api/admin/exams/${examId}/results`;
+  const isStaffPortal = apiVariant === 'staff';
 
-  useEffect(() => {
-    fetchExams();
-    fetchGroups();
-  }, []);
-
-  const fetchExams = async () => {
-    const res = await fetch(apiUrl('/api/admin/exams'), { headers: { Authorization: `Bearer ${token}` } });
+  const fetchExams = useCallback(async () => {
+    const res = await fetch(apiUrl(examsListUrl), { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
       const raw = await readJsonSafe<unknown>(res);
       setExams(Array.isArray(raw) ? raw : []);
     }
-  };
+  }, [token, examsListUrl]);
 
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
+    if (isStaffPortal) return;
     const res = await fetch(apiUrl('/api/admin/groups'), { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
       const raw = await readJsonSafe<unknown>(res);
       setGroups(Array.isArray(raw) ? raw : []);
     }
-  };
+  }, [token, isStaffPortal]);
+
+  useEffect(() => {
+    void fetchExams();
+    void fetchGroups();
+  }, [fetchExams, fetchGroups]);
 
   const viewResults = async (examId: number) => {
-    const res = await fetch(apiUrl(`/api/admin/exams/${examId}/results`), { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(apiUrl(resultsUrl(examId)), { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
       const raw = await readJsonSafe<unknown>(res);
       setResults(raw && typeof raw === 'object' ? raw : null);
       setSelectedExam(examId);
       setSortConfig(null);
       setFilterStatus('All');
+      setRecommendedOnly(false);
     }
   };
 
   const allowRetake = async (studentExamId: number) => {
+    if (isStaffPortal) return;
     await fetch(apiUrl(`/api/admin/student_exams/${studentExamId}/retake`), {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -120,6 +131,9 @@ export function AdminExamsTab({
     let filtered = results.results;
     if (filterStatus !== 'All') {
       filtered = filtered.filter((r: any) => r.status === filterStatus);
+    }
+    if (recommendedOnly) {
+      filtered = filtered.filter((r: any) => Boolean(r.recommended_review));
     }
     if (sortConfig !== null) {
       filtered = [...filtered].sort((a: any, b: any) => {
@@ -177,7 +191,9 @@ export function AdminExamsTab({
         <motion.div variants={item}>
           <Card className="h-full">
             <CardHeader>
-              <CardTitle className="text-xl font-semibold text-gray-800">{t.exams}</CardTitle>
+              <CardTitle className="text-xl font-semibold text-gray-800">
+                {isStaffPortal ? t.staffMyExamsTitle : t.exams}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-3">
@@ -232,13 +248,19 @@ export function AdminExamsTab({
                       <Button size="sm" variant="outline" onClick={() => viewResults(e.id)} className="rounded-full px-4">
                         {t.results}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditingExamId(e.id)} className="rounded-full px-4">
-                        {t.edit}
-                      </Button>
+                      {!isStaffPortal && (
+                        <Button size="sm" variant="outline" onClick={() => setEditingExamId(e.id)} className="rounded-full px-4">
+                          {t.edit}
+                        </Button>
+                      )}
                     </div>
                   </motion.li>
                 ))}
-                {exams.length === 0 && <p className="text-sm text-gray-500 text-center py-8">No exams created yet.</p>}
+                {exams.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-8">
+                    {isStaffPortal ? t.staffNoExamsHint : t.adminNoExamsYet}
+                  </p>
+                )}
               </ul>
             </CardContent>
           </Card>
@@ -255,7 +277,22 @@ export function AdminExamsTab({
             >
               <Card className="h-full">
                 <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <CardTitle className="text-xl font-semibold text-gray-800">{t.results}</CardTitle>
+                  <div className="space-y-2">
+                    <CardTitle className="text-xl font-semibold text-gray-800">{t.results}</CardTitle>
+                    {results?.review_priority_counts && (
+                      <div className="flex flex-wrap gap-2 text-[11px]">
+                        <span className="px-2 py-1 rounded-full border border-red-200 bg-red-50 text-red-700 font-semibold">
+                          Critical: {results.review_priority_counts.critical || 0}
+                        </span>
+                        <span className="px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-semibold">
+                          High: {results.review_priority_counts.high || 0}
+                        </span>
+                        <span className="px-2 py-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold">
+                          Medium: {results.review_priority_counts.medium || 0}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <select
                       className="text-sm border-gray-200 rounded-full px-3 py-1.5 bg-white/50 backdrop-blur-md focus:ring-2 focus:ring-blue-500/20 outline-none"
@@ -282,10 +319,27 @@ export function AdminExamsTab({
                       >
                         Name {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSort('risk_score')}
+                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${sortConfig?.key === 'risk_score' ? 'bg-red-100 text-red-700' : 'hover:bg-gray-100 text-gray-600'}`}
+                      >
+                        Risk {sortConfig?.key === 'risk_score' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                      </button>
                     </div>
-                    <Button size="sm" variant="outline" onClick={exportCSV} className="rounded-full">
-                      {t.exportCsv}
+                    <Button
+                      size="sm"
+                      variant={recommendedOnly ? 'default' : 'outline'}
+                      className="rounded-full"
+                      onClick={() => setRecommendedOnly((v) => !v)}
+                    >
+                      Recommended only
                     </Button>
+                    {!isStaffPortal && (
+                      <Button size="sm" variant="outline" onClick={exportCSV} className="rounded-full">
+                        {t.exportCsv}
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -305,6 +359,19 @@ export function AdminExamsTab({
                             <div>
                               <h3 className="font-semibold text-gray-900 text-lg">{r.name}</h3>
                               <p className="text-gray-500 text-sm font-mono">{r.student_id}</p>
+                              <div className="flex flex-wrap items-center gap-2 mt-2">
+                                {r.recommended_review && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 font-semibold">
+                                    Recommended
+                                  </span>
+                                )}
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                  Risk score: {r.risk_score ?? 0}
+                                </span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-600 uppercase">
+                                  {r.highest_priority || 'medium'}
+                                </span>
+                              </div>
                             </div>
                             <span
                               className={`px-3 py-1 rounded-full text-xs font-medium shadow-sm ${
@@ -366,6 +433,33 @@ export function AdminExamsTab({
                             </div>
                           )}
 
+                          {Array.isArray(r.question_risk_timeline) && r.question_risk_timeline.length > 0 && (
+                            <div className="mb-4">
+                              <details className="group">
+                                <summary className="text-sm font-medium text-gray-700 cursor-pointer hover:text-red-600 transition-colors flex items-center gap-2 select-none">
+                                  <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                  Question Risk Timeline ({r.question_risk_timeline.length})
+                                </summary>
+                                <div className="mt-3 space-y-2 pl-6 border-l-2 border-orange-100">
+                                  {r.question_risk_timeline.map((q: any) => (
+                                    <div key={q.question_id} className="text-sm bg-orange-50/40 p-2.5 rounded-lg border border-orange-100/60 flex flex-wrap gap-2 items-center">
+                                      <span className="font-semibold text-gray-800">Q{q.question_no}</span>
+                                      <span className="text-xs px-2 py-0.5 rounded-full border border-slate-200 bg-white">risk {q.risk_score}</span>
+                                      {q.flagged ? (
+                                        <span className="text-xs px-2 py-0.5 rounded-full border border-red-200 bg-red-50 text-red-700">flagged</span>
+                                      ) : null}
+                                      {q.incorrect ? (
+                                        <span className="text-xs px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700">incorrect</span>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            </div>
+                          )}
+
                           {studentViolations.length > 0 && (
                             <div className="mt-3 p-4 bg-red-500/5 rounded-xl border border-red-500/10">
                               <p className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-2">
@@ -389,7 +483,7 @@ export function AdminExamsTab({
                               </ul>
                             </div>
                           )}
-                          {(r.status === 'Banned' || r.status === 'Completed') && (
+                          {!isStaffPortal && (r.status === 'Banned' || r.status === 'Completed') && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -421,7 +515,7 @@ export function AdminExamsTab({
         )}
       </AnimatePresence>
 
-      {editingExamId != null && (
+      {editingExamId != null && !isStaffPortal && (
         <ExamEditModal
           token={token}
           lang={lang}

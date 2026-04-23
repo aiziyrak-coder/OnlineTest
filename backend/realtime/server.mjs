@@ -112,7 +112,7 @@ io.on('connection', (socket) => {
       if (role === 'student' && socket.data.role !== 'student') {
         return;
       }
-      if (role === 'proctor' && socket.data.role !== 'admin') {
+      if (role === 'proctor' && !['admin', 'staff'].includes(socket.data.role)) {
         return;
       }
     }

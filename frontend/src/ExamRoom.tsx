@@ -9,6 +9,8 @@ import { io, Socket } from 'socket.io-client';
 import { translations, Language } from './i18n';
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
+import { examAuthHeaders } from './lib/deviceFingerprint';
+import { buildGuardedExamHeaders } from './lib/examRequestGuard';
 import type { ExamResultPayload } from './components/ExamResultSummary';
 import {
   openPreferredProctorStream,
@@ -113,8 +115,37 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [submitting, setSubmitting] = useState(false);
   const [hardBlocked, setHardBlocked] = useState(false);
   const [banPdfBusy, setBanPdfBusy] = useState(false);
+  const [appealReason, setAppealReason] = useState('');
+  const [appealFile, setAppealFile] = useState<File | null>(null);
+  const [appealBusy, setAppealBusy] = useState(false);
+  const [appealMsg, setAppealMsg] = useState('');
   // Ogohlantirish modal
   const [violationWarning, setViolationWarning] = useState<ViolationWarning | null>(null);
+  const seqRef = useRef<number>(Number(exam.sessionSeqStart || 1));
+
+  useEffect(() => {
+    seqRef.current = Number(exam.sessionSeqStart || 1);
+  }, [exam.sessionSeqStart, exam.id]);
+
+  const nextGuardHeaders = useCallback(
+    async (method: string, path: string) =>
+      buildGuardedExamHeaders({
+        token,
+        examId: exam.id,
+        studentExamId,
+        studentId: String(user.id),
+        sessionKey: exam.sessionKey,
+        challengeSeed: exam.sessionChallenge,
+        seq: seqRef.current,
+        method,
+        path,
+      }),
+    [token, exam.id, exam.sessionKey, exam.sessionChallenge, studentExamId, user.id],
+  );
+
+  const advanceSeq = () => {
+    seqRef.current += 1;
+  };
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -132,8 +163,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     (async () => {
       try {
         const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/draft`), {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: await nextGuardHeaders('GET', `/api/student/exams/${exam.id}/draft`),
         });
+        advanceSeq();
         const data = await readJsonSafe<{
           answers?: Record<string, string>;
           flaggedQuestions?: number[];
@@ -156,7 +188,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     return () => {
       cancelled = true;
     };
-  }, [exam.id, token]);
+  }, [exam.id, token, nextGuardHeaders]);
 
   useEffect(() => {
     localStorage.setItem(`exam_answers_${exam.id}`, JSON.stringify(answers));
@@ -173,10 +205,11 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              ...(await nextGuardHeaders('POST', `/api/student/exams/${exam.id}/save-progress`)),
             },
             body,
           });
+          advanceSeq();
           if (r.ok) {
             return;
           }
@@ -194,15 +227,16 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       void attempt(0);
     }, 22000);
     return () => clearTimeout(id);
-  }, [answers, flaggedQuestions, exam.id, token, banned]);
+  }, [answers, flaggedQuestions, exam.id, token, banned, nextGuardHeaders]);
 
   useEffect(() => {
     if (banned) return;
     const sync = async () => {
       try {
         const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/clock`), {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: await nextGuardHeaders('GET', `/api/student/exams/${exam.id}/clock`),
         });
+        advanceSeq();
         const data = await readJsonSafe<{ seconds_remaining?: number }>(res);
         if (res.ok && typeof data.seconds_remaining === 'number') {
           setTimeLeft((prev) => {
@@ -218,7 +252,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     sync();
     const iv = window.setInterval(sync, 45000);
     return () => clearInterval(iv);
-  }, [exam.id, token, banned]);
+  }, [exam.id, token, banned, nextGuardHeaders]);
 
   useEffect(() => {
     const h = (e: BeforeUnloadEvent) => {
@@ -237,6 +271,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   useEffect(() => {
     const ua = navigator.userAgent || '';
     if (/anydesk|teamviewer|rustdesk|splashtop/i.test(ua)) {
+      void logViolationRef.current('REMOTE_CONTROL_SUSPECTED');
+    }
+    if ((navigator as any).webdriver) {
+      void logViolationRef.current('REMOTE_CONTROL_SUSPECTED');
+    }
+    const touchPoints = Number((navigator as any).maxTouchPoints || 0);
+    if (touchPoints > 0 && window.innerWidth < 1024) {
+      // Strict VAC rejim: mobil/planshetga o'xshash muhitda imtihon xavfli deb belgilanadi.
       void logViolationRef.current('REMOTE_CONTROL_SUSPECTED');
     }
 
@@ -340,10 +382,37 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   useEffect(() => {
     if (banned) return;
 
-    // Security: Disable right click, copy/paste, and keyboard shortcuts
-    const handleContextMenu = (e: Event) => e.preventDefault();
-    const handleCopyPaste = (e: Event) => e.preventDefault();
+    // Security: Disable right click, copy/paste, and keyboard shortcuts (+ hard violation logging)
+    const handleContextMenu = (e: Event) => {
+      e.preventDefault();
+      void logViolationRef.current('CLIPBOARD_ATTEMPT');
+    };
+    const handleCopyPaste = (e: Event) => {
+      e.preventDefault();
+      void logViolationRef.current('CLIPBOARD_ATTEMPT');
+    };
     const handleKeyDown = (e: KeyboardEvent) => {
+      const key = (e.key || '').toLowerCase();
+      const isClipboardCombo = (e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a'].includes(key);
+      const isDevtoolsCombo =
+        key === 'f12' ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+        ((e.ctrlKey || e.metaKey) && key === 'u');
+      if (key === 'printscreen') {
+        e.preventDefault();
+        void logViolationRef.current('PRINT_SCREEN');
+        return;
+      }
+      if (isDevtoolsCombo) {
+        e.preventDefault();
+        void logViolationRef.current('DEVTOOLS_OPEN');
+        return;
+      }
+      if (isClipboardCombo) {
+        e.preventDefault();
+        void logViolationRef.current('CLIPBOARD_ATTEMPT');
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) {
         e.preventDefault();
       }
@@ -352,7 +421,16 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('copy', handleCopyPaste);
     document.addEventListener('paste', handleCopyPaste);
+    document.addEventListener('cut', handleCopyPaste);
     document.addEventListener('keydown', handleKeyDown);
+
+    const devtoolsTick = window.setInterval(() => {
+      const dw = Math.abs((window.outerWidth || 0) - (window.innerWidth || 0));
+      const dh = Math.abs((window.outerHeight || 0) - (window.innerHeight || 0));
+      if (dw > 180 || dh > 180) {
+        void logViolationRef.current('DEVTOOLS_OPEN');
+      }
+    }, 5000);
 
     // requestFullscreen faqat foydalanuvchi jesti (click/touch) bilan — useEffect o'zi "user gesture" emas
     const onFirstUserGesture = () => {
@@ -505,7 +583,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleCopyPaste);
       document.removeEventListener('paste', handleCopyPaste);
+      document.removeEventListener('cut', handleCopyPaste);
       document.removeEventListener('keydown', handleKeyDown);
+      clearInterval(devtoolsTick);
       
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
@@ -715,13 +795,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokenRef.current}`,
+          ...(await nextGuardHeaders('POST', '/api/student/violations')),
         },
         body: JSON.stringify({
           exam_id: examIdRef.current,
           violation_type: type,
         }),
       });
+      advanceSeq();
       const data = (await readJsonSafe<{
         error?: string;
         code?: string;
@@ -802,7 +883,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${tokenRef.current}`,
+            ...(await nextGuardHeaders('POST', '/api/student/identity-compare')),
           },
           body: JSON.stringify({
             exam_id: examIdRef.current,
@@ -810,6 +891,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             live_capture_base64: liveB64,
           }),
         });
+        advanceSeq();
 
         if (res.status === 503 || res.status === 429) {
           // Rate limit yoki Gemini yetmaydi — skip
@@ -837,7 +919,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
     const id = window.setInterval(runCheck, IDENTITY_CHECK_MS);
     return () => clearInterval(id);
-  }, [banned, user.profile_image]);
+  }, [banned, user.profile_image, nextGuardHeaders]);
 
   // --- Tab / visibility (masofaviy nazorat) ---
   useEffect(() => {
@@ -865,10 +947,11 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            ...(await nextGuardHeaders('POST', `/api/student/exams/${exam.id}/submit`)),
           },
           body: JSON.stringify({ answers: ans, flaggedQuestions: fl }),
         });
+        advanceSeq();
         const json = await readJsonSafe<ExamResultPayload & { error?: string }>(res);
         if (!res.ok) {
           alert(String(json?.error || t.submitError));
@@ -905,7 +988,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         setSubmitting(false);
       }
     },
-    [exam.id, exam.title, token, user.name, user.id, onFinish, isOffline, t.offlineSubmit, t.submitError]
+    [exam.id, exam.title, token, user.name, user.id, onFinish, isOffline, t.offlineSubmit, t.submitError, nextGuardHeaders]
   );
 
   const handleSubmit = () => runSubmitCore(answersRef.current, flaggedRef.current);
@@ -1057,7 +1140,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                 try {
                   setBanPdfBusy(true);
                   const res = await fetch(apiUrl(`/api/student/ban-report.pdf?exam_id=${exam.id}`), {
-                    headers: { Authorization: `Bearer ${token}` },
+                    headers: examAuthHeaders(token),
                   });
                   if (!res.ok) throw new Error('yuklab bo\'lmadi');
                   const blob = await res.blob();
@@ -1078,6 +1161,70 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             </Button>
             <Button className="w-full rounded-full" variant="outline" onClick={() => onFinish(null)}>
               {backLabel}
+            </Button>
+          </div>
+          <div className="mt-5 border-t border-red-200/70 pt-5 text-left space-y-3">
+            <p className="text-sm font-semibold text-gray-800">BAN bo'yicha appeal yuborish</p>
+            <textarea
+              value={appealReason}
+              onChange={(e) => setAppealReason(e.target.value)}
+              placeholder="Vaziyatni batafsil yozing (kamida 12 belgi)"
+              className="w-full min-h-[90px] rounded-2xl border border-red-200 bg-white/80 px-3 py-2 text-sm"
+            />
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(e) => setAppealFile(e.target.files?.[0] || null)}
+              className="w-full text-xs"
+            />
+            {appealMsg ? <p className="text-xs text-gray-600">{appealMsg}</p> : null}
+            <Button
+              className="w-full rounded-full"
+              disabled={appealBusy || appealReason.trim().length < 12}
+              onClick={async () => {
+                try {
+                  setAppealBusy(true);
+                  setAppealMsg('');
+                  let evidence_base64 = '';
+                  let evidence_name = '';
+                  let evidence_mime = '';
+                  if (appealFile) {
+                    evidence_name = appealFile.name;
+                    evidence_mime = appealFile.type || '';
+                    evidence_base64 = await new Promise<string>((resolve) => {
+                      const r = new FileReader();
+                      r.onloadend = () => resolve(String(r.result || ''));
+                      r.readAsDataURL(appealFile);
+                    });
+                  }
+                  const res = await fetch(apiUrl('/api/student/ban-appeals'), {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...examAuthHeaders(token),
+                    },
+                    body: JSON.stringify({
+                      exam_id: exam.id,
+                      reason: appealReason.trim(),
+                      evidence_base64,
+                      evidence_name,
+                      evidence_mime,
+                    }),
+                  });
+                  const data = await readJsonSafe<{ error?: string }>(res);
+                  if (!res.ok) {
+                    setAppealMsg(data?.error || 'Appeal yuborishda xatolik');
+                    return;
+                  }
+                  setAppealMsg('Appeal yuborildi. Admin ko‘rib chiqadi.');
+                  setAppealReason('');
+                  setAppealFile(null);
+                } finally {
+                  setAppealBusy(false);
+                }
+              }}
+            >
+              {appealBusy ? 'Yuborilmoqda...' : 'Appeal yuborish'}
             </Button>
           </div>
         </Card>

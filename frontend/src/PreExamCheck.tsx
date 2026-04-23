@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { translations, Language, formatPreExamMediaAccessFailure } from './i18n';
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
+import { examAuthHeaders } from './lib/deviceFingerprint';
 import { InstituteLogo } from './components/InstituteLogo';
 import {
   attachDefaultMicrophone,
@@ -350,7 +351,7 @@ export function PreExamCheck({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...examAuthHeaders(token),
         },
         body: JSON.stringify({
           exam_id: exam.id,
@@ -401,7 +402,7 @@ export function PreExamCheck({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...examAuthHeaders(token),
         },
         body: JSON.stringify({ pin }),
       });
@@ -410,6 +411,9 @@ export function PreExamCheck({
         exam?: any;
         studentExamId?: number;
         startedAt?: string;
+        sessionKey?: string;
+        sessionSeqStart?: number;
+        sessionChallenge?: string;
       }>(res);
       if (!res.ok) {
         setError(data?.error || t.preExamStartError);
@@ -421,7 +425,16 @@ export function PreExamCheck({
         setStarting(false);
         return;
       }
-      onComplete({ ...data.exam, startedAt: data.startedAt }, data.studentExamId);
+      onComplete(
+        {
+          ...data.exam,
+          startedAt: data.startedAt,
+          sessionKey: data.sessionKey,
+          sessionSeqStart: data.sessionSeqStart,
+          sessionChallenge: data.sessionChallenge,
+        },
+        data.studentExamId,
+      );
     } catch {
       setError(t.preExamNetworkError);
       setStarting(false);
