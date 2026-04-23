@@ -26,7 +26,7 @@ python manage.py reset_single_admin --yes  # hammasini o‘chirib faqat admin / 
 python manage.py runserver
 ```
 
-API: `http://127.0.0.1:8000/api/health`
+Mahalliy `runserver`: `http://127.0.0.1:8000/api/health`. **Server (nginx + Gunicorn):** API odatda `127.0.0.1:9081` — `curl http://127.0.0.1:9081/api/health` yoki [`deploy/DEPLOY.md`](deploy/DEPLOY.md) dagi yangilash buyrug‘i.
 
 ### 2. Frontend
 

@@ -169,6 +169,14 @@ Certbot konfigni yangilaydi; keyin `listen 443 ssl` bloklari paydo bo‘ladi.
 
 `deploy/remote-update.sh` quyidagilarni ketma-ket bajaradi: `git pull`, `/etc/onlinetest/api.env` yuklab `migrate` / `collectstatic`, `api.online-imtixon.uz` bo‘lsa `frontend/.env.production` dagi VITE ni bir domen (bo‘sh) qilib tuzatadi, **realtime** `SOCKET_IO_CORS_ORIGIN` (HTTP+HTTPS apex + api), frontend `npm ci && build`, **`sudo bash deploy/enable-nginx-onlinetest.sh`** (sertifikat bo‘lmasa HTTP-only), systemd unitlarni nusxalaydi, servislarni restart, health.
 
+**Bitta qator (pull + migrate + build + nginx + restart):** loyiha ildizidan (standart katalog `/var/www/onlinetest`; boshqa joyda bo‘lsa `cd` ni o‘zgartiring).
+
+```bash
+cd /var/www/onlinetest && bash deploy/server-pull-restart.sh
+```
+
+`deploy/server-pull-restart.sh` — `remote-update.sh` ga yo‘naltiruvchi qisqa nom.
+
 ```bash
 cd /var/www/onlinetest
 bash deploy/remote-update.sh
@@ -184,7 +192,10 @@ bash deploy/remote-update.sh --reset-admin       # XAVFLI: barcha user + imtihon
 
 ## Tekshiruv
 
+**Eslatma:** prod da API **8000** da emas; Gunicorn `127.0.0.1:9081` da (`onlinetest-api.service`). Shuning uchun `curl http://127.0.0.1:8000/...` bo‘sh yoki rad etiladi — to‘g‘ri tekshiruv: `9081` yoki nginx orqali.
+
 - `curl -sS http://127.0.0.1:9081/api/health` — `{"ok":true,"database":true}`
+- `curl -sS http://127.0.0.1:9081/api/live` — build/reviziya (ixtiyoriy)
 - `curl -sS -H 'Host: online-imtixon.uz' http://127.0.0.1/api/health` — xuddi shunday (bir domen nginx)
 - `https://api.online-imtixon.uz/api/health` — faqat `api` DNS va TLS tayyor bo‘lsa
 - `https://online-imtixon.uz` yoki `http://online-imtixon.uz` — SPA yuklanishi
