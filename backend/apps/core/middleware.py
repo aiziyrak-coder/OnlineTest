@@ -61,4 +61,7 @@ class SecurityHeadersMiddleware:
             "camera=(self), microphone=(self), geolocation=(), payment=()",
         )
         response.setdefault("Referrer-Policy", "same-origin")
+        # Nginx ham qo‘shishi mumkin; API javoblarida qayta ishlatish xavfsiz.
+        response.setdefault("X-Content-Type-Options", "nosniff")
+        response.setdefault("X-Frame-Options", "DENY")
         return response

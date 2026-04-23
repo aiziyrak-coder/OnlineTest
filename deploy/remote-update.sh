@@ -140,13 +140,13 @@ run_enable_nginx() {
 
 check_health() {
   local local_api="http://127.0.0.1:9081/api/health"
+  local rt_health="http://127.0.0.1:9082/health"
   if ! command -v curl >/dev/null 2>&1; then
     return 0
   fi
   echo "[remote-update] Health tekshirilmoqda..."
   curl -fsS --max-time 8 "$local_api" >/dev/null && echo "  - gunicorn 9081: OK" || echo "  - gunicorn 9081: FAIL ($local_api)"
-  curl -fsS --max-time 8 -H 'Host: online-imtixon.uz' "http://127.0.0.1/api/health" >/dev/null \
-    && echo "  - nginx apex /api/health: OK" || echo "  - nginx apex /api/health: FAIL (Host: online-imtixon.uz)"
+  curl -fsS --max-time 8 "$rt_health" >/dev/null && echo "  - realtime 9082: OK" || echo "  - realtime 9082: FAIL ($rt_health)"
 }
 
 git_pull_safe

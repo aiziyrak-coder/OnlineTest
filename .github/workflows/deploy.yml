@@ -3,6 +3,9 @@
 # Bir vaqtning o‘zida faqat bittasini ishlating: webhook bo‘lsa SSH_HOST qo‘ymang.
 name: Deploy to server
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
   workflow_run:
@@ -50,6 +53,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 45m
           script_stop: true
           script: |
             set -euo pipefail

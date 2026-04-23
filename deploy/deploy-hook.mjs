@@ -11,6 +11,12 @@ const SECRET = process.env.DEPLOY_HOOK_SECRET || '';
 const APP = process.env.DEPLOY_APP_ROOT || '/var/www/onlinetest';
 const MAX_BODY = 4096;
 
+const jsonHeaders = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'X-Content-Type-Options': 'nosniff',
+  'Cache-Control': 'no-store',
+};
+
 if (!SECRET || SECRET.length < 24) {
   console.error('[deploy-hook] DEPLOY_HOOK_SECRET majburiy (min 24 belgi).');
   process.exit(1);
@@ -77,14 +83,14 @@ function runDeploy() {
 
 const server = http.createServer(async (req, res) => {
   if (req.method !== 'POST' || req.url !== '/__internal_deploy/v1') {
-    res.writeHead(404);
-    res.end();
+    res.writeHead(404, jsonHeaders);
+    res.end(JSON.stringify({ ok: false, error: 'not found' }));
     return;
   }
 
   const cl = req.headers['content-length'];
   if (cl !== undefined && Number(cl) > MAX_BODY) {
-    res.writeHead(413, { 'Content-Type': 'application/json' });
+    res.writeHead(413, jsonHeaders);
     res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
     return;
   }
@@ -93,11 +99,11 @@ const server = http.createServer(async (req, res) => {
     try {
       await drainCapped(req, MAX_BODY);
     } catch {
-      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.writeHead(413, jsonHeaders);
       res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
       return;
     }
-    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.writeHead(401, jsonHeaders);
     res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
     return;
   }
@@ -106,11 +112,11 @@ const server = http.createServer(async (req, res) => {
     try {
       await drainCapped(req, MAX_BODY);
     } catch {
-      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.writeHead(413, jsonHeaders);
       res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
       return;
     }
-    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.writeHead(429, jsonHeaders);
     res.end(JSON.stringify({ ok: false, error: 'busy' }));
     return;
   }
@@ -118,7 +124,7 @@ const server = http.createServer(async (req, res) => {
   try {
     await drainCapped(req, MAX_BODY);
   } catch {
-    res.writeHead(413, { 'Content-Type': 'application/json' });
+    res.writeHead(413, jsonHeaders);
     res.end(JSON.stringify({ ok: false, error: 'payload too large' }));
     return;
   }
@@ -126,13 +132,13 @@ const server = http.createServer(async (req, res) => {
   busy = true;
   try {
     const { out, err } = await runDeploy();
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, jsonHeaders);
     res.end(JSON.stringify({ ok: true, message: 'deployed' }));
     if (err) console.error('[deploy-hook] stderr:', err.slice(0, 8000));
     if (out) console.log('[deploy-hook] stdout:', out.slice(0, 4000));
   } catch (e) {
     console.error('[deploy-hook]', e);
-    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.writeHead(500, jsonHeaders);
     res.end(JSON.stringify({ ok: false, error: 'deploy failed' }));
   } finally {
     busy = false;
