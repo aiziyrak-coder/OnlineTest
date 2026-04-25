@@ -469,20 +469,22 @@ export function PreExamCheck({
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 1.05 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="min-h-[80vh] flex items-center justify-center p-6"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      className="w-full min-h-[calc(100dvh-5.5rem)] flex flex-col"
     >
-      <Card className="max-w-4xl w-full">
-        <CardHeader className="flex flex-col items-center gap-3">
-          <InstituteLogo size="sm" />
-          <CardTitle className="text-3xl text-center font-bold tracking-tight text-gray-900">
-            {t.preExamTitle}
-          </CardTitle>
+      <Card className="w-full max-w-none rounded-none border-0 border-y border-sky-200/40 bg-white/95 shadow-none sm:shadow-sm sm:rounded-2xl sm:border sm:mx-0">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 lg:px-10 pt-6 pb-4 border-b border-gray-100/80">
+          <div className="flex items-center gap-3 min-w-0">
+            <InstituteLogo size="sm" />
+            <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 text-left">
+              {t.preExamTitle}
+            </CardTitle>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 px-4 sm:px-6 lg:px-10 xl:px-14 pb-8 pt-6">
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -502,32 +504,37 @@ export function PreExamCheck({
             </motion.div>
           )}
 
-          <div className="rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 to-orange-50/50 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 sm:px-5 border-b border-amber-200/50 bg-amber-100/40">
-              <h3 className="font-bold text-amber-950 text-sm sm:text-base tracking-tight">{t.preExamVacRulesTitle}</h3>
-              <p className="text-xs sm:text-sm text-amber-950/85 mt-1.5 leading-relaxed">{t.preExamVacRulesIntro}</p>
-            </div>
-            <div
-              ref={vacRulesBoxRef}
-              className="max-h-56 sm:max-h-72 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5 text-sm text-gray-900 leading-relaxed space-y-2.5 border-b border-amber-100/60"
-            >
-              {t.preExamVacRulesItems.split('|||RULE|||').map((line, i) => (
-                <div key={i} className="flex gap-2.5">
-                  <span className="shrink-0 font-bold text-amber-800 tabular-nums w-6 text-right">{i + 1}.</span>
-                  <p className="min-w-0 flex-1">{line.trim()}</p>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 xl:gap-10 items-start">
+            <div className="lg:col-span-5 space-y-4 min-w-0">
+              <div className="rounded-2xl sm:rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 to-orange-50/50 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 sm:px-5 border-b border-amber-200/50 bg-amber-100/40">
+                  <h3 className="font-bold text-amber-950 text-sm sm:text-base tracking-tight">{t.preExamVacRulesTitle}</h3>
+                  <p className="text-xs sm:text-sm text-amber-950/85 mt-1.5 leading-relaxed">{t.preExamVacRulesIntro}</p>
                 </div>
-              ))}
+                <div
+                  ref={vacRulesBoxRef}
+                  className="max-h-52 sm:max-h-64 lg:max-h-[min(70vh,520px)] overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5 text-sm text-gray-900 leading-relaxed space-y-2.5 border-b border-amber-100/60"
+                >
+                  {t.preExamVacRulesItems.split('|||RULE|||').map((line, i) => (
+                    <div key={i} className="flex gap-2.5">
+                      <span className="shrink-0 font-bold text-amber-800 tabular-nums w-6 text-right">{i + 1}.</span>
+                      <p className="min-w-0 flex-1">{line.trim()}</p>
+                    </div>
+                  ))}
+                </div>
+                {!vacRulesScrolledEnd && (
+                  <p className="px-4 py-2 text-center text-xs font-medium text-amber-900 bg-amber-100/50">
+                    ↓ {t.preExamVacRulesScrollHint}
+                  </p>
+                )}
+              </div>
             </div>
-            {!vacRulesScrolledEnd && (
-              <p className="px-4 py-2 text-center text-xs font-medium text-amber-900 bg-amber-100/50">
-                ↓ {t.preExamVacRulesScrollHint}
-              </p>
-            )}
-          </div>
 
-          {/* Kamera — yuqorida katta, to'liq kenglikda */}
-          <div className="relative w-full rounded-3xl overflow-hidden border-4 border-white/60 shadow-xl bg-black"
-               style={{ aspectRatio: '16/9', maxHeight: '420px' }}>
+            <div className="lg:col-span-7 space-y-6 min-w-0">
+          {/* Kamera — keng ekranda to'liq ustun */}
+          <div
+            className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border-2 sm:border-4 border-white/60 shadow-xl bg-black aspect-video max-h-[min(58vh,640px)] lg:max-h-[min(72vh,720px)] mx-auto lg:mx-0"
+          >
             <video
               ref={videoRef}
               autoPlay
@@ -560,13 +567,13 @@ export function PreExamCheck({
           </div>
 
           {exam.custom_rules && (
-            <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm">
+            <div className="p-4 border border-white/40 bg-white/30 rounded-2xl sm:rounded-3xl backdrop-blur-md shadow-sm">
               <h4 className="font-semibold text-sm text-gray-800 mb-1">{t.customRules}</h4>
               <p className="text-sm text-gray-600 whitespace-pre-wrap">{exam.custom_rules}</p>
             </div>
           )}
 
-          <div className="space-y-4 max-w-xl mx-auto w-full">
+          <div className="space-y-4 w-full">
               {/* Shaxs tasdiqlash */}
               {user.profile_image ? (
                 <div className="p-4 border border-white/40 bg-white/30 rounded-3xl backdrop-blur-md shadow-sm space-y-4">
@@ -650,9 +657,11 @@ export function PreExamCheck({
                 </div>
               )}
             </div>
+            </div>
+          </div>
 
           {/* Rozilik + tugmalar */}
-          <div className="pt-4 border-t border-gray-200/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="pt-6 border-t border-gray-200/60 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <label className="flex items-start gap-3 cursor-pointer p-3 hover:bg-white/50 rounded-2xl transition-colors flex-1">
               <input
                 type="checkbox"

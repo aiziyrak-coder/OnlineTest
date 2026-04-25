@@ -120,6 +120,7 @@ function AppContent() {
   }
 
   const t = translations[lang];
+  const preExamFullBleed = user.role === 'student' && examStatus === 'checking';
 
   const headerShell =
     user.role === 'student'
@@ -165,7 +166,11 @@ function AppContent() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 max-w-7xl w-full mx-auto pt-24 sm:pt-28 pb-6 sm:pb-8 px-3 sm:px-6 relative z-10">
+      <main
+        className={`flex-1 min-h-0 w-full mx-auto pt-24 sm:pt-28 pb-6 sm:pb-8 relative z-10 ${
+          preExamFullBleed ? 'max-w-none px-0' : 'max-w-7xl px-3 sm:px-6'
+        }`}
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={user.role + examStatus}
