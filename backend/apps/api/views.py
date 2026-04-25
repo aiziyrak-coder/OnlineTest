@@ -3013,13 +3013,13 @@ def student_violations(request):
     }
     reason_text = violation_reason_map.get(vtype, vtype)
 
-    WARN_SUPPRESS_SECONDS = max(10, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "60")))
+    WARN_SUPPRESS_SECONDS = max(15, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "30")))
     # Imtihon startida texnik tebranishlar (kamera/GPU) uchun grace — yozuvsiz.
     STARTUP_GRACE_SECONDS = max(0, int(os.environ.get("PROCTOR_STARTUP_GRACE_SECONDS", "40")))
     MAX_WARNINGS_BEFORE_BAN = 3  # 3 ta modal; 4-chi rasmiy epizodda ban
     HARDENED_MODE = str(os.environ.get("PROCTOR_HARDENED_MODE", "1")).strip() not in ("0", "false", "False")
     HARDENED_WINDOW_MIN = max(3, int(os.environ.get("PROCTOR_HARD_WINDOW_MIN", "10")))
-    HARDENED_MAX_POINTS = max(8, int(os.environ.get("PROCTOR_HARD_MAX_POINTS", "14")))
+    HARDENED_MAX_POINTS = max(8, int(os.environ.get("PROCTOR_HARD_MAX_POINTS", "22")))
     # Boshida turli turlar ketma-ket tushganda (rolling score) haddan tashqari xavf — vaqtincha o‘chirish.
     HARDENED_STARTUP_GRACE = max(0, int(os.environ.get("PROCTOR_HARDENED_STARTUP_GRACE_SECONDS", "60")))
 
@@ -3076,11 +3076,8 @@ def student_violations(request):
                     seen_types.add(tp)
                     hard_points += _priority_weight(_violation_priority(tp))
 
-                combo_ban = (
-                    ("TAB_SWITCH_HARD" in seen_types and "FULLSCREEN_EXIT_HARD" in seen_types)
-                    or ("DEVTOOLS_OPEN" in seen_types and "CLIPBOARD_ATTEMPT" in seen_types)
-                    or ("MULTIPLE_FACES" in seen_types and "WHISPER_OR_CONVERSATION_SUSPECTED" in seen_types)
-                )
+                # Real hayot: F12 + clipboard yoki tab+fullscreen bir vaqtda — alohida "combo" ban emas (ogohlantirish oqimi).
+                combo_ban = "MULTIPLE_FACES" in seen_types and "WHISPER_OR_CONVERSATION_SUSPECTED" in seen_types
                 if combo_ban or hard_points >= HARDENED_MAX_POINTS:
                     AppUser.objects.filter(pk=u.id).update(status="Banned")
                     se.status = "Banned"
@@ -3125,6 +3122,7 @@ def student_violations(request):
                         "violationReason": reason_text,
                         "isFinalWarning": False,
                         "officialWarnings": se.proctor_official_warnings,
+                        "mergeWindowSeconds": WARN_SUPPRESS_SECONDS,
                     }
                 )
 

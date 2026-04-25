@@ -124,6 +124,10 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [banViolationsCount, setBanViolationsCount] = useState<number | null>(null);
   // Ogohlantirish modal
   const [violationWarning, setViolationWarning] = useState<ViolationWarning | null>(null);
+  /** Kamera oqimi video elementga ulangach +1 (async setup va ref vaqti sinxroni). */
+  const [proctorStreamRevision, setProctorStreamRevision] = useState(0);
+  const [cameraPreviewOk, setCameraPreviewOk] = useState(false);
+  const [cameraErrorHint, setCameraErrorHint] = useState('');
   const seqRef = useRef<number>(Number(exam.sessionSeqStart || 1));
 
   useEffect(() => {
@@ -369,7 +373,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const singleFaceRef = useRef(false);
   const identityCheckBusyRef = useRef(false);
   const logViolationRef = useRef<(type: string) => Promise<void>>(async () => {});
-  /** Ogohlantirish modali ochiq (UI); serverga yozuvlar baribir ketadi (60s birlashtirish serverda). */
+  /** Ogohlantirish modali ochiq (UI); serverda rasmiy ogohlantirishlar merge oynasi bilan birlashtiriladi. */
   const violationModalOpenRef = useRef(false);
   useEffect(() => {
     violationModalOpenRef.current = violationWarning !== null;
@@ -386,6 +390,36 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   ]);
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<{ [id: string]: RTCPeerConnection }>({});
+
+  useEffect(() => {
+    if (banned) return;
+    const s = streamRef.current;
+    const v = videoRef.current;
+    if (!s || !v) return;
+    const tz = translations[lang];
+    if (v.srcObject !== s) v.srcObject = s;
+    const tryPlay = () => {
+      void v
+        .play()
+        .then(() => {
+          setCameraPreviewOk(true);
+          setCameraErrorHint('');
+        })
+        .catch(() => {
+          setCameraPreviewOk(false);
+          setCameraErrorHint(tz.examCameraPlayBlocked);
+        });
+    };
+    tryPlay();
+    v.addEventListener('loadeddata', tryPlay, { once: true });
+    const t1 = window.setTimeout(tryPlay, 350);
+    const t2 = window.setTimeout(tryPlay, 900);
+    return () => {
+      v.removeEventListener('loadeddata', tryPlay);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [proctorStreamRevision, banned, lang]);
 
   // --- AI Proctoring Setup & Security ---
   useEffect(() => {
@@ -434,12 +468,13 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     document.addEventListener('keydown', handleKeyDown);
 
     const devtoolsTick = window.setInterval(() => {
+      if (bannedRef.current) return;
       const dw = Math.abs((window.outerWidth || 0) - (window.innerWidth || 0));
       const dh = Math.abs((window.outerHeight || 0) - (window.innerHeight || 0));
-      if (dw > 180 || dh > 180) {
+      if (dw > 200 && dh > 100) {
         void logViolationRef.current('DEVTOOLS_OPEN');
       }
-    }, 5000);
+    }, 12_000);
 
     // requestFullscreen faqat foydalanuvchi jesti (click/touch) bilan — useEffect o'zi "user gesture" emas
     const onFirstUserGesture = () => {
@@ -466,12 +501,11 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
     const setupAI = async () => {
       try {
-        // 1. Setup Media with optimized constraints for lower bandwidth
+        setCameraErrorHint('');
+        setCameraPreviewOk(false);
         const stream = await openPreferredProctorStream();
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        setProctorStreamRevision((n) => n + 1);
 
         // Socket.IO alohida realtime server (backend/realtime); devda odatda :3001
         const socketUrl =
@@ -574,11 +608,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         animationFrameRef.current = requestAnimationFrame(processFrame);
 
       } catch (err) {
+        setCameraPreviewOk(false);
         if (err instanceof DOMException && err.message === VIRTUAL_CAMERA_BLOCKED_MESSAGE) {
+          setCameraErrorHint(translations[lang].virtualCameraBlocked);
           setWarningMsg(translations[lang].virtualCameraBlocked);
           void logViolationRef.current('VIRTUAL_WEBCAM_SUSPECTED');
         } else {
           console.error('Failed to setup AI proctoring:', err);
+          setCameraErrorHint(translations[lang].examCameraPlayBlocked);
           void logViolationRef.current('CAMERA_MIC_ACCESS_FAILED');
         }
       }
@@ -829,6 +866,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         isFinalWarning?: boolean;
         warningSuppressed?: boolean;
         officialWarnings?: number;
+        mergeWindowSeconds?: number;
       }>(res)) || {};
 
       if (!res.ok) {
@@ -840,7 +878,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
       if (data.warningSuppressed) {
         const detail = (data.violationReason || type).trim();
-        setWarningMsg(`${t.warningSuppressedToast} ${detail}`.trim());
+        const sec = typeof data.mergeWindowSeconds === 'number' ? data.mergeWindowSeconds : 30;
+        setWarningMsg(`${t.warningSuppressedToast.replace('{s}', String(sec))} ${detail}`.trim());
         setTimeout(() => setWarningMsg(''), 7000);
         return;
       }
@@ -1473,6 +1512,24 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                 className="w-full h-full object-cover"
                 style={{ transform: 'scaleX(-1)' }} // Mirror
               />
+              {(cameraErrorHint || !cameraPreviewOk) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center bg-white/75 backdrop-blur-sm text-[11px] sm:text-xs text-gray-800">
+                  {cameraErrorHint ? (
+                    <>
+                      <span className="font-semibold text-red-700 leading-snug">{cameraErrorHint}</span>
+                      <button
+                        type="button"
+                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50"
+                        onClick={() => window.location.reload()}
+                      >
+                        {t.examCameraReload}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="font-medium text-gray-600">{t.examCameraLoadingPreview}</span>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

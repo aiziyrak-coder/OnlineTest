@@ -366,7 +366,7 @@ def build_ban_report_pdf(
     y -= 14
 
     c.setFont("Helvetica", 9)
-    warn_win = max(10, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "60")))
+    warn_win = max(15, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "30")))
     grouped = _group_violation_rows_for_pdf(violations, window_sec=warn_win) if violations else []
     if not grouped:
         c.drawString(50, y, "- Qoidabuzarlik loglari topilmadi.")

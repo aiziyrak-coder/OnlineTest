@@ -360,7 +360,7 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(TestBankQuestion.objects.count(), 1)
 
     def test_violation_three_distinct_warnings_then_ban_on_fourth(self):
-        """3 ta rasmiy ogohlantirish (har biri oldingisidan 60s o'tgach), 4-chi epizodda ban."""
+        """3 ta rasmiy ogohlantirish (har biri oldingisidan merge oynadan ko'proq vaqt), 4-chi epizodda ban."""
         hp = bcrypt.hashpw(b"vstudent2", bcrypt.gensalt(rounds=10)).decode("ascii")
         st2 = AppUser.objects.create(
             id="itest_student_viol",
@@ -406,7 +406,7 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(st2.status, "Banned")
 
     def test_violation_multiple_types_within_one_minute_single_warning(self):
-        """1 daqiqa ichida turli violationlar — faqat bitta rasmiy ogohlantirish."""
+        """Bitta merge oynasi ichida turli violationlar — faqat bitta rasmiy ogohlantirish."""
         hp = bcrypt.hashpw(b"vstudent3", bcrypt.gensalt(rounds=10)).decode("ascii")
         st3 = AppUser.objects.create(
             id="itest_student_viol3",
@@ -802,7 +802,8 @@ class ExamFlowApiTests(TestCase):
         self.assertIn("results", body)
         self.assertTrue(isinstance(body["results"], list))
 
-    def test_hardened_combo_ban_triggers_immediately(self):
+    def test_hardened_combo_ban_faces_and_whisper(self):
+        """Hardened: faqat yuz + gapirish kombinatsiyasi darhol ban (tab+fullscreen emas)."""
         hp = bcrypt.hashpw(b"vstudent7", bcrypt.gensalt(rounds=10)).decode("ascii")
         st7 = AppUser.objects.create(
             id="itest_student_viol7",
@@ -822,13 +823,14 @@ class ExamFlowApiTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
         r1 = self.client.post(
             "/api/student/violations",
-            {"exam_id": self.exam_a.id, "violation_type": "TAB_SWITCH_HARD", "screenshot_url": ""},
+            {"exam_id": self.exam_a.id, "violation_type": "MULTIPLE_FACES", "screenshot_url": ""},
             format="json",
         )
         self.assertEqual(r1.status_code, 200)
+        self.assertFalse(r1.json().get("banned"))
         r2 = self.client.post(
             "/api/student/violations",
-            {"exam_id": self.exam_a.id, "violation_type": "FULLSCREEN_EXIT_HARD", "screenshot_url": ""},
+            {"exam_id": self.exam_a.id, "violation_type": "WHISPER_OR_CONVERSATION_SUSPECTED", "screenshot_url": ""},
             format="json",
         )
         self.assertEqual(r2.status_code, 200)
