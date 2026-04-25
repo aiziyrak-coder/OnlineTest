@@ -2939,19 +2939,9 @@ def student_violations(request):
     screenshot = str(d.get("screenshot_url") or "")[:50_000]
 
     vac_strict_mode = str(os.environ.get("VAC_STRICT_MODE", "1")).strip() not in ("0", "false", "False")
-    # Strict rejimda ayrim violationlar darhol ban; aks holda 1-3 warning oqimi ishlaydi.
-    instant_ban_types = (
-        frozenset(
-            {
-                "IDENTITY_SUBSTITUTION",
-                "REMOTE_CONTROL_SUSPECTED",
-                "VIRTUAL_WEBCAM_SUSPECTED",
-                "DEVTOOLS_OPEN",
-            }
-        )
-        if vac_strict_mode
-        else frozenset()
-    )
+    # Strict: faqat yuz almashtirish (identity) darhol ban; qolganlari 1-3 rasmiy ogohlantirish + hardening.
+    # Masofaviy dastur / keng oyna+touch (false positive) uchun remote/devtools/virtual kamera ogohlantirish oqimiga o‘tadi.
+    instant_ban_types = frozenset({"IDENTITY_SUBSTITUTION"}) if vac_strict_mode else frozenset()
     warn_types = frozenset(
         {
             "TAB_SWITCH_HARD",
@@ -3024,12 +3014,14 @@ def student_violations(request):
     reason_text = violation_reason_map.get(vtype, vtype)
 
     WARN_SUPPRESS_SECONDS = max(10, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "60")))
-    # Imtihon startida texnik tebranishlar sababli birdan ogohlantirish ketmasligi uchun grace.
-    STARTUP_GRACE_SECONDS = max(0, int(os.environ.get("PROCTOR_STARTUP_GRACE_SECONDS", "20")))
+    # Imtihon startida texnik tebranishlar (kamera/GPU) uchun grace — yozuvsiz.
+    STARTUP_GRACE_SECONDS = max(0, int(os.environ.get("PROCTOR_STARTUP_GRACE_SECONDS", "40")))
     MAX_WARNINGS_BEFORE_BAN = 3  # 3 ta modal; 4-chi rasmiy epizodda ban
     HARDENED_MODE = str(os.environ.get("PROCTOR_HARDENED_MODE", "1")).strip() not in ("0", "false", "False")
     HARDENED_WINDOW_MIN = max(3, int(os.environ.get("PROCTOR_HARD_WINDOW_MIN", "10")))
     HARDENED_MAX_POINTS = max(8, int(os.environ.get("PROCTOR_HARD_MAX_POINTS", "14")))
+    # Boshida turli turlar ketma-ket tushganda (rolling score) haddan tashqari xavf — vaqtincha o‘chirish.
+    HARDENED_STARTUP_GRACE = max(0, int(os.environ.get("PROCTOR_HARDENED_STARTUP_GRACE_SECONDS", "60")))
 
     try:
         with transaction.atomic():
@@ -3066,7 +3058,11 @@ def student_violations(request):
 
             cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
 
-            if HARDENED_MODE:
+            hardened_in_startup_window = bool(
+                se.started_at
+                and (now - se.started_at) < timedelta(seconds=HARDENED_STARTUP_GRACE)
+            )
+            if HARDENED_MODE and not hardened_in_startup_window:
                 win_from = now - timedelta(minutes=HARDENED_WINDOW_MIN)
                 recent = list(
                     ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int, timestamp__gte=win_from).values(

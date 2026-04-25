@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Button, Card, CardContent, CardHeader, CardTitle } from './components/ui';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
@@ -119,6 +120,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [appealFile, setAppealFile] = useState<File | null>(null);
   const [appealBusy, setAppealBusy] = useState(false);
   const [appealMsg, setAppealMsg] = useState('');
+  /** BAN paytida serverdagi jami violation yozuvlari (3 ta "!" o‘rniga) */
+  const [banViolationsCount, setBanViolationsCount] = useState<number | null>(null);
   // Ogohlantirish modal
   const [violationWarning, setViolationWarning] = useState<ViolationWarning | null>(null);
   const seqRef = useRef<number>(Number(exam.sessionSeqStart || 1));
@@ -276,11 +279,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     if ((navigator as any).webdriver) {
       void logViolationRef.current('REMOTE_CONTROL_SUSPECTED');
     }
-    const touchPoints = Number((navigator as any).maxTouchPoints || 0);
-    if (touchPoints > 0 && window.innerWidth < 1024) {
-      // Strict VAC rejim: mobil/planshetga o'xshash muhitda imtihon xavfli deb belgilanadi.
-      void logViolationRef.current('REMOTE_CONTROL_SUSPECTED');
-    }
+    // Eslatma: maxTouchPoints + tor brauzer oynasi (masalan 900px) "mobil" deb noto'g'ri
+    // REMOTE_CONTROL yuborardi — Windows sensorli noutbuklar tez-tez ban. Alohida yuborilmaydi.
 
     // Blur: faqat fullscreen rejimida va fullscreen so'ralayotgan paytda emas
     const onBlur = () => {
@@ -778,7 +778,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const logViolation = async (type: string) => {
     if (bannedRef.current) return;
 
-    const INSTANT_BAN_TYPES = new Set(['IDENTITY_SUBSTITUTION', 'REMOTE_CONTROL_SUSPECTED']);
+    // Server: strict VAC da faqat IDENTITY_SUBSTITUTION darhol ban; qolganlari ogohlantirish ketma-ketligi.
+    const INSTANT_BAN_TYPES = new Set(['IDENTITY_SUBSTITUTION']);
 
     // Dedup: bir xil tur uchun qisqa interval (server 60s ichida bitta rasmiy ogohlantirishni birlashtiradi)
     const dedupeKey = `viol_last_${type}`;
@@ -830,6 +831,11 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         if (type === 'IDENTITY_SUBSTITUTION') setIdentityTerminated(true);
         setViolationWarning(null);
         setStrikeLevel(3);
+        if (typeof data.violationsCount === 'number') {
+          setBanViolationsCount(data.violationsCount);
+        } else {
+          setBanViolationsCount(null);
+        }
         setBanned(true);
         streamRef.current?.getTracks().forEach((t) => t.stop());
       } else if (typeof data.warningNumber === 'number' && data.warningNumber > 0) {
@@ -1026,9 +1032,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     const finalMsg = t.violationFinalNotice;
     const reasonLabel = t.violationReasonLabel;
 
-    return (
+    return createPortal(
       <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-y-contain px-4 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
+        className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto overscroll-y-contain px-4 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="violation-warn-title"
@@ -1096,7 +1102,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             </button>
           </div>
         </motion.div>
-      </div>
+      </div>,
+      document.body,
     );
   }
 
@@ -1107,30 +1114,32 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     const banPdfLabel = t.banReportDownload;
     const backLabel = t.banBackToDashboard;
 
-    return (
-      <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-6">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-lg flex items-center justify-center"
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/50 backdrop-blur-sm overflow-y-auto overscroll-y-contain px-4 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ban-ended-title"
       >
-        <Card className="w-full text-center p-8 sm:p-10 border-red-500/30 bg-red-50/90 backdrop-blur-xl shadow-2xl shadow-red-500/10">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-lg my-auto"
+        >
+          <Card className="w-full text-center p-6 sm:p-8 md:p-10 max-h-[min(92dvh,100dvh-1rem)] overflow-y-auto overscroll-y-contain border-red-500/30 bg-red-50/95 backdrop-blur-xl shadow-2xl shadow-red-500/10">
           <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-red-600 mb-3 tracking-tight">{banTitle}</h2>
-          <p className="text-gray-700 mb-5 leading-relaxed text-sm">{banMsg}</p>
-
-          <div className="flex justify-center gap-2 mb-6">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="w-9 h-9 rounded-full bg-red-200 text-red-700 flex items-center justify-center text-sm font-bold border-2 border-red-400">
-                !
-              </div>
-            ))}
-          </div>
+          <h2 id="ban-ended-title" className="text-2xl font-bold text-red-600 mb-3 tracking-tight">{banTitle}</h2>
+          <p className="text-gray-700 mb-4 leading-relaxed text-sm">{banMsg}</p>
+          {banViolationsCount != null && (
+            <p className="text-sm text-red-800/90 font-medium mb-5">
+              {t.banRecordCountHint.replace('{n}', String(banViolationsCount))}
+            </p>
+          )}
 
           <div className="space-y-3">
             <Button
@@ -1228,8 +1237,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
             </Button>
           </div>
         </Card>
-      </motion.div>
-      </div>
+        </motion.div>
+      </div>,
+      document.body,
     );
   }
 
