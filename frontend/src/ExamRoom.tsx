@@ -286,20 +286,33 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     // Eslatma: maxTouchPoints + tor brauzer oynasi (masalan 900px) "mobil" deb noto'g'ri
     // REMOTE_CONTROL yuborardi — Windows sensorli noutbuklar tez-tez ban. Alohida yuborilmaydi.
 
+    const clearBlurTimer = () => {
+      if (blurViolationTimerRef.current !== null) {
+        window.clearTimeout(blurViolationTimerRef.current);
+        blurViolationTimerRef.current = null;
+      }
+    };
+
     // Blur: faqat fullscreen rejimida va fullscreen so'ralayotgan paytda emas
     const onBlur = () => {
       if (bannedRef.current) return;
       const now = Date.now();
       // Fullscreen so'ralayotgan paytda (2 soniya) blur ignore
       if (now < blurIgnoreUntilRef.current) return;
-      // Fullscreen rejimida emas bo'lsa — tab almashtirish (ogohlantirish, darhol ban emas)
-      if (!document.fullscreenElement) {
-        void logViolationRef.current('TAB_SWITCH_HARD');
-        return;
-      }
-      // Fullscreen rejimida blur — boshqa dastur focus oldi, lekin biz hali fullscreendamiz
-      // Bu hard block emas — soft violation
-      void logViolationRef.current('TAB_SWITCH_SOFT');
+      clearBlurTimer();
+      blurViolationTimerRef.current = window.setTimeout(() => {
+        blurViolationTimerRef.current = null;
+        if (bannedRef.current) return;
+        if (document.hasFocus()) return;
+        // Fullscreen rejimida emas bo'lsa — tab almashtirish (ogohlantirish, darhol ban emas)
+        if (!document.fullscreenElement) {
+          void logViolationRef.current('TAB_SWITCH_HARD');
+          return;
+        }
+        // Fullscreen rejimida blur — boshqa dastur focus oldi, lekin biz hali fullscreendamiz
+        // Bu hard block emas — soft violation
+        void logViolationRef.current('TAB_SWITCH_SOFT');
+      }, 900);
     };
 
     // Fullscreen o'zgarishi
@@ -309,6 +322,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         // Fullscreen kirildi — bu yaxshi
         fullscreenEnteredRef.current = true;
         fullscreenRequestedRef.current = false;
+        clearBlurTimer();
         return;
       }
       // Fullscreen chiqildi
@@ -323,6 +337,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     window.addEventListener('blur', onBlur);
     document.addEventListener('fullscreenchange', onFs);
     return () => {
+      clearBlurTimer();
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('fullscreenchange', onFs);
     };
@@ -376,6 +391,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const isProcessingRef = useRef(false);
   /** DevTools/clipboard/varaq — bir "urinish"da yuboriladigan bir nechta signal; bittasini yuborish. */
   const focusBurstLockUntilRef = useRef(0);
+  const blurViolationTimerRef = useRef<number | null>(null);
+  const hiddenViolationTimerRef = useRef<number | null>(null);
   const FOCUS_BURST_TYPES = new Set([
     'DEVTOOLS_OPEN',
     'CLIPBOARD_ATTEMPT',
@@ -981,14 +998,34 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
   // --- Tab / visibility (masofaviy nazorat) ---
   useEffect(() => {
+    const clearHiddenTimer = () => {
+      if (hiddenViolationTimerRef.current !== null) {
+        window.clearTimeout(hiddenViolationTimerRef.current);
+        hiddenViolationTimerRef.current = null;
+      }
+    };
+
     const onVis = () => {
+      if (bannedRef.current) return;
       if (document.visibilityState === 'hidden') {
-        // TAB_SWITCH_SOFT — ogohlantirish, darhol ban emas
-        void logViolationRef.current('TAB_SWITCH_SOFT');
+        // Qisqa hidden holatlari false positive bermasligi uchun delay.
+        clearHiddenTimer();
+        hiddenViolationTimerRef.current = window.setTimeout(() => {
+          hiddenViolationTimerRef.current = null;
+          if (bannedRef.current) return;
+          if (document.visibilityState === 'hidden') {
+            void logViolationRef.current('TAB_SWITCH_SOFT');
+          }
+        }, 1200);
+      } else {
+        clearHiddenTimer();
       }
     };
     document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    return () => {
+      clearHiddenTimer();
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, []);
 
   const runSubmitCore = useCallback(
