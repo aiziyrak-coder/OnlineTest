@@ -15,7 +15,20 @@ from django.utils import timezone as dj_tz
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from apps.core.models import AppUser, BanAppeal, BanAppealEvent, Exam, ExamGroup, Group, Level, StudentExam, TestBankCategory, TestBankQuestion, UnbanEvidence
+from apps.core.models import (
+    AppUser,
+    BanAppeal,
+    BanAppealEvent,
+    Exam,
+    ExamGroup,
+    Group,
+    Level,
+    StudentExam,
+    TestBankCategory,
+    TestBankQuestion,
+    UnbanEvidence,
+    ViolationLog,
+)
 
 PROFILE = (
     "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlcZ/"
@@ -113,6 +126,14 @@ class ExamFlowApiTests(TestCase):
         )
         self.assertEqual(r2.status_code, 200)
         self.admin_token = r2.json()["token"]
+
+    def _start_exam_session(self, token: str, exam_id: int, student_id: str) -> None:
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        rs = self.client.post(f"/api/student/exams/{exam_id}/start", {"pin": ""}, format="json")
+        self.assertEqual(rs.status_code, 200)
+        StudentExam.objects.filter(student_id=student_id, exam_id=exam_id).update(
+            started_at=dj_tz.now() - timedelta(minutes=3)
+        )
 
     def test_login_returns_jwt_and_role(self):
         r = self.client.post(
@@ -369,7 +390,7 @@ class ExamFlowApiTests(TestCase):
             name="Viol Student",
             status="Active",
             group_id=self.group.id,
-            profile_image="",
+            profile_image=PROFILE,
         )
         r0 = self.client.post(
             "/api/auth/login",
@@ -378,12 +399,13 @@ class ExamFlowApiTests(TestCase):
         )
         self.assertEqual(r0.status_code, 200)
         tok = r0.json()["token"]
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tok}")
+        self._start_exam_session(tok, self.exam_a.id, st2.id)
         eid = self.exam_a.id
-        for i in range(3):
+        types = ["TAB_SWITCH_SOFT", "FACE_NOT_VISIBLE", "SUSPICIOUS_AUDIO"]
+        for i, vtype in enumerate(types):
             r = self.client.post(
                 "/api/student/violations",
-                {"exam_id": eid, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+                {"exam_id": eid, "violation_type": vtype, "screenshot_url": ""},
                 format="json",
             )
             self.assertEqual(r.status_code, 200, msg=f"warn step {i}")
@@ -395,6 +417,9 @@ class ExamFlowApiTests(TestCase):
             StudentExam.objects.filter(student_id=st2.id, exam_id=eid).update(
                 proctor_last_warning_at=dj_tz.now() - timedelta(seconds=61)
             )
+        ViolationLog.objects.filter(student_id=st2.id, exam_id=eid).update(
+            timestamp=dj_tz.now() - timedelta(seconds=120)
+        )
         r4 = self.client.post(
             "/api/student/violations",
             {"exam_id": eid, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
@@ -402,8 +427,10 @@ class ExamFlowApiTests(TestCase):
         )
         self.assertEqual(r4.status_code, 200)
         self.assertTrue(r4.json().get("banned"))
+        se = StudentExam.objects.get(student_id=st2.id, exam_id=eid)
+        self.assertEqual(se.status, "Banned")
         st2.refresh_from_db()
-        self.assertEqual(st2.status, "Banned")
+        self.assertEqual(st2.status, "Active")
 
     def test_violation_multiple_types_within_one_minute_single_warning(self):
         """Bitta merge oynasi ichida turli violationlar — faqat bitta rasmiy ogohlantirish."""
@@ -415,7 +442,7 @@ class ExamFlowApiTests(TestCase):
             name="Viol Student 3",
             status="Active",
             group_id=self.group.id,
-            profile_image="",
+            profile_image=PROFILE,
         )
         r0 = self.client.post(
             "/api/auth/login",
@@ -423,7 +450,7 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r0.status_code, 200)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
+        self._start_exam_session(r0.json()["token"], self.exam_a.id, st3.id)
         eid = self.exam_a.id
         r1 = self.client.post(
             "/api/student/violations",
@@ -443,6 +470,42 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(r2.json().get("warningNumber"), 0)
         se = StudentExam.objects.get(student_id=st3.id, exam_id=eid)
         self.assertEqual(se.proctor_official_warnings, 1)
+        self.assertEqual(ViolationLog.objects.filter(student_id=st3.id, exam_id=eid).count(), 1)
+
+    def test_violation_same_type_spam_is_deduped_without_extra_logs(self):
+        hp = bcrypt.hashpw(b"vstudent12", bcrypt.gensalt(rounds=10)).decode("ascii")
+        st12 = AppUser.objects.create(
+            id="itest_student_viol12",
+            password=hp,
+            role="student",
+            name="Viol Student 12",
+            status="Active",
+            group_id=self.group.id,
+            profile_image=PROFILE,
+        )
+        r0 = self.client.post(
+            "/api/auth/login",
+            {"id": "itest_student_viol12", "password": "vstudent12"},
+            format="json",
+        )
+        self.assertEqual(r0.status_code, 200)
+        self._start_exam_session(r0.json()["token"], self.exam_a.id, st12.id)
+        eid = self.exam_a.id
+        r1 = self.client.post(
+            "/api/student/violations",
+            {"exam_id": eid, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.assertFalse(r1.json().get("warningSuppressed"))
+        r2 = self.client.post(
+            "/api/student/violations",
+            {"exam_id": eid, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, 200)
+        self.assertTrue(r2.json().get("warningSuppressed"))
+        self.assertEqual(ViolationLog.objects.filter(student_id=st12.id, exam_id=eid).count(), 1)
 
     def test_identity_substitution_instant_ban_in_strict_vac(self):
         hp = bcrypt.hashpw(b"vstudent4", bcrypt.gensalt(rounds=10)).decode("ascii")
@@ -453,7 +516,7 @@ class ExamFlowApiTests(TestCase):
             name="Viol Student 4",
             status="Active",
             group_id=self.group.id,
-            profile_image="",
+            profile_image=PROFILE,
         )
         r0 = self.client.post(
             "/api/auth/login",
@@ -461,7 +524,7 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r0.status_code, 200)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
+        self._start_exam_session(r0.json()["token"], self.exam_a.id, st4.id)
         r = self.client.post(
             "/api/student/violations",
             {"exam_id": self.exam_a.id, "violation_type": "IDENTITY_SUBSTITUTION", "screenshot_url": ""},
@@ -470,8 +533,10 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertTrue(body.get("banned"))
+        se = StudentExam.objects.get(student_id=st4.id, exam_id=self.exam_a.id)
+        self.assertEqual(se.status, "Banned")
         st4.refresh_from_db()
-        self.assertEqual(st4.status, "Banned")
+        self.assertEqual(st4.status, "Active")
 
     def test_retake_resets_proctor_warning_state(self):
         hp = bcrypt.hashpw(b"vstudent5", bcrypt.gensalt(rounds=10)).decode("ascii")
@@ -498,6 +563,47 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(se.status, "Pending")
         self.assertEqual(se.proctor_official_warnings, 0)
         self.assertIsNone(se.proctor_last_warning_at)
+
+    def test_start_from_pending_resets_proctor_warning_state(self):
+        hp = bcrypt.hashpw(b"vstudent10", bcrypt.gensalt(rounds=10)).decode("ascii")
+        st10 = AppUser.objects.create(
+            id="itest_student_viol10",
+            password=hp,
+            role="student",
+            name="Viol Student 10",
+            status="Active",
+            group_id=self.group.id,
+            profile_image=PROFILE,
+        )
+        old_started = dj_tz.now() - timedelta(hours=5)
+        StudentExam.objects.create(
+            student_id=st10.id,
+            exam_id=self.exam_a.id,
+            status="Pending",
+            started_at=old_started,
+            proctor_official_warnings=3,
+            proctor_last_warning_at=dj_tz.now() - timedelta(minutes=2),
+        )
+        r0 = self.client.post(
+            "/api/auth/login",
+            {"id": "itest_student_viol10", "password": "vstudent10"},
+            format="json",
+        )
+        self.assertEqual(r0.status_code, 200)
+        tok = r0.json()["token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tok}")
+        rs = self.client.post(
+            f"/api/student/exams/{self.exam_a.id}/start",
+            {"pin": ""},
+            format="json",
+        )
+        self.assertEqual(rs.status_code, 200)
+        se = StudentExam.objects.get(student_id=st10.id, exam_id=self.exam_a.id)
+        self.assertEqual(se.status, "In Progress")
+        self.assertEqual(se.proctor_official_warnings, 0)
+        self.assertIsNone(se.proctor_last_warning_at)
+        self.assertIsNotNone(se.started_at)
+        self.assertGreaterEqual(se.started_at, old_started)
 
     def test_violation_startup_grace_suppresses_warning(self):
         hp = bcrypt.hashpw(b"vstudent6", bcrypt.gensalt(rounds=10)).decode("ascii")
@@ -535,8 +641,80 @@ class ExamFlowApiTests(TestCase):
         se.refresh_from_db()
         self.assertEqual(se.proctor_official_warnings, 0)
 
+    def test_violation_rejected_without_in_progress_session(self):
+        hp = bcrypt.hashpw(b"vstudent11", bcrypt.gensalt(rounds=10)).decode("ascii")
+        st11 = AppUser.objects.create(
+            id="itest_student_viol11",
+            password=hp,
+            role="student",
+            name="Viol Student 11",
+            status="Active",
+            group_id=self.group.id,
+            profile_image=PROFILE,
+        )
+        StudentExam.objects.create(
+            student_id=st11.id,
+            exam_id=self.exam_a.id,
+            status="Pending",
+            started_at=dj_tz.now() - timedelta(minutes=2),
+        )
+        r0 = self.client.post(
+            "/api/auth/login",
+            {"id": "itest_student_viol11", "password": "vstudent11"},
+            format="json",
+        )
+        self.assertEqual(r0.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
+        r = self.client.post(
+            "/api/student/violations",
+            {"exam_id": self.exam_a.id, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 409)
+
+    def test_violation_count_ignores_logs_before_current_started_at(self):
+        hp = bcrypt.hashpw(b"vstudent9", bcrypt.gensalt(rounds=10)).decode("ascii")
+        st9 = AppUser.objects.create(
+            id="itest_student_viol9",
+            password=hp,
+            role="student",
+            name="Viol Student 9",
+            status="Active",
+            group_id=self.group.id,
+            profile_image=PROFILE,
+        )
+        se = StudentExam.objects.create(
+            student_id=st9.id,
+            exam_id=self.exam_a.id,
+            status="In Progress",
+            started_at=dj_tz.now() - timedelta(minutes=1),
+        )
+        ViolationLog.objects.create(
+            student_id=st9.id,
+            exam_id=self.exam_a.id,
+            violation_type="TAB_SWITCH_SOFT",
+            timestamp=se.started_at - timedelta(hours=2),
+            screenshot_url="",
+        )
+        r0 = self.client.post(
+            "/api/auth/login",
+            {"id": "itest_student_viol9", "password": "vstudent9"},
+            format="json",
+        )
+        self.assertEqual(r0.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
+        r = self.client.post(
+            "/api/student/violations",
+            {"exam_id": self.exam_a.id, "violation_type": "TAB_SWITCH_SOFT", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body.get("violationsCount"), 1)
+        self.assertEqual(body.get("warningNumber"), 1)
+
     def test_admin_results_include_violation_priority_counts(self):
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        self._start_exam_session(self.student_token, self.exam_a.id, self.student.id)
         self.client.post(
             "/api/student/violations",
             {"exam_id": self.exam_a.id, "violation_type": "TAB_SWITCH_HARD", "screenshot_url": ""},
@@ -789,7 +967,7 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(self.student.status, "Active")
 
     def test_admin_review_queue_endpoint(self):
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
+        self._start_exam_session(self.student_token, self.exam_a.id, self.student.id)
         self.client.post(
             "/api/student/violations",
             {"exam_id": self.exam_a.id, "violation_type": "TAB_SWITCH_HARD", "screenshot_url": ""},
@@ -820,7 +998,7 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r0.status_code, 200)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
+        self._start_exam_session(r0.json()["token"], self.exam_a.id, st7.id)
         r1 = self.client.post(
             "/api/student/violations",
             {"exam_id": self.exam_a.id, "violation_type": "MULTIPLE_FACES", "screenshot_url": ""},
@@ -835,8 +1013,10 @@ class ExamFlowApiTests(TestCase):
         )
         self.assertEqual(r2.status_code, 200)
         self.assertTrue(r2.json().get("banned"))
+        se = StudentExam.objects.get(student_id=st7.id, exam_id=self.exam_a.id)
+        self.assertEqual(se.status, "Banned")
         st7.refresh_from_db()
-        self.assertEqual(st7.status, "Banned")
+        self.assertEqual(st7.status, "Active")
 
     def test_vac_strict_devtools_open_is_warning_not_instant_ban(self):
         hp = bcrypt.hashpw(b"vstudent8", bcrypt.gensalt(rounds=10)).decode("ascii")
@@ -855,7 +1035,7 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r0.status_code, 200)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r0.json()['token']}")
+        self._start_exam_session(r0.json()["token"], self.exam_a.id, st8.id)
         r = self.client.post(
             "/api/student/violations",
             {"exam_id": self.exam_a.id, "violation_type": "DEVTOOLS_OPEN", "screenshot_url": ""},

@@ -2098,7 +2098,10 @@ def student_exams_start(request, pk: int):
         return Response({"error": f"Exam already {se.status}"}, status=403)
     elif se.status == "Pending":
         se.status = "In Progress"
-        se.started_at = se.started_at or dj_tz.now()
+        # Pending -> In Progress: yangi urinish sifatida boshlansin.
+        se.started_at = dj_tz.now()
+        se.proctor_official_warnings = 0
+        se.proctor_last_warning_at = None
         if not se.session_signing_key:
             se.session_signing_key = secrets.token_hex(32)
         if not se.session_request_seq:
@@ -2117,11 +2120,21 @@ def student_exams_start(request, pk: int):
                     "session_signing_key",
                     "session_request_seq",
                     "session_challenge",
+                    "proctor_official_warnings",
+                    "proctor_last_warning_at",
                 ]
             )
         else:
             se.save(
-                update_fields=["status", "started_at", "session_signing_key", "session_request_seq", "session_challenge"]
+                update_fields=[
+                    "status",
+                    "started_at",
+                    "session_signing_key",
+                    "session_request_seq",
+                    "session_challenge",
+                    "proctor_official_warnings",
+                    "proctor_last_warning_at",
+                ]
             )
     elif se.status == "In Progress" and not se.session_signing_key:
         se.session_signing_key = secrets.token_hex(32)
@@ -2142,11 +2155,24 @@ def student_exams_start(request, pk: int):
             return mismatch
 
     retake_only = in_retake and not in_general
-    if retake_only and exam.exam_mode == "bank_mixed" and se:
-        se.session_questions_json = None
+    if retake_only and se:
+        # Retake oynasi — yangi sessiya sifatida boshlansin (eski ogohlantirishlar qoldig'i o'tmasin).
+        se.started_at = now
+        se.proctor_official_warnings = 0
+        se.proctor_last_warning_at = None
         se.draft_answers_json = "{}"
         se.draft_flagged_json = "[]"
-        se.save(update_fields=["session_questions_json", "draft_answers_json", "draft_flagged_json"])
+        update_fields = [
+            "started_at",
+            "proctor_official_warnings",
+            "proctor_last_warning_at",
+            "draft_answers_json",
+            "draft_flagged_json",
+        ]
+        if exam.exam_mode == "bank_mixed":
+            se.session_questions_json = None
+            update_fields.append("session_questions_json")
+        se.save(update_fields=update_fields)
 
     full_questions: list[dict]
     if exam.exam_mode == "bank_mixed":
@@ -2979,13 +3005,14 @@ def student_violations(request):
     if not _student_assigned_to_exam(u, exam_id_int):
         return Response({"error": "Forbidden"}, status=403)
     se_for_device = StudentExam.objects.filter(student_id=u.id, exam_id=exam_id_int).first()
+    if not se_for_device or se_for_device.status != "In Progress":
+        return Response({"error": "No active session"}, status=409)
     mismatch = _enforce_bound_device_or_403(se_for_device, request)
     if mismatch is not None:
         return mismatch
-    if se_for_device and se_for_device.status == "In Progress":
-        sig_err = _verify_exam_hmac_or_403(se_for_device, request)
-        if sig_err is not None:
-            return sig_err
+    sig_err = _verify_exam_hmac_or_403(se_for_device, request)
+    if sig_err is not None:
+        return sig_err
 
     # Violation sababini matn sifatida qaytarish
     violation_reason_map = {
@@ -3014,6 +3041,7 @@ def student_violations(request):
     reason_text = violation_reason_map.get(vtype, vtype)
 
     WARN_SUPPRESS_SECONDS = max(15, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "30")))
+    EVENT_MIN_INTERVAL_SECONDS = max(1, int(os.environ.get("PROCTOR_EVENT_MIN_INTERVAL_SECONDS", "8")))
     # Imtihon startida texnik tebranishlar (kamera/GPU) uchun grace — yozuvsiz.
     STARTUP_GRACE_SECONDS = max(0, int(os.environ.get("PROCTOR_STARTUP_GRACE_SECONDS", "40")))
     MAX_WARNINGS_BEFORE_BAN = 3  # 3 ta modal; 4-chi rasmiy epizodda ban
@@ -3022,6 +3050,8 @@ def student_violations(request):
     HARDENED_MAX_POINTS = max(8, int(os.environ.get("PROCTOR_HARD_MAX_POINTS", "22")))
     # Boshida turli turlar ketma-ket tushganda (rolling score) haddan tashqari xavf — vaqtincha o‘chirish.
     HARDENED_STARTUP_GRACE = max(0, int(os.environ.get("PROCTOR_HARDENED_STARTUP_GRACE_SECONDS", "60")))
+    GLOBAL_ACCOUNT_BAN = str(os.environ.get("VAC_GLOBAL_ACCOUNT_BAN", "0")).strip().lower() in ("1", "true", "yes")
+    HARDENED_COMBO_TYPES = frozenset({"MULTIPLE_FACES", "WHISPER_OR_CONVERSATION_SUSPECTED"})
 
     try:
         with transaction.atomic():
@@ -3030,23 +3060,64 @@ def student_violations(request):
                 .filter(student_id=u.id, exam_id=exam_id_int)
                 .first()
             )
-            if se is None:
-                se = StudentExam.objects.create(student_id=u.id, exam_id=exam_id_int, status="Pending")
-                se = StudentExam.objects.select_for_update().get(pk=se.pk)
+            if se is None or se.status != "In Progress":
+                return Response({"error": "No active session"}, status=409)
 
             now = dj_tz.now()
+            logs_qs = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int)
+            # Oldingi urinish/sessiya yozuvlari yangi urinishga aralashmasin.
+            if se.started_at:
+                logs_qs = logs_qs.filter(timestamp__gte=se.started_at)
             if se.started_at and (now - se.started_at) < timedelta(seconds=STARTUP_GRACE_SECONDS):
                 return Response(
                     {
                         "banned": False,
                         "warningSuppressed": True,
-                        "violationsCount": ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count(),
+                        "violationsCount": logs_qs.count(),
                         "warningNumber": 0,
                         "violationReason": f"Startup grace ({STARTUP_GRACE_SECONDS}s): {reason_text}",
                         "isFinalWarning": False,
                         "officialWarnings": se.proctor_official_warnings,
                     }
                 )
+
+            bypass_dedupe = HARDENED_MODE and vtype in HARDENED_COMBO_TYPES
+
+            # Bir xil turdagi signal juda qisqa intervalda takrorlansa, log spam bo'lmasin.
+            if not bypass_dedupe:
+                if logs_qs.filter(
+                    violation_type=vtype,
+                    timestamp__gte=now - timedelta(seconds=EVENT_MIN_INTERVAL_SECONDS),
+                ).exists():
+                    return Response(
+                        {
+                            "banned": False,
+                            "warningSuppressed": True,
+                            "violationsCount": logs_qs.count(),
+                            "warningNumber": 0,
+                            "violationReason": reason_text,
+                            "isFinalWarning": False,
+                            "officialWarnings": se.proctor_official_warnings,
+                            "mergeWindowSeconds": EVENT_MIN_INTERVAL_SECONDS,
+                        }
+                    )
+
+            # Rasmiy ogohlantirish merge oynasida bo'lsa, qo'shimcha log yozmaymiz.
+            last = se.proctor_last_warning_at
+            if not bypass_dedupe:
+                if last is not None and (now - last) < timedelta(seconds=WARN_SUPPRESS_SECONDS):
+                    return Response(
+                        {
+                            "banned": False,
+                            "warningSuppressed": True,
+                            "violationsCount": logs_qs.count(),
+                            "warningNumber": 0,
+                            "violationReason": reason_text,
+                            "isFinalWarning": False,
+                            "officialWarnings": se.proctor_official_warnings,
+                            "mergeWindowSeconds": WARN_SUPPRESS_SECONDS,
+                        }
+                    )
 
             ViolationLog.objects.create(
                 student_id=u.id,
@@ -3056,7 +3127,7 @@ def student_violations(request):
                 screenshot_url=screenshot,
             )
 
-            cnt_all = ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int).count()
+            cnt_all = logs_qs.count()
 
             hardened_in_startup_window = bool(
                 se.started_at
@@ -3064,8 +3135,10 @@ def student_violations(request):
             )
             if HARDENED_MODE and not hardened_in_startup_window:
                 win_from = now - timedelta(minutes=HARDENED_WINDOW_MIN)
+                if se.started_at and se.started_at > win_from:
+                    win_from = se.started_at
                 recent = list(
-                    ViolationLog.objects.filter(student_id=u.id, exam_id=exam_id_int, timestamp__gte=win_from).values(
+                    logs_qs.filter(timestamp__gte=win_from).values(
                         "violation_type", "timestamp"
                     )
                 )
@@ -3079,7 +3152,8 @@ def student_violations(request):
                 # Real hayot: F12 + clipboard yoki tab+fullscreen bir vaqtda — alohida "combo" ban emas (ogohlantirish oqimi).
                 combo_ban = "MULTIPLE_FACES" in seen_types and "WHISPER_OR_CONVERSATION_SUSPECTED" in seen_types
                 if combo_ban or hard_points >= HARDENED_MAX_POINTS:
-                    AppUser.objects.filter(pk=u.id).update(status="Banned")
+                    if GLOBAL_ACCOUNT_BAN:
+                        AppUser.objects.filter(pk=u.id).update(status="Banned")
                     se.status = "Banned"
                     se.save(update_fields=["status"])
                     return Response(
@@ -3097,7 +3171,8 @@ def student_violations(request):
                     )
 
             if vtype in instant_ban_types:
-                AppUser.objects.filter(pk=u.id).update(status="Banned")
+                if GLOBAL_ACCOUNT_BAN:
+                    AppUser.objects.filter(pk=u.id).update(status="Banned")
                 StudentExam.objects.filter(pk=se.pk).update(status="Banned")
                 return Response(
                     {
@@ -3111,26 +3186,12 @@ def student_violations(request):
                     }
                 )
 
-            last = se.proctor_last_warning_at
-            if last is not None and (now - last) < timedelta(seconds=WARN_SUPPRESS_SECONDS):
-                return Response(
-                    {
-                        "banned": False,
-                        "warningSuppressed": True,
-                        "violationsCount": cnt_all,
-                        "warningNumber": 0,
-                        "violationReason": reason_text,
-                        "isFinalWarning": False,
-                        "officialWarnings": se.proctor_official_warnings,
-                        "mergeWindowSeconds": WARN_SUPPRESS_SECONDS,
-                    }
-                )
-
             se.proctor_official_warnings = int(se.proctor_official_warnings or 0) + 1
             se.proctor_last_warning_at = now
 
             if se.proctor_official_warnings >= 4:
-                AppUser.objects.filter(pk=u.id).update(status="Banned")
+                if GLOBAL_ACCOUNT_BAN:
+                    AppUser.objects.filter(pk=u.id).update(status="Banned")
                 se.status = "Banned"
                 se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at", "status"])
                 return Response(

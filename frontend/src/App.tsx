@@ -13,24 +13,50 @@ import { Button } from './components/ui';
 import { translations, Language } from './i18n';
 import { InstituteLogo } from './components/InstituteLogo';
 
+const SUPPORTED_LANGS: Language[] = ['uz', 'ru', 'en'];
+
+function safeStorageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore storage quota/private mode */
+  }
+}
+
+function safeStorageRemove(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore storage quota/private mode */
+  }
+}
+
 function readStoredSession(): { token: string; user: any } {
-  const token = localStorage.getItem('token') || '';
+  const token = (safeStorageGet('token') || '').trim();
   let user: any = null;
   try {
-    const raw = localStorage.getItem('user');
+    const raw = safeStorageGet('user');
     user = raw ? JSON.parse(raw) : null;
   } catch {
     user = null;
   }
   if (user?.role === 'teacher') {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    safeStorageRemove('token');
+    safeStorageRemove('user');
     return { token: '', user: null };
   }
   const valid = Boolean(token && user && typeof user === 'object' && user.id && user.role);
   if (token && !valid) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    safeStorageRemove('token');
+    safeStorageRemove('user');
     return { token: '', user: null };
   }
   return { token: valid ? token : '', user: valid ? user : null };
@@ -44,20 +70,23 @@ function AppContent() {
   const [studentExamId, setStudentExamId] = useState<number | null>(null);
   const [examStatus, setExamStatus] = useState<'pending' | 'checking' | 'taking' | 'finished'>('pending');
   const [lastSubmitResult, setLastSubmitResult] = useState<ExamResultPayload | null>(null);
-  const [lang, setLang] = useState<Language>((localStorage.getItem('lang') as Language) || 'uz');
+  const [lang, setLang] = useState<Language>(() => {
+    const raw = (safeStorageGet('lang') || 'uz').trim() as Language;
+    return SUPPORTED_LANGS.includes(raw) ? raw : 'uz';
+  });
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    localStorage.setItem('lang', lang);
+    safeStorageSet('lang', lang);
   }, [lang]);
 
   useEffect(() => {
     if (user?.role === 'teacher') {
       setToken('');
       setUser(null);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      safeStorageRemove('token');
+      safeStorageRemove('user');
       navigate('/login');
     }
   }, [user?.role, navigate]);
@@ -65,8 +94,8 @@ function AppContent() {
   const handleLogin = (newToken: string, userData: any) => {
     setToken(newToken);
     setUser(userData);
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+    safeStorageSet('token', newToken);
+    safeStorageSet('user', JSON.stringify(userData));
     navigate('/');
   };
 
@@ -75,8 +104,8 @@ function AppContent() {
     setUser(null);
     setActiveExam(null);
     setExamStatus('pending');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    safeStorageRemove('token');
+    safeStorageRemove('user');
     navigate('/login');
   };
 

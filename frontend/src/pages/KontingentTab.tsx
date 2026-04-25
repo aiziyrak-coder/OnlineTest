@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '../components/ui';
-import { translations, Language } from '../i18n';
+import { translations, Language, type TranslationBundle } from '../i18n';
 import { readJsonSafe, parseAdminUsersList } from '../lib/http';
 import { apiUrl } from '../lib/apiUrl';
 

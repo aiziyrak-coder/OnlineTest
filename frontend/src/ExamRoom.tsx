@@ -102,6 +102,16 @@ function sanitizeExamAnswers(
   return clean;
 }
 
+function parseAnswersJson(raw: string | null): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function initialSecondsLeft(exam: ExamRoomProps['exam']) {
   if (exam.submission_deadline) {
     const end = new Date(exam.submission_deadline).getTime();
@@ -204,10 +214,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }>(res);
         if (!res.ok || cancelled) return;
         const localRaw = localStorage.getItem(`exam_answers_${exam.id}`);
-        const localAns = sanitizeExamAnswers(
-          exam.questions,
-          localRaw ? (JSON.parse(localRaw) as Record<string, string>) : {},
-        );
+        const localAns = sanitizeExamAnswers(exam.questions, parseAnswersJson(localRaw));
         const srv = sanitizeExamAnswers(
           exam.questions,
           (data.answers && typeof data.answers === 'object' ? data.answers : {}) as Record<string, string>,
@@ -220,7 +227,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       } catch {
         const saved = localStorage.getItem(`exam_answers_${exam.id}`);
         if (saved && !cancelled) {
-          setAnswers(sanitizeExamAnswers(exam.questions, JSON.parse(saved) as Record<string, string>));
+          setAnswers(sanitizeExamAnswers(exam.questions, parseAnswersJson(saved)));
         }
       }
     })();

@@ -156,12 +156,20 @@ export function AdminExamsTab({
   const getIncorrectAnswers = (answersJson: string, questionsJson: string) => {
     if (!answersJson || !questionsJson) return [];
     try {
-      const answers = JSON.parse(answersJson);
-      const questions = JSON.parse(questionsJson);
+      const answers = JSON.parse(answersJson) as Record<string, string>;
+      const questions = JSON.parse(questionsJson) as Array<{
+        id: number | string;
+        text?: string;
+        correctAnswer?: string;
+      }>;
+      if (!answers || typeof answers !== 'object' || !Array.isArray(questions)) return [];
       const incorrect: any[] = [];
       questions.forEach((q: any) => {
-        if (answers[q.id] !== q.correctAnswer) {
-          incorrect.push({ question: q.text, studentAnswer: answers[q.id], correctAnswer: q.correctAnswer });
+        const qid = String(q.id ?? '');
+        if (!qid) return;
+        const studentAnswer = answers[qid] ?? answers[String(Number(qid))];
+        if (studentAnswer !== q.correctAnswer) {
+          incorrect.push({ question: q.text, studentAnswer, correctAnswer: q.correctAnswer });
         }
       });
       return incorrect;
@@ -173,7 +181,8 @@ export function AdminExamsTab({
   const getFlaggedCount = (flaggedJson: string) => {
     if (!flaggedJson) return 0;
     try {
-      return JSON.parse(flaggedJson).length;
+      const parsed = JSON.parse(flaggedJson);
+      return Array.isArray(parsed) ? parsed.length : 0;
     } catch {
       return 0;
     }
