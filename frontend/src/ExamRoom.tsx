@@ -304,9 +304,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         blurViolationTimerRef.current = null;
         if (bannedRef.current) return;
         if (document.hasFocus()) return;
-        // Fullscreen rejimida emas bo'lsa — tab almashtirish (ogohlantirish, darhol ban emas)
+        // Fullscreen bo'lmagan holatda blur ko'p false-positive beradi (OS popup, browser UI).
+        // Shu sabab blur eventdan HARD violation yubormaymiz.
         if (!document.fullscreenElement) {
-          void logViolationRef.current('TAB_SWITCH_HARD');
           return;
         }
         // Fullscreen rejimida blur — boshqa dastur focus oldi, lekin biz hali fullscreendamiz
