@@ -375,6 +375,15 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     violationModalOpenRef.current = violationWarning !== null;
   }, [violationWarning]);
   const isProcessingRef = useRef(false);
+  /** DevTools/clipboard/varaq — bir "urinish"da yuboriladigan bir nechta signal; bittasini yuborish. */
+  const focusBurstLockUntilRef = useRef(0);
+  const FOCUS_BURST_TYPES = new Set([
+    'DEVTOOLS_OPEN',
+    'CLIPBOARD_ATTEMPT',
+    'TAB_SWITCH_HARD',
+    'TAB_SWITCH_SOFT',
+    'FULLSCREEN_EXIT_HARD',
+  ]);
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<{ [id: string]: RTCPeerConnection }>({});
 
@@ -782,12 +791,18 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     const INSTANT_BAN_TYPES = new Set(['IDENTITY_SUBSTITUTION']);
 
     // Dedup: bir xil tur uchun qisqa interval (server 60s ichida bitta rasmiy ogohlantirishni birlashtiradi)
+    const now = Date.now();
+    if (FOCUS_BURST_TYPES.has(type) && now < focusBurstLockUntilRef.current) {
+      return;
+    }
     const dedupeKey = `viol_last_${type}`;
     const lastSent = parseInt(sessionStorage.getItem(dedupeKey) || '0', 10);
-    const now = Date.now();
     const MIN_INTERVAL = INSTANT_BAN_TYPES.has(type) ? 0 : 14_000;
     if (MIN_INTERVAL > 0 && now - lastSent < MIN_INTERVAL) {
       return;
+    }
+    if (FOCUS_BURST_TYPES.has(type)) {
+      focusBurstLockUntilRef.current = now + 4500;
     }
     sessionStorage.setItem(dedupeKey, String(now));
 
@@ -824,6 +839,9 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       }
 
       if (data.warningSuppressed) {
+        const detail = (data.violationReason || type).trim();
+        setWarningMsg(`${t.warningSuppressedToast} ${detail}`.trim());
+        setTimeout(() => setWarningMsg(''), 7000);
         return;
       }
 

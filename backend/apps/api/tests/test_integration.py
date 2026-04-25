@@ -444,7 +444,7 @@ class ExamFlowApiTests(TestCase):
         se = StudentExam.objects.get(student_id=st3.id, exam_id=eid)
         self.assertEqual(se.proctor_official_warnings, 1)
 
-    def test_identity_substitution_is_warning_not_instant_ban(self):
+    def test_identity_substitution_instant_ban_in_strict_vac(self):
         hp = bcrypt.hashpw(b"vstudent4", bcrypt.gensalt(rounds=10)).decode("ascii")
         st4 = AppUser.objects.create(
             id="itest_student_viol4",
@@ -469,10 +469,9 @@ class ExamFlowApiTests(TestCase):
         )
         self.assertEqual(r.status_code, 200)
         body = r.json()
-        self.assertFalse(body.get("banned"))
-        self.assertEqual(body.get("warningNumber"), 1)
+        self.assertTrue(body.get("banned"))
         st4.refresh_from_db()
-        self.assertEqual(st4.status, "Active")
+        self.assertEqual(st4.status, "Banned")
 
     def test_retake_resets_proctor_warning_state(self):
         hp = bcrypt.hashpw(b"vstudent5", bcrypt.gensalt(rounds=10)).decode("ascii")
@@ -837,7 +836,7 @@ class ExamFlowApiTests(TestCase):
         st7.refresh_from_db()
         self.assertEqual(st7.status, "Banned")
 
-    def test_vac_strict_devtools_open_instant_ban(self):
+    def test_vac_strict_devtools_open_is_warning_not_instant_ban(self):
         hp = bcrypt.hashpw(b"vstudent8", bcrypt.gensalt(rounds=10)).decode("ascii")
         st8 = AppUser.objects.create(
             id="itest_student_viol8",
@@ -861,9 +860,11 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r.status_code, 200)
-        self.assertTrue(r.json().get("banned"))
+        j = r.json()
+        self.assertFalse(j.get("banned"))
+        self.assertEqual(j.get("warningNumber"), 1)
         st8.refresh_from_db()
-        self.assertEqual(st8.status, "Banned")
+        self.assertEqual(st8.status, "Active")
 
     def test_staff_exams_forbidden_for_student(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")

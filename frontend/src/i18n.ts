@@ -231,6 +231,8 @@ export const translations = {
     violationFooterHonest:
       "Bir daqiqa ichidagi bir nechta shubha bitta ogohlantirish sifatida yoziladi. Imtihonni halol davom ettiring.",
     examEndedTitle: "Imtihon to‘xtatildi",
+    warningSuppressedToast:
+      "Hodisa qayd etildi; alohida ogohlantirish oynasi 1 daqiqada 1 marta (jismoniy birlashish). Tafsilot:",
     banRecordCountHint: "Ushbu imtihon bo‘yicha tizimda {n} ta qoidabuzarlik yozuvi mavjud (har bir rasmiy ogohlantirish alohida hisoblanadi).",
     banReportDownload: "Rasmiy BAN hisobotini yuklab olish",
     banBackToDashboard: "Bosh sahifaga qaytish",
@@ -533,6 +535,8 @@ export const translations = {
     violationFooterHonest:
       "Несколько подозрений в течение минуты считаются одним предупреждением. Продолжайте экзамен честно.",
     examEndedTitle: "Экзамен остановлен",
+    warningSuppressedToast:
+      "Событие записано; отдельное окно предупреждения не показано (одно официальное предупреждение в минуту). Подробность:",
     banRecordCountHint: "По этому экзамену в системе {n} запис(ей) о нарушениях (каждое официальное предупреждение считается отдельно).",
     banReportDownload: "Скачать официальный отчёт о блокировке (BAN)",
     banBackToDashboard: "Вернуться на главную",
@@ -835,6 +839,8 @@ export const translations = {
     violationFooterHonest:
       "Multiple suspicious events within one minute count as a single warning. Continue the exam honestly.",
     examEndedTitle: "Exam stopped",
+    warningSuppressedToast:
+      "Event recorded; no extra warning modal (one official warning per minute). Detail:",
     banRecordCountHint: "There are {n} violation record(s) for this exam in the system (each official warning is counted separately).",
     banReportDownload: "Download official ban report (PDF)",
     banBackToDashboard: "Back to dashboard",

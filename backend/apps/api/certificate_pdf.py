@@ -1,4 +1,5 @@
 """Sertifikat va BAN hisobot PDF (reportlab + QR)."""
+import os
 from io import BytesIO
 from pathlib import Path
 
@@ -31,6 +32,7 @@ VIOLATION_LABELS: dict[str, str] = {
     "COPY_PASTE_ATTEMPT":           "Nusxa ko'chirish urinishi",
     "PRINT_SCREEN_ATTEMPT":         "Ekran suratga olish urinishi",
     "DEVTOOLS_OPEN":                "Dasturchi vositalari ochildi",
+    "CLIPBOARD_ATTEMPT":            "Nusxa / buferga urinish (clipboard)",
     "CLIPBOARD_ACCESS":             "Bufer xotirasiga kirish",
     "GAZE_AWAY_LEFT":               "Kameradan chapga uzoq qarash",
     "GAZE_AWAY_RIGHT":              "Kameradan o'ngga uzoq qarash",
@@ -66,6 +68,50 @@ def _get_logo_path() -> str | None:
 def _violation_label(vtype: str) -> str:
     """Violation type ni o'zbek tiliga tarjima qiladi."""
     return VIOLATION_LABELS.get(vtype, vtype.replace("_", " ").capitalize())
+
+
+def _group_violation_rows_for_pdf(
+    rows: list[dict],
+    *,
+    window_sec: int = 60,
+) -> list[str]:
+    """
+    serverdagi 60s ogohlantirish birlashishi bilan mos: birinchi hodisadan {window_sec}s
+    ichidagi ketma-kelgan yozuvlarni bitta soddalashtirilgan qator sifatida ko'rsatadi.
+    """
+    if not rows:
+        return []
+    with_ts = [r for r in rows if r.get("timestamp") is not None]
+    if not with_ts:
+        return ["- Vaqttama yozuv topilmadi."]
+    raw = sorted(with_ts, key=lambda x: x["timestamp"])
+    out: list[str] = []
+    i = 0
+    n = len(raw)
+    w = max(10, float(window_sec))
+    while i < n:
+        start_ts = raw[i]["timestamp"]
+        chunk: list[dict] = [raw[i]]
+        j = i + 1
+        while j < n:
+            cur = raw[j]["timestamp"]
+            if (cur - start_ts).total_seconds() > w:
+                break
+            chunk.append(raw[j])
+            j += 1
+        if len(chunk) == 1:
+            ts = str(chunk[0].get("timestamp") or "")[:19].replace("T", " ")
+            vt = str(chunk[0].get("violation_type") or "UNKNOWN")
+            out.append(f"[{ts}]  {_violation_label(vt)}")
+        else:
+            t0 = str(chunk[0].get("timestamp") or "")[:19].replace("T", " ")
+            t1 = str(chunk[-1].get("timestamp") or "")[:19].replace("T", " ")
+            labels = " — ".join(_violation_label(str(c.get("violation_type") or "UNKNOWN")) for c in chunk)
+            out.append(
+                f"[{t0} – {t1}]  {len(chunk)} ta texnik hodisa, 1 rasmiy ogohlantirish davrida: {labels}"
+            )
+        i = j
+    return out
 
 
 def _ban_reason_text(violations: list[dict]) -> str:
@@ -320,16 +366,21 @@ def build_ban_report_pdf(
     y -= 14
 
     c.setFont("Helvetica", 9)
-    if not violations:
+    warn_win = max(10, int(os.environ.get("PROCTOR_WARN_SUPPRESS_SECONDS", "60")))
+    grouped = _group_violation_rows_for_pdf(violations, window_sec=warn_win) if violations else []
+    if not grouped:
         c.drawString(50, y, "- Qoidabuzarlik loglari topilmadi.")
         y -= 12
     else:
-        for idx, v in enumerate(violations[:60], start=1):
-            ts = str(v.get("timestamp") or "")[:19].replace("T", " ")
-            vtype = str(v.get("violation_type") or "UNKNOWN")
-            label = _violation_label(vtype)
-            line_txt = f"{idx}) [{ts}]  {label}"
-            c.drawString(50, y, line_txt[:110])
+        c.setFont("Helvetica", 8)
+        c.setFillColor(colors.HexColor("#666666"))
+        c.drawString(50, y, f"Eslatma: ketma-kelgan hodisalar {warn_win}s oynasida 1 rasmiy ogohlantirish bilan PDF da bitta qator sifatida ko'rsatiladi.")
+        y -= 12
+        c.setFont("Helvetica", 9)
+        c.setFillColor(colors.HexColor("#1a1a2e"))
+        for idx, line in enumerate(grouped[:40], start=1):
+            line_txt = f"{idx}) {line}"
+            c.drawString(50, y, line_txt[:118])
             y -= 11
             if y < 80:
                 c.showPage()
