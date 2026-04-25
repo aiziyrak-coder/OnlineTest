@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from './components/ui';
 import { motion } from 'motion/react';
 import { translations, Language, formatPreExamMediaAccessFailure } from './i18n';
@@ -63,12 +63,38 @@ export function PreExamCheck({
   const [livenessChecking, setLivenessChecking] = useState(false);
   const [livenessRetryKey, setLivenessRetryKey] = useState(0);
   const [livenessFailed, setLivenessFailed] = useState(false);
+  /** VAC qoidalari ro'yxati oxirigacha aylantirilgani (katta ekranda ham majburiy). */
+  const [vacRulesScrolledEnd, setVacRulesScrolledEnd] = useState(false);
+  const vacRulesBoxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   /** Identity snapshot (JPEG) — faqat verifyIdentity */
   const canvasRef = useRef<HTMLCanvasElement>(null);
   /** Liveness getImageData — alohida canvas (bir canvas da kontekst aralashmasin) */
   const livenessCanvasRef = useRef<HTMLCanvasElement>(null);
   const t = translations[lang];
+
+  useLayoutEffect(() => {
+    setVacRulesScrolledEnd(false);
+    setAgreed(false);
+  }, [lang]);
+
+  useEffect(() => {
+    const el = vacRulesBoxRef.current;
+    if (!el) return;
+    const measure = () => {
+      const end =
+        el.scrollHeight <= el.clientHeight + 12 ||
+        el.scrollTop + el.clientHeight >= el.scrollHeight - 12;
+      setVacRulesScrolledEnd(end);
+    };
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      el.removeEventListener('scroll', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, [lang]);
 
   /**
    * Kamera kadridan piksel yig'indisini hisoblaydi.
@@ -476,6 +502,29 @@ export function PreExamCheck({
             </motion.div>
           )}
 
+          <div className="rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50/90 to-orange-50/50 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 sm:px-5 border-b border-amber-200/50 bg-amber-100/40">
+              <h3 className="font-bold text-amber-950 text-sm sm:text-base tracking-tight">{t.preExamVacRulesTitle}</h3>
+              <p className="text-xs sm:text-sm text-amber-950/85 mt-1.5 leading-relaxed">{t.preExamVacRulesIntro}</p>
+            </div>
+            <div
+              ref={vacRulesBoxRef}
+              className="max-h-56 sm:max-h-72 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5 text-sm text-gray-900 leading-relaxed space-y-2.5 border-b border-amber-100/60"
+            >
+              {t.preExamVacRulesItems.split('|||RULE|||').map((line, i) => (
+                <div key={i} className="flex gap-2.5">
+                  <span className="shrink-0 font-bold text-amber-800 tabular-nums w-6 text-right">{i + 1}.</span>
+                  <p className="min-w-0 flex-1">{line.trim()}</p>
+                </div>
+              ))}
+            </div>
+            {!vacRulesScrolledEnd && (
+              <p className="px-4 py-2 text-center text-xs font-medium text-amber-900 bg-amber-100/50">
+                ↓ {t.preExamVacRulesScrollHint}
+              </p>
+            )}
+          </div>
+
           {/* Kamera — yuqorida katta, to'liq kenglikda */}
           <div className="relative w-full rounded-3xl overflow-hidden border-4 border-white/60 shadow-xl bg-black"
                style={{ aspectRatio: '16/9', maxHeight: '420px' }}>
@@ -604,14 +653,15 @@ export function PreExamCheck({
 
           {/* Rozilik + tugmalar */}
           <div className="pt-4 border-t border-gray-200/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-white/50 rounded-2xl transition-colors flex-1">
+            <label className="flex items-start gap-3 cursor-pointer p-3 hover:bg-white/50 rounded-2xl transition-colors flex-1">
               <input
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
-                className="w-5 h-5 text-black rounded border-gray-300 focus:ring-black transition-all"
+                disabled={!vacRulesScrolledEnd}
+                className="w-5 h-5 mt-0.5 text-black rounded border-gray-300 focus:ring-black transition-all shrink-0 disabled:opacity-40"
               />
-              <span className="font-medium text-gray-800 text-sm">{t.agree}</span>
+              <span className="font-medium text-gray-800 text-sm leading-snug">{t.preExamAgreeAllRules}</span>
             </label>
             <div className="flex gap-3 shrink-0">
               <Button
@@ -627,6 +677,7 @@ export function PreExamCheck({
                 disabled={
                   !cameraReady ||
                   !agreed ||
+                  !vacRulesScrolledEnd ||
                   starting ||
                   (exam.has_pin && !pin) ||
                   !user.profile_image ||

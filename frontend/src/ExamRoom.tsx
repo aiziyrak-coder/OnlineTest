@@ -373,11 +373,6 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const singleFaceRef = useRef(false);
   const identityCheckBusyRef = useRef(false);
   const logViolationRef = useRef<(type: string) => Promise<void>>(async () => {});
-  /** Ogohlantirish modali ochiq (UI); serverda rasmiy ogohlantirishlar merge oynasi bilan birlashtiriladi. */
-  const violationModalOpenRef = useRef(false);
-  useEffect(() => {
-    violationModalOpenRef.current = violationWarning !== null;
-  }, [violationWarning]);
   const isProcessingRef = useRef(false);
   /** DevTools/clipboard/varaq — bir "urinish"da yuboriladigan bir nechta signal; bittasini yuborish. */
   const focusBurstLockUntilRef = useRef(0);
@@ -1061,9 +1056,6 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     if (banned) return;
     const timer = window.setInterval(() => {
       setTimeLeft((prev) => {
-        if (violationModalOpenRef.current) {
-          return prev;
-        }
         if (prev === 300) {
           setShowTimeWarning(true);
           window.setTimeout(() => setShowTimeWarning(false), 5000);
@@ -1350,6 +1342,16 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         </motion.div>
 
         <AnimatePresence>
+          {timeLeft <= 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="bg-red-500/10 border border-red-400/30 text-red-800 px-6 py-4 rounded-2xl backdrop-blur-md shadow-sm text-sm font-medium"
+            >
+              {t.examTimeExpiredHint}
+            </motion.div>
+          )}
           {showTimeWarning && (
             <motion.div 
               initial={{ opacity: 0, y: -20, scale: 0.95 }}

@@ -229,7 +229,7 @@ export const translations = {
       "Bu oxirgi ogohlantirish (3/3). Keyingi qoidabuzarlik imtihonni tugatadi va akkauntingiz bloklanadi.",
     violationReasonLabel: "Sabab",
     violationFooterHonest:
-      "Bir daqiqa ichidagi bir nechta shubha bitta ogohlantirish sifatida yoziladi. Imtihonni halol davom ettiring.",
+      "Qisqa vaqt oralig'ida bir nechta shubha bitta rasmiy ogohlantirish sifatida birlashtirilishi mumkin. Imtihonni halol davom ettiring.",
     examEndedTitle: "Imtihon to‘xtatildi",
     warningSuppressedToast:
       "Hodisa qayd etildi. So'nggi {s} soniyadagi rasmiy ogohlantirish davriga qo'shildi (alohida modal yo'q). Tafsilot:",
@@ -256,6 +256,8 @@ export const translations = {
     examLoadFailed: "Imtihon ma’lumotlari yuklanmadi.",
     examDeleteFailed: "Imtihon o‘chirilmadi.",
     retakeWindowNeedFields: "Talaba ID va qayta kirish vaqt oralig‘i majburiy.",
+    examTimeExpiredHint:
+      "Imtihon vaqti tugadi. Darhol «Imtihonni topshirish»ni bosing — server vaqti asosida qabul qilinadi.",
     submitExam: "Imtihonni topshirish",
     submitting: "Yuborilyapti…",
     leaveExamWarning: "Imtihon davom etmoqda.",
@@ -270,6 +272,14 @@ export const translations = {
       "Proktor ulanishi (Socket.io) serverga ulanmadi. Savollarga javob berish va vaqt davom etadi; administrator serverdagi «onlinetest-realtime» xizmatini tekshirishi kerak.",
     proctorWarningTitle: "Ogohlantirish",
     preExamTitle: "Imtihon oldidan tekshiruv",
+    preExamVacRulesTitle: "Intizom va VAC / proktorlik qoidalari (majburiy o‘qish)",
+    preExamVacRulesIntro:
+      "Quyidagi bandlarni birma-bir o‘qing. So‘ng ro‘yxat oxirigacha aylantiring va rozilik belgisini qo‘ying. Bu qoidalar imtihon davomida avtomatik nazorat (kamera, ovoz, brauzer) bilan tekshiriladi.",
+    preExamVacRulesItems:
+      "Kamera va mikrofon imtihon tugaguncha yoqilgan turishi kerak; boshqa dastur yoki brauzer varag‘iga o‘tmang.|||RULE|||To‘liq ekran rejimi talab qilinadi; rejimdan chiqish qayd etiladi va ogohlantirish yoki blokka olib kelishi mumkin.|||RULE|||Nusxa (Ctrl+C), chaplash (Ctrl+V), ekran surati (Print Screen) va dasturchi vositalari (F12, Ctrl+Shift+I) taqiqlanadi.|||RULE|||Telefon, noutbuk, kitob, qo‘l yozuvchi va boshqa taqiqlangan buyumlar kadrda ko‘rinmasligi kerak — tizim aniqlaydi.|||RULE|||Nazaringiz asosan monitor markaziga qaralgan bo‘lsin; uzoq vaqtga boshqa tomonga qarash ogohlantirish berishi mumkin.|||RULE|||Kadrda faqat o‘zingiz bo‘ling; boshqa shaxs yoki qo‘l bilan yordam shubha deb qayd etiladi.|||RULE|||Gapirish, pichirlash yoki boshqa odamlar bilan suhbat (mikrofon orqali) shubha deb tahlil qilinadi.|||RULE|||Masofaviy boshqaruv dasturlari (AnyDesk, TeamViewer, RustDesk va h.k.) taqiqlanadi.|||RULE|||Virtual / dasturiy kamera (OBS va h.k.) o‘rniga faqat jismoniy kamera tanlanishi kerak.|||RULE|||Ketma-ket 3 ta rasmiy ogohlantirishdan keyin yana qayd etilgan qonunbuzarlikda imtihon to‘xtatiladi va akkaunt bloklanishi mumkin (4-hodisa).|||RULE|||Bir paytda bir nechta texnik hodisa bitta rasmiy ogohlantirish oynasida birlashtirilishi mumkin (server sozlamalari).|||RULE|||Texnik muammo bo‘lsa avval nazoratchiga xabar bering; imtihon sahifasini yopmang.",
+    preExamVacRulesScrollHint: "Davom etish uchun ro‘yxatni pastga aylantiring",
+    preExamAgreeAllRules:
+      "Yuqoridagi barcha qoidalarni to‘liq o‘qib chiqdim, ularga roziman va imtihon davomida rioya qilaman.",
     preExamSysReq: "Tizim talablari",
     preExamCamera: "Kamera ruxsati",
     preExamMic: "Mikrofon ruxsati",
@@ -536,7 +546,7 @@ export const translations = {
       "Это последнее предупреждение (3 из 3). Следующее нарушение завершит экзамен и заблокирует аккаунт.",
     violationReasonLabel: "Причина",
     violationFooterHonest:
-      "Несколько подозрений в течение минуты считаются одним предупреждением. Продолжайте экзамен честно.",
+      "Несколько подозрений за короткий интервал могут объединиться в одно официальное предупреждение. Продолжайте честно.",
     examEndedTitle: "Экзамен остановлен",
     warningSuppressedToast:
       "Событие записано; добавлено к текущему официальному предупреждению за {s} с (отдельное окно не показано). Подробность:",
@@ -563,6 +573,8 @@ export const translations = {
     examLoadFailed: "Не удалось загрузить данные экзамена.",
     examDeleteFailed: "Не удалось удалить экзамен.",
     retakeWindowNeedFields: "Укажите ID студента и интервал повторной попытки.",
+    examTimeExpiredHint:
+      "Время экзамена истекло. Сразу нажмите «Завершить экзамен» — приём ответов по времени сервера.",
     submitExam: "Завершить экзамен",
     submitting: "Отправка…",
     leaveExamWarning: "Экзамен продолжается.",
@@ -577,6 +589,14 @@ export const translations = {
       "Подключение проктора (Socket.io) к серверу не установлено. Ответы на вопросы и таймер продолжают работать; администратору нужно проверить службу «onlinetest-realtime».",
     proctorWarningTitle: "Внимание",
     preExamTitle: "Проверка перед экзаменом",
+    preExamVacRulesTitle: "Правила дисциплины и VAC / прокторинга (обязательно прочитать)",
+    preExamVacRulesIntro:
+      "Прочитайте каждый пункт. Прокрутите список до конца и отметьте согласие. Во время экзамена действует автоматический контроль (камера, звук, браузер).",
+    preExamVacRulesItems:
+      "Камера и микрофон должны быть включены до конца экзамена; не переключайтесь на другие программы или вкладки.|||RULE|||Требуется полноэкранный режим; выход из него фиксируется и может привести к предупреждению или блокировке.|||RULE|||Запрещены копирование (Ctrl+C), вставка (Ctrl+V), скриншот (Print Screen) и инструменты разработчика (F12, Ctrl+Shift+I).|||RULE|||Телефон, ноутбук, книга и другие запрещённые предметы не должны попадать в кадр — система их распознаёт.|||RULE|||Взгляд должен быть в основном на центр монитора; долгий взгляд в сторону может дать предупреждение.|||RULE|||В кадре должны быть только вы; другой человек или помощь руками фиксируется как нарушение.|||RULE|||Разговор, шёпот или разговор с другими людьми анализируется по микрофону как подозрительное поведение.|||RULE|||Запрещены программы удалённого доступа (AnyDesk, TeamViewer, RustDesk и т.п.).|||RULE|||Вместо виртуальной камеры (OBS и т.п.) нужна физическая камера.|||RULE|||После трёх официальных предупреждений следующее нарушение может завершить экзамен и заблокировать аккаунт (4-й эпизод).|||RULE|||Несколько технических событий подряд могут объединиться в одно официальное предупреждение (настройки сервера).|||RULE|||При технической проблеме сначала сообщите наблюдателю; не закрывайте страницу экзамена.",
+    preExamVacRulesScrollHint: "Прокрутите список вниз, чтобы продолжить",
+    preExamAgreeAllRules:
+      "Я полностью прочитал(а) все правила выше, согласен(на) с ними и буду им следовать во время экзамена.",
     preExamSysReq: "Системные требования",
     preExamCamera: "Доступ к камере",
     preExamMic: "Доступ к микрофону",
@@ -843,7 +863,7 @@ export const translations = {
       "This is your final warning (3 of 3). Another violation will end the exam and block your account.",
     violationReasonLabel: "Reason",
     violationFooterHonest:
-      "Multiple suspicious events within one minute count as a single warning. Continue the exam honestly.",
+      "Multiple suspicious events within a short window may merge into one official warning. Continue honestly.",
     examEndedTitle: "Exam stopped",
     warningSuppressedToast:
       "Event recorded; merged into the current official warning window ({s}s) — no extra modal. Detail:",
@@ -870,6 +890,8 @@ export const translations = {
     examLoadFailed: "Could not load exam data.",
     examDeleteFailed: "Could not delete the exam.",
     retakeWindowNeedFields: "Student ID and retake time window are required.",
+    examTimeExpiredHint:
+      "Time is up. Click «Submit exam» now — acceptance follows the server clock.",
     submitExam: "Submit exam",
     submitting: "Submitting…",
     leaveExamWarning: "Exam in progress.",
@@ -884,6 +906,14 @@ export const translations = {
       "The proctor channel (Socket.io) could not reach the server. You can still answer questions and the timer keeps running; ask an admin to check the «onlinetest-realtime» service.",
     proctorWarningTitle: "Warning",
     preExamTitle: "Pre-Exam Check",
+    preExamVacRulesTitle: "Discipline & VAC / proctoring rules (required reading)",
+    preExamVacRulesIntro:
+      "Read every item below, scroll the list to the end, then check the agreement box. Automated checks (camera, audio, browser) apply during the exam.",
+    preExamVacRulesItems:
+      "Keep camera and microphone on until you finish; do not switch to other apps or browser tabs.|||RULE|||Fullscreen is required; leaving fullscreen is logged and may lead to warnings or a block.|||RULE|||Copy (Ctrl+C), paste (Ctrl+V), Print Screen, and developer tools (F12, Ctrl+Shift+I) are not allowed.|||RULE|||Phones, laptops, books, and similar items must not appear in frame — the system can detect them.|||RULE|||Keep your gaze mainly toward the centre of the screen; prolonged looking away may trigger a warning.|||RULE|||Only you should be visible; another person or hands helping you is treated as a violation.|||RULE|||Speaking, whispering, or others talking to you is analysed via the microphone as suspicious.|||RULE|||Remote-control software (AnyDesk, TeamViewer, RustDesk, etc.) is not allowed.|||RULE|||Use a physical webcam, not a virtual/OBS camera.|||RULE|||After three official warnings, another logged violation may end the exam and block your account (4th episode).|||RULE|||Several technical events in a short time may merge into one official warning (server settings).|||RULE|||If you have a technical issue, contact the invigilator first; do not close the exam page.",
+    preExamVacRulesScrollHint: "Scroll the list to the bottom to continue",
+    preExamAgreeAllRules:
+      "I have read all the rules above, I agree to them, and I will follow them during the exam.",
     preExamSysReq: "System Requirements",
     preExamCamera: "Camera Access",
     preExamMic: "Microphone Access",
