@@ -162,6 +162,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [proctorRetryNonce, setProctorRetryNonce] = useState(0);
   const [cameraPreviewOk, setCameraPreviewOk] = useState(false);
   const [cameraErrorHint, setCameraErrorHint] = useState('');
+  const enableSizeHeuristicDevtools =
+    String(import.meta.env.VITE_DEVTOOLS_SIZE_HEURISTIC || '').toLowerCase().trim() === 'true';
   const seqRef = useRef<number>(Number(exam.sessionSeqStart || 1));
 
   useEffect(() => {
@@ -442,6 +444,30 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const socketRef = useRef<Socket | null>(null);
   const peerConnectionsRef = useRef<{ [id: string]: RTCPeerConnection }>({});
 
+  const recoverCameraPreview = useCallback(() => {
+    const v = videoRef.current;
+    const s = streamRef.current;
+    if (!v || !s) {
+      setProctorRetryNonce((n) => n + 1);
+      return;
+    }
+    if (v.srcObject !== s) v.srcObject = s;
+    const vt = s.getVideoTracks()[0];
+    if (!vt || vt.readyState !== 'live') {
+      setProctorRetryNonce((n) => n + 1);
+      return;
+    }
+    void v
+      .play()
+      .then(() => {
+        setCameraPreviewOk(true);
+        setCameraErrorHint('');
+      })
+      .catch(() => {
+        setProctorRetryNonce((n) => n + 1);
+      });
+  }, []);
+
   useEffect(() => {
     if (banned) return;
     const s = streamRef.current;
@@ -518,14 +544,25 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     document.addEventListener('cut', handleCopyPaste);
     document.addEventListener('keydown', handleKeyDown);
 
-    const devtoolsTick = window.setInterval(() => {
-      if (bannedRef.current) return;
-      const dw = Math.abs((window.outerWidth || 0) - (window.innerWidth || 0));
-      const dh = Math.abs((window.outerHeight || 0) - (window.innerHeight || 0));
-      if (dw > 200 && dh > 100) {
-        void logViolationRef.current('DEVTOOLS_OPEN');
-      }
-    }, 12_000);
+    let devtoolsTick: number | null = null;
+    if (enableSizeHeuristicDevtools) {
+      let consecutiveHits = 0;
+      devtoolsTick = window.setInterval(() => {
+        if (bannedRef.current) return;
+        if (!document.fullscreenElement || !document.hasFocus()) {
+          consecutiveHits = 0;
+          return;
+        }
+        const dw = Math.abs((window.outerWidth || 0) - (window.innerWidth || 0));
+        const dh = Math.abs((window.outerHeight || 0) - (window.innerHeight || 0));
+        const suspicious = dw > 320 && dh > 180;
+        consecutiveHits = suspicious ? consecutiveHits + 1 : 0;
+        if (consecutiveHits >= 2) {
+          consecutiveHits = 0;
+          void logViolationRef.current('DEVTOOLS_OPEN');
+        }
+      }, 12_000);
+    }
 
     // requestFullscreen faqat foydalanuvchi jesti (click/touch) bilan — useEffect o'zi "user gesture" emas
     const onFirstUserGesture = () => {
@@ -682,7 +719,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       document.removeEventListener('paste', handleCopyPaste);
       document.removeEventListener('cut', handleCopyPaste);
       document.removeEventListener('keydown', handleKeyDown);
-      clearInterval(devtoolsTick);
+      if (devtoolsTick !== null) clearInterval(devtoolsTick);
       
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
@@ -1218,7 +1255,10 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           <div className="shrink-0 border-t border-black/5 p-4 sm:p-5 pt-3 sm:pt-4 bg-white/40 rounded-b-2xl sm:rounded-b-3xl">
             <button
               type="button"
-              onClick={() => setViolationWarning(null)}
+              onClick={() => {
+                setViolationWarning(null);
+                recoverCameraPreview();
+              }}
               className={`w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base transition-all active:scale-[0.98] text-white ${
                 isFinal ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-500 hover:bg-orange-600'
               }`}
