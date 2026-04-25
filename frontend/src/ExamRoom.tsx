@@ -79,6 +79,29 @@ function extractQuestionImages(text: string): { cleanText: string; images: strin
   return { cleanText: clean.trim(), images };
 }
 
+function sanitizeExamAnswers(
+  questions: Array<{ id: number | string; options?: string[] }>,
+  raw: Record<string, string> | null | undefined,
+): Record<string, string> {
+  if (!raw || typeof raw !== 'object') return {};
+  const optionMap = new Map<string, Set<string>>();
+  for (const q of questions || []) {
+    const qKey = String(q?.id ?? '');
+    if (!qKey) continue;
+    const opts = Array.isArray(q?.options) ? q.options.filter((x): x is string => typeof x === 'string') : [];
+    optionMap.set(qKey, new Set(opts));
+  }
+  const clean: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const qKey = String(key);
+    const answer = typeof value === 'string' ? value : '';
+    const allowed = optionMap.get(qKey);
+    if (!allowed || !answer || !allowed.has(answer)) continue;
+    clean[qKey] = answer;
+  }
+  return clean;
+}
+
 function initialSecondsLeft(exam: ExamRoomProps['exam']) {
   if (exam.submission_deadline) {
     const end = new Date(exam.submission_deadline).getTime();
@@ -126,6 +149,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [violationWarning, setViolationWarning] = useState<ViolationWarning | null>(null);
   /** Kamera oqimi video elementga ulangach +1 (async setup va ref vaqti sinxroni). */
   const [proctorStreamRevision, setProctorStreamRevision] = useState(0);
+  const [proctorRetryNonce, setProctorRetryNonce] = useState(0);
   const [cameraPreviewOk, setCameraPreviewOk] = useState(false);
   const [cameraErrorHint, setCameraErrorHint] = useState('');
   const seqRef = useRef<number>(Number(exam.sessionSeqStart || 1));
@@ -180,8 +204,14 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }>(res);
         if (!res.ok || cancelled) return;
         const localRaw = localStorage.getItem(`exam_answers_${exam.id}`);
-        const localAns = localRaw ? (JSON.parse(localRaw) as Record<string, string>) : {};
-        const srv = (data.answers && typeof data.answers === 'object' ? data.answers : {}) as Record<string, string>;
+        const localAns = sanitizeExamAnswers(
+          exam.questions,
+          localRaw ? (JSON.parse(localRaw) as Record<string, string>) : {},
+        );
+        const srv = sanitizeExamAnswers(
+          exam.questions,
+          (data.answers && typeof data.answers === 'object' ? data.answers : {}) as Record<string, string>,
+        );
         const merged = { ...srv, ...localAns };
         if (Object.keys(merged).length > 0) setAnswers(merged);
         if (Array.isArray(data.flaggedQuestions) && data.flaggedQuestions.length > 0) {
@@ -189,13 +219,15 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         }
       } catch {
         const saved = localStorage.getItem(`exam_answers_${exam.id}`);
-        if (saved && !cancelled) setAnswers(JSON.parse(saved) as Record<string, string>);
+        if (saved && !cancelled) {
+          setAnswers(sanitizeExamAnswers(exam.questions, JSON.parse(saved) as Record<string, string>));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [exam.id, token, nextGuardHeaders]);
+  }, [exam.id, token, nextGuardHeaders, exam.questions]);
 
   useEffect(() => {
     localStorage.setItem(`exam_answers_${exam.id}`, JSON.stringify(answers));
@@ -407,7 +439,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     if (banned) return;
     const s = streamRef.current;
     const v = videoRef.current;
-    if (!s || !v) return;
+      if (!s || !v) return;
     const tz = translations[lang];
     if (v.srcObject !== s) v.srcObject = s;
     const tryPlay = () => {
@@ -665,7 +697,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         audioContextRef.current.close().catch(() => {});
       }
     };
-  }, [banned, exam.id, token, user.id, lang]);
+  }, [banned, exam.id, token, user.id, lang, proctorRetryNonce]);
 
   // Frame counter — object detection ni kamroq chaqirish uchun
   const frameCountRef = useRef(0);
@@ -1480,25 +1512,30 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                     <label
                       key={optIndex}
                       className={`flex items-center space-x-4 p-4 rounded-2xl cursor-pointer transition-all duration-200 border ${
-                        answers[currentQ.id] === opt
+                        answers[String(currentQ.id)] === opt
                           ? 'bg-black/5 border-black/10 shadow-inner'
                           : 'bg-white/50 border-transparent hover:bg-white/80 hover:border-white/80 hover:shadow-sm'
                       }`}
                     >
                       <div className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                        answers[currentQ.id] === opt ? 'border-black bg-black' : 'border-gray-300 bg-white'
+                        answers[String(currentQ.id)] === opt ? 'border-black bg-black' : 'border-gray-300 bg-white'
                       }`}>
-                        {answers[currentQ.id] === opt && <div className="w-2 h-2 rounded-full bg-white" />}
+                        {answers[String(currentQ.id)] === opt && <div className="w-2 h-2 rounded-full bg-white" />}
                       </div>
                       <input
                         type="radio"
                         name={`q-${currentQ.id}`}
                         value={opt}
-                        checked={answers[currentQ.id] === opt}
-                        onChange={() => setAnswers({ ...answers, [currentQ.id]: opt })}
+                        checked={answers[String(currentQ.id)] === opt}
+                        onChange={() =>
+                          setAnswers((prev) => ({
+                            ...prev,
+                            [String(currentQ.id)]: opt,
+                          }))
+                        }
                         className="sr-only"
                       />
-                      <span className={`text-base ${answers[currentQ.id] === opt ? 'font-medium text-black' : 'text-gray-700'}`}>{opt}</span>
+                      <span className={`text-base ${answers[String(currentQ.id)] === opt ? 'font-medium text-black' : 'text-gray-700'}`}>{opt}</span>
                     </label>
                   ))}
                 </CardContent>
@@ -1548,6 +1585,16 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                 autoPlay
                 playsInline
                 muted
+                onLoadedMetadata={() => {
+                  if (videoRef.current && videoRef.current.videoWidth > 0) {
+                    setCameraPreviewOk(true);
+                    setCameraErrorHint('');
+                  }
+                }}
+                onPlaying={() => {
+                  setCameraPreviewOk(true);
+                  setCameraErrorHint('');
+                }}
                 className="w-full h-full object-cover"
                 style={{ transform: 'scaleX(-1)' }} // Mirror
               />
@@ -1559,7 +1606,11 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
                       <button
                         type="button"
                         className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50"
-                        onClick={() => window.location.reload()}
+                        onClick={() => {
+                          setCameraErrorHint('');
+                          setCameraPreviewOk(false);
+                          setProctorRetryNonce((n) => n + 1);
+                        }}
                       >
                         {t.examCameraReload}
                       </button>
