@@ -3051,6 +3051,16 @@ def student_violations(request):
     # Boshida turli turlar ketma-ket tushganda (rolling score) haddan tashqari xavf — vaqtincha o‘chirish.
     HARDENED_STARTUP_GRACE = max(0, int(os.environ.get("PROCTOR_HARDENED_STARTUP_GRACE_SECONDS", "60")))
     GLOBAL_ACCOUNT_BAN = str(os.environ.get("VAC_GLOBAL_ACCOUNT_BAN", "0")).strip().lower() in ("1", "true", "yes")
+    AUTO_BAN_NON_IDENTITY = str(os.environ.get("PROCTOR_AUTO_BAN_NON_IDENTITY", "0")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    AUTO_BAN_IDENTITY = str(os.environ.get("PROCTOR_AUTO_BAN_IDENTITY", "1")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     HARDENED_COMBO_TYPES = frozenset({"MULTIPLE_FACES", "WHISPER_OR_CONVERSATION_SUSPECTED"})
 
     try:
@@ -3152,6 +3162,26 @@ def student_violations(request):
                 # Real hayot: F12 + clipboard yoki tab+fullscreen bir vaqtda — alohida "combo" ban emas (ogohlantirish oqimi).
                 combo_ban = "MULTIPLE_FACES" in seen_types and "WHISPER_OR_CONVERSATION_SUSPECTED" in seen_types
                 if combo_ban or hard_points >= HARDENED_MAX_POINTS:
+                    if not AUTO_BAN_NON_IDENTITY:
+                        se.proctor_last_warning_at = now
+                        if int(se.proctor_official_warnings or 0) < MAX_WARNINGS_BEFORE_BAN:
+                            se.proctor_official_warnings = MAX_WARNINGS_BEFORE_BAN
+                        se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at"])
+                        return Response(
+                            {
+                                "banned": False,
+                                "requiresHumanReview": True,
+                                "reviewReason": "HARDENED_RISK",
+                                "violationsCount": cnt_all,
+                                "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                                "violationReason": f"{reason_text} (hardened)",
+                                "isFinalWarning": True,
+                                "warningSuppressed": False,
+                                "officialWarnings": int(se.proctor_official_warnings or 0),
+                                "hardenedRiskPoints": hard_points,
+                                "hardenedCombo": combo_ban,
+                            }
+                        )
                     if GLOBAL_ACCOUNT_BAN:
                         AppUser.objects.filter(pk=u.id).update(status="Banned")
                     se.status = "Banned"
@@ -3171,6 +3201,24 @@ def student_violations(request):
                     )
 
             if vtype in instant_ban_types:
+                if not AUTO_BAN_IDENTITY:
+                    se.proctor_last_warning_at = now
+                    if int(se.proctor_official_warnings or 0) < MAX_WARNINGS_BEFORE_BAN:
+                        se.proctor_official_warnings = MAX_WARNINGS_BEFORE_BAN
+                    se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at"])
+                    return Response(
+                        {
+                            "banned": False,
+                            "requiresHumanReview": True,
+                            "reviewReason": "IDENTITY_RISK",
+                            "violationsCount": cnt_all,
+                            "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                            "violationReason": reason_text,
+                            "isFinalWarning": True,
+                            "warningSuppressed": False,
+                            "officialWarnings": int(se.proctor_official_warnings or 0),
+                        }
+                    )
                 if GLOBAL_ACCOUNT_BAN:
                     AppUser.objects.filter(pk=u.id).update(status="Banned")
                 StudentExam.objects.filter(pk=se.pk).update(status="Banned")
@@ -3190,6 +3238,22 @@ def student_violations(request):
             se.proctor_last_warning_at = now
 
             if se.proctor_official_warnings >= 4:
+                if not AUTO_BAN_NON_IDENTITY:
+                    se.proctor_official_warnings = MAX_WARNINGS_BEFORE_BAN
+                    se.save(update_fields=["proctor_official_warnings", "proctor_last_warning_at"])
+                    return Response(
+                        {
+                            "banned": False,
+                            "requiresHumanReview": True,
+                            "reviewReason": "WARNINGS_LIMIT",
+                            "violationsCount": cnt_all,
+                            "warningNumber": MAX_WARNINGS_BEFORE_BAN,
+                            "violationReason": reason_text,
+                            "isFinalWarning": True,
+                            "warningSuppressed": False,
+                            "officialWarnings": MAX_WARNINGS_BEFORE_BAN,
+                        }
+                    )
                 if GLOBAL_ACCOUNT_BAN:
                     AppUser.objects.filter(pk=u.id).update(status="Banned")
                 se.status = "Banned"

@@ -112,6 +112,30 @@ function parseAnswersJson(raw: string | null): Record<string, string> {
   }
 }
 
+function safeLocalGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore quota/private mode */
+  }
+}
+
+function safeLocalRemove(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore quota/private mode */
+  }
+}
+
 function initialSecondsLeft(exam: ExamRoomProps['exam']) {
   if (exam.submission_deadline) {
     const end = new Date(exam.submission_deadline).getTime();
@@ -164,6 +188,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   const [cameraErrorHint, setCameraErrorHint] = useState('');
   const enableSizeHeuristicDevtools =
     String(import.meta.env.VITE_DEVTOOLS_SIZE_HEURISTIC || '').toLowerCase().trim() === 'true';
+  const devtoolsShortcutCooldownUntilRef = useRef(0);
   const seqRef = useRef<number>(Number(exam.sessionSeqStart || 1));
 
   useEffect(() => {
@@ -215,7 +240,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           updated_at?: string | null;
         }>(res);
         if (!res.ok || cancelled) return;
-        const localRaw = localStorage.getItem(`exam_answers_${exam.id}`);
+        const localRaw = safeLocalGet(`exam_answers_${exam.id}`);
         const localAns = sanitizeExamAnswers(exam.questions, parseAnswersJson(localRaw));
         const srv = sanitizeExamAnswers(
           exam.questions,
@@ -227,7 +252,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
           setFlaggedQuestions(data.flaggedQuestions);
         }
       } catch {
-        const saved = localStorage.getItem(`exam_answers_${exam.id}`);
+        const saved = safeLocalGet(`exam_answers_${exam.id}`);
         if (saved && !cancelled) {
           setAnswers(sanitizeExamAnswers(exam.questions, parseAnswersJson(saved)));
         }
@@ -239,8 +264,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
   }, [exam.id, token, nextGuardHeaders, exam.questions]);
 
   useEffect(() => {
-    localStorage.setItem(`exam_answers_${exam.id}`, JSON.stringify(answers));
-    localStorage.setItem(`exam_answers_ts_${exam.id}`, String(Date.now()));
+    safeLocalSet(`exam_answers_${exam.id}`, JSON.stringify(answers));
+    safeLocalSet(`exam_answers_ts_${exam.id}`, String(Date.now()));
   }, [answers, exam.id]);
 
   useEffect(() => {
@@ -470,6 +495,31 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
 
   useEffect(() => {
     if (banned) return;
+    const id = window.setInterval(() => {
+      if (bannedRef.current) return;
+      const v = videoRef.current;
+      const s = streamRef.current;
+      const vt = s?.getVideoTracks?.()?.[0];
+      if (!v || !s || !vt) return;
+      if (vt.readyState !== 'live') {
+        setCameraPreviewOk(false);
+        setCameraErrorHint(translations[lang].examCameraPlayBlocked);
+        setProctorRetryNonce((n) => n + 1);
+        return;
+      }
+      if (v.srcObject !== s) v.srcObject = s;
+      if (v.readyState >= 2 && !v.paused) {
+        if (!cameraPreviewOk) {
+          setCameraPreviewOk(true);
+          setCameraErrorHint('');
+        }
+      }
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [banned, lang, cameraPreviewOk]);
+
+  useEffect(() => {
+    if (banned) return;
     const s = streamRef.current;
     const v = videoRef.current;
       if (!s || !v) return;
@@ -516,8 +566,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       const isClipboardCombo = (e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a'].includes(key);
       const isDevtoolsCombo =
         key === 'f12' ||
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
-        ((e.ctrlKey || e.metaKey) && key === 'u');
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j'].includes(key));
       if (key === 'printscreen') {
         e.preventDefault();
         void logViolationRef.current('PRINT_SCREEN');
@@ -525,7 +574,15 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       }
       if (isDevtoolsCombo) {
         e.preventDefault();
-        void logViolationRef.current('DEVTOOLS_OPEN');
+        const now = Date.now();
+        if (
+          now >= devtoolsShortcutCooldownUntilRef.current &&
+          document.hasFocus() &&
+          Boolean(document.fullscreenElement)
+        ) {
+          devtoolsShortcutCooldownUntilRef.current = now + 20_000;
+          void logViolationRef.current('DEVTOOLS_OPEN');
+        }
         return;
       }
       if (isClipboardCombo) {
@@ -1108,7 +1165,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
     async (ans: Record<string, string>, fl: number[]) => {
       if (submittingRef.current || bannedRef.current) return;
       if (isOffline) {
-        alert(t.offlineSubmit);
+        setWarningMsg(t.offlineSubmit);
+        setTimeout(() => setWarningMsg(''), 4000);
         return;
       }
       submittingRef.current = true;
@@ -1125,19 +1183,21 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         advanceSeq();
         const json = await readJsonSafe<ExamResultPayload & { error?: string }>(res);
         if (!res.ok) {
-          alert(String(json?.error || t.submitError));
+          setWarningMsg(String(json?.error || t.submitError));
+          setTimeout(() => setWarningMsg(''), 5000);
           submittingRef.current = false;
           setSubmitting(false);
           return;
         }
         if (!json?.result_public_id || !Array.isArray(json.questions)) {
-          alert(t.submitError);
+          setWarningMsg(t.submitError);
+          setTimeout(() => setWarningMsg(''), 5000);
           submittingRef.current = false;
           setSubmitting(false);
           return;
         }
-        localStorage.removeItem(`exam_answers_${exam.id}`);
-        localStorage.removeItem(`exam_answers_ts_${exam.id}`);
+        safeLocalRemove(`exam_answers_${exam.id}`);
+        safeLocalRemove(`exam_answers_ts_${exam.id}`);
         const payload: ExamResultPayload = {
           exam_id: json.exam_id,
           result_public_id: json.result_public_id,
@@ -1155,6 +1215,8 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
         onFinish(payload);
       } catch (err) {
         console.error('Failed to submit', err);
+        setWarningMsg(t.submitError);
+        setTimeout(() => setWarningMsg(''), 5000);
         submittingRef.current = false;
         setSubmitting(false);
       }

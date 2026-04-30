@@ -426,9 +426,11 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r4.status_code, 200)
-        self.assertTrue(r4.json().get("banned"))
+        self.assertFalse(r4.json().get("banned"))
+        self.assertTrue(r4.json().get("requiresHumanReview"))
+        self.assertEqual(r4.json().get("reviewReason"), "WARNINGS_LIMIT")
         se = StudentExam.objects.get(student_id=st2.id, exam_id=eid)
-        self.assertEqual(se.status, "Banned")
+        self.assertEqual(se.status, "In Progress")
         st2.refresh_from_db()
         self.assertEqual(st2.status, "Active")
 
@@ -1012,9 +1014,11 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r2.status_code, 200)
-        self.assertTrue(r2.json().get("banned"))
+        self.assertFalse(r2.json().get("banned"))
+        self.assertTrue(r2.json().get("requiresHumanReview"))
+        self.assertEqual(r2.json().get("reviewReason"), "HARDENED_RISK")
         se = StudentExam.objects.get(student_id=st7.id, exam_id=self.exam_a.id)
-        self.assertEqual(se.status, "Banned")
+        self.assertEqual(se.status, "In Progress")
         st7.refresh_from_db()
         self.assertEqual(st7.status, "Active")
 
