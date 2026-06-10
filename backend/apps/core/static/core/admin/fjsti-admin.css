@@ -1,0 +1,51 @@
+/* FJSTI Online Exam — admin panel qo‘shimcha uslubi */
+
+.login-logo img,
+.brand-image {
+  max-height: 42px;
+}
+
+.content-wrapper {
+  background: linear-gradient(160deg, #f0f4f8 0%, #e8eef5 45%, #f7f9fc 100%);
+}
+
+.card-primary.card-outline,
+.card.card-primary {
+  border-top: 3px solid #1e5f9a;
+  box-shadow: 0 0.25rem 0.75rem rgba(30, 95, 154, 0.08);
+}
+
+.main-sidebar {
+  box-shadow: 0 0 1.25rem rgba(0, 0, 0, 0.12);
+}
+
+.brand-link {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+#jazzy-navbar .nav-link,
+.sidebar .nav-link p {
+  font-weight: 500;
+}
+
+.changeform-tabs .nav-tabs .nav-link.active {
+  font-weight: 600;
+}
+
+.module h2,
+.inline-group h2 {
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+table#result_list thead th {
+  white-space: nowrap;
+}
+
+.help-block,
+.helptext,
+.form-text {
+  color: #5c6b7a !important;
+}

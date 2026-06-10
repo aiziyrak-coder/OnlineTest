@@ -144,7 +144,7 @@ export const translations = {
     testBankAiCategories: "Kategoriyalar bo‘yicha",
     examModeBank: "Test bazasi + AI",
     examModeBankHint:
-      "Imtihon boshlanganda: ~75% savollar bazadan tasodifiy, ~25% xuddi shu mavzu va darajada yangi savollar (Gemini AI) — yodlashni kamaytirish uchun. GEMINI_API_KEY talab qilinadi.",
+      "Imtihon boshlanganda: ~75% savollar bazadan tasodifiy, ~25% xuddi shu mavzu va darajada yangi savollar (OpenAI) — yodlashni kamaytirish uchun. OPENAI_API_KEY talab qilinadi.",
     examBankQuestionCount: "Jami savollar (masalan 100)",
     bankExamBadge: "Baza 75% + AI 25%",
     testBankNeedFirst: "Avval «Test bazasi» bo‘limida kategoriya va yetarli savollar qo‘shing.",
@@ -155,11 +155,11 @@ export const translations = {
     identityVerifyFailed: "Profil rasmingiz bilan mos kelmedi. Yuzingiz yaxshi yoritilgan va kamerada aniq ko‘rinsin.",
     identityVerifyError: "Tekshirishda xatolik. Qayta urinib ko‘ring.",
     identityVerifyServiceDown:
-      "Yuzni solishtirish ishlamayapti: serverda GEMINI_API_KEY yo‘q yoki xizmat vaqtincha band. Administrator sozlamalarini tekshirsin.",
+      "Yuzni solishtirish ishlamayapti: serverda OPENAI_API_KEY yo‘q yoki xizmat vaqtincha band. Administrator sozlamalarini tekshirsin.",
     identityVerifyGeminiError:
-      "Google AI (Gemini) bilan aloqa yoki javob xatosi — kalit, kvota yoki tarmoq. Administrator /etc/onlinetest/api.env da GEMINI_API_KEY va internet chiqishini tekshirsin.",
+      "OpenAI bilan aloqa yoki javob xatosi — kalit, kvota yoki tarmoq. Administrator api.env da OPENAI_API_KEY va internet chiqishini tekshirsin.",
     identityVerifyGeminiModelInvalid:
-      "Gemini model barcha urinishlarda rad etildi (404). Loyihani yangilang (git pull + deploy), api.env da GEMINI_MODEL=gemini-2.5-flash va GEMINI_MODEL_FALLBACKS=gemini-2.5-pro,gemini-1.5-flash qo‘ying; kalit AI Studio dan bo‘lsin. Keyin: sudo systemctl restart onlinetest-api.",
+      "OpenAI model rad etildi. api.env da OPENAI_MODEL=gpt-4o-mini va OPENAI_VISION_MODEL=gpt-4o qo‘ying, keyin API xizmatini qayta ishga tushiring.",
     identityVerifyUnavailable: "Administratorga murojaat qiling.",
     virtualCameraBlocked:
       "Virtual / dasturiy kamera (OBS Virtual Camera, DroidCam va h.k.) imtihonda taqiqlangan. OBS va shunga o‘xshash ilovalarni yoping, USB yoki qurilmaga o‘rnatilgan haqiqiy kamerani tanlang.",
@@ -464,7 +464,7 @@ export const translations = {
     testBankAiCategories: "По категориям",
     examModeBank: "Банк + ИИ",
     examModeBankHint:
-      "При старте: ~75% из банка, ~25% новых вопросов ИИ (те же темы). Нужен GEMINI_API_KEY.",
+      "При старте: ~75% из банка, ~25% новых вопросов ИИ (те же темы). Нужен OPENAI_API_KEY.",
     examBankQuestionCount: "Всего вопросов",
     bankExamBadge: "Банк 75% + ИИ 25%",
     testBankNeedFirst: "Сначала добавьте категории и вопросы во вкладке «Банк тестов».",
@@ -475,11 +475,11 @@ export const translations = {
     identityVerifyFailed: "Не совпадает с фото профиля. Убедитесь, что лицо хорошо видно.",
     identityVerifyError: "Ошибка проверки. Попробуйте снова.",
     identityVerifyServiceDown:
-      "Сравнение лиц недоступно: на сервере нет GEMINI_API_KEY или сервис временно недоступен. Обратитесь к администратору.",
+      "Сравнение лиц недоступно: на сервере нет OPENAI_API_KEY или сервис временно недоступен. Обратитесь к администратору.",
     identityVerifyGeminiError:
-      "Ошибка связи с Google AI (Gemini) — ключ, квота или сеть. Администратору: GEMINI_API_KEY в api.env и доступ в интернет.",
+      "Ошибка OpenAI — ключ, квота или сеть. Администратору: OPENAI_API_KEY в api.env и доступ в интернет.",
     identityVerifyGeminiModelInvalid:
-      "Модель Gemini отклонена для ключа (404). Обновите сервер (git pull + deploy), в api.env: GEMINI_MODEL=gemini-2.5-flash и GEMINI_MODEL_FALLBACKS=gemini-2.5-pro,gemini-1.5-flash; ключ из AI Studio. Затем restart onlinetest-api.",
+      "Модель OpenAI отклонена. В api.env: OPENAI_MODEL=gpt-4o-mini и OPENAI_VISION_MODEL=gpt-4o, затем перезапуск API.",
     identityVerifyUnavailable: "Обратитесь к администратору.",
     virtualCameraBlocked:
       "Виртуальная камера (OBS Virtual Camera, DroidCam и т.п.) на экзамене запрещена. Закройте OBS и подобные программы, выберите реальную USB- или встроенную камеру.",
@@ -781,7 +781,7 @@ export const translations = {
     testBankAiCategories: "By category",
     examModeBank: "Bank + AI mix",
     examModeBankHint:
-      "On start: ~75% random bank questions, ~25% new AI questions at the same topics/level (reduces memorization). Requires GEMINI_API_KEY.",
+      "On start: ~75% random bank questions, ~25% new AI questions at the same topics/level (reduces memorization). Requires OPENAI_API_KEY.",
     examBankQuestionCount: "Total questions (e.g. 100)",
     bankExamBadge: "Bank 75% + AI 25%",
     testBankNeedFirst: "Add categories and questions in the Question bank tab first.",
@@ -792,11 +792,11 @@ export const translations = {
     identityVerifyFailed: "Does not match your profile photo. Ensure your face is clearly visible.",
     identityVerifyError: "Verification failed. Please try again.",
     identityVerifyServiceDown:
-      "Face comparison is unavailable: GEMINI_API_KEY is missing on the server or the service is temporarily down. Ask your administrator.",
+      "Face comparison is unavailable: OPENAI_API_KEY is missing on the server or the service is temporarily down. Ask your administrator.",
     identityVerifyGeminiError:
-      "Google AI (Gemini) request failed — API key, quota, or network. Administrator: check GEMINI_API_KEY in api.env and outbound HTTPS.",
+      "OpenAI request failed — API key, quota, or network. Administrator: check OPENAI_API_KEY in api.env and outbound HTTPS.",
     identityVerifyGeminiModelInvalid:
-      "Gemini rejected every model for your key (404). Deploy the latest backend, set GEMINI_MODEL=gemini-2.5-flash and GEMINI_MODEL_FALLBACKS=gemini-2.5-pro,gemini-1.5-flash in api.env (AI Studio key), then restart onlinetest-api.",
+      "OpenAI model rejected. Set OPENAI_MODEL=gpt-4o-mini and OPENAI_VISION_MODEL=gpt-4o in api.env, then restart the API service.",
     identityVerifyUnavailable: "Contact your administrator.",
     virtualCameraBlocked:
       "Virtual cameras (OBS Virtual Camera, DroidCam, etc.) are not allowed during the exam. Close OBS and similar apps and select a physical USB or built-in webcam.",

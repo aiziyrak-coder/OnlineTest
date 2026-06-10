@@ -30,13 +30,35 @@ grep -rE "server_name.*(online-imtixon\.uz|api\.online-imtixon\.uz)" /etc/nginx/
 cp -a "$SRC" "$DST_AVAILABLE"
 ln -sf "$DST_AVAILABLE" "$DST_ENABLED"
 
+# nginx (www-data) har bir ota-katalogda "x" bo'lmasa fayllarni o'qiy olmaydi → 403 Forbidden.
+# Faqat $ROOT ga chmod yetarli emas (masalan: /home/user/repo — /home yoki /home/user 711 emas).
+ensure_world_traverse_to_dir() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 0
+  local p
+  p="$(cd "$dir" && pwd -P)"
+  while [[ "$p" != "/" ]]; do
+    if [[ "$p" == "/root" ]]; then
+      echo "[enable-nginx] WARN: loyiha /root ostida — nginx www-data kirmaydi. Kodni /var/www/... ga ko'chiring yoki ACL qo'lda sozlang."
+      break
+    fi
+    chmod o+rx "$p" 2>/dev/null || true
+    p="$(dirname "$p")"
+  done
+}
+
 # SPA: nginx www-data o'qishi + katalog bo'ylab "x" (403 oldini olish)
-if [[ -d "$ROOT/frontend/dist" ]]; then
+DIST="$ROOT/frontend/dist"
+if [[ -d "$DIST" ]]; then
+  ensure_world_traverse_to_dir "$DIST"
+  chmod o+rx "$ROOT/frontend" 2>/dev/null || true
   chmod o+rx "$ROOT" 2>/dev/null || true
   if id www-data &>/dev/null; then
-    chown -R www-data:www-data "$ROOT/frontend/dist" 2>/dev/null || true
+    chown -R www-data:www-data "$DIST" 2>/dev/null || true
   fi
-  chmod -R a+rX "$ROOT/frontend/dist" 2>/dev/null || true
+  chmod -R a+rX "$DIST" 2>/dev/null || true
+else
+  echo "[enable-nginx] WARN: $DIST yo'q — frontend uchun 'npm run build' qiling, aks holda SPA 403/404 berishi mumkin."
 fi
 
 nginx -t

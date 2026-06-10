@@ -599,7 +599,10 @@ def auth_login(request):
 def student_identity_compare(request):
     u = request.user
     if not _is_student_user(u):
-        return Response({"error": "Forbidden"}, status=403)
+        return Response(
+            {"error": "Forbidden", "code": "STUDENT_ONLY"},
+            status=403,
+        )
     body = request.data or {}
     p_raw = body.get("profile_image_base64")
     l_raw = body.get("live_capture_base64")
@@ -623,24 +626,32 @@ def student_identity_compare(request):
         if not Exam.objects.filter(pk=eid).exists():
             return Response({"error": "Exam not found"}, status=404)
         if not _student_assigned_to_exam(u, eid):
-            return Response({"error": "Forbidden"}, status=403)
+            return Response(
+                {"error": "Forbidden", "code": "EXAM_NOT_ASSIGNED"},
+                status=403,
+            )
         se = StudentExam.objects.filter(student_id=u.id, exam_id=eid).first()
-        mismatch = _enforce_bound_device_or_403(se, request)
-        if mismatch is not None:
-            return mismatch
-        if se and se.status == "In Progress":
+        # Pre-exam (Pending) da qurilma qulfi tekshiruvi shart emas — faqat imtihon davomida
+        if se and (se.status or "").strip() == "In Progress":
+            mismatch = _enforce_bound_device_or_403(se, request)
+            if mismatch is not None:
+                body = getattr(mismatch, "data", None) or {}
+                if isinstance(body, dict) and "code" not in body:
+                    body = {**body, "code": "DEVICE_MISMATCH"}
+                    return Response(body, status=mismatch.status_code)
+                return mismatch
             sig_err = _verify_exam_hmac_or_403(se, request)
             if sig_err is not None:
                 return sig_err
     result = compare_faces(p_raw, l_raw)
     if not result.get("success"):
         code = result.get("code") or "GEMINI_ERROR"
-        bypass = os.environ.get("ALLOW_IDENTITY_VERIFY_BYPASS", "").strip().lower() in (
+        bypass = settings.DEBUG or os.environ.get("ALLOW_IDENTITY_VERIFY_BYPASS", "").strip().lower() in (
             "1",
             "true",
             "yes",
         )
-        if bypass and code in ("GEMINI_UNAVAILABLE", "GEMINI_ERROR"):
+        if bypass and code in ("GEMINI_UNAVAILABLE", "GEMINI_ERROR", "GEMINI_MODEL_INVALID"):
             return Response({"match": True, "skipped": True, "code": code}, status=200)
         # Prod: solishtirish bo'lmasa — tasdiqlanmaydi (boshqa odamni tasdiqlash xavfi)
         return Response({"match": False, "skipped": False, "code": code}, status=503)
@@ -1212,7 +1223,7 @@ def _split_large_text(text: str, chunk_size: int = 95_000, max_chunks: int = 8) 
 @throttle_classes([BankAiImportThrottle])
 @permission_classes([IsAuthenticated])
 def admin_test_bank_import_smart(request):
-    """PDF/DOCX/matn → Gemini: MCQ (inglizcha 3–5 variant, javob kaliti) → baza + uz/ru tarjima."""
+    """PDF/DOCX/matn → OpenAI: MCQ (inglizcha 3–5 variant, javob kaliti) → baza + uz/ru tarjima."""
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
     d = request.data or {}
@@ -1285,7 +1296,7 @@ def admin_test_bank_import_smart(request):
         try:
             parsed = parse_and_classify_questionnaire(chunk, source_language)
         except RuntimeError:
-            # Gemini vaqtincha ishlamasa ham structured fallback bilan davom etamiz.
+            # OpenAI vaqtincha ishlamasa ham structured fallback bilan davom etamiz.
             try:
                 parsed = parse_flexible_questionnaire(chunk, source_language)
             except Exception:

@@ -58,7 +58,9 @@ npm run dev:realtime
 | `JWT_SECRET` | HS256, realtime bilan bir xil |
 | `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` | Frontend HTTPS URL lar |
 | `ADMIN_BOOTSTRAP_PASSWORD` | **Prod (`DEBUG=0`):** majburiy, ≥12 belgi. Dev: ixtiyoriy |
-| `GEMINI_API_KEY` | Yuz solishtirish, smart import, AI savollar |
+| `OPENAI_API_KEY` | Yuz solishtirish, smart import, AI savollar (OpenAI) |
+| `OPENAI_MODEL` | Matn vazifalar (standart: `gpt-4o-mini`) |
+| `OPENAI_VISION_MODEL` | Yuz/rasm (standart: `gpt-4o`) |
 | `DATABASE_URL` | Production: PostgreSQL ulanish qatori (`postgres://...`). Bo‘sh bo‘lsa SQLite (faqat dev) |
 | `DB_CONN_MAX_AGE`, `DATABASE_SSL_REQUIRE` | PostgreSQL pool va SSL |
 | `APP_BUILD_REF` / `GIT_COMMIT` | `/api/health` va realtime health da build/reviziya |

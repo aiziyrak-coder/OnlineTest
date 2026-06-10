@@ -3,6 +3,7 @@ import os
 
 import bcrypt
 from django.conf import settings
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.core.models import AppUser, Group, Level, ResultIdCounter
@@ -73,3 +74,4 @@ class Command(BaseCommand):
         gid = g.id
 
         self._ensure_fjsti_admin(gid)
+        call_command("ensure_django_admin")

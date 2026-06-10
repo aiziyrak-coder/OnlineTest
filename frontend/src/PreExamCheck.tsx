@@ -5,6 +5,7 @@ import { translations, Language, formatPreExamMediaAccessFailure } from './i18n'
 import { readJsonSafe } from './lib/http';
 import { apiUrl } from './lib/apiUrl';
 import { examAuthHeaders } from './lib/deviceFingerprint';
+import { compressVideoFrameToJpeg } from './lib/compressToJpeg';
 import { InstituteLogo } from './components/InstituteLogo';
 import {
   attachDefaultMicrophone,
@@ -359,16 +360,10 @@ export function PreExamCheck({
     setVerifying(true);
     setError('');
     try {
-      const canvas = canvasRef.current;
       const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d', { willReadFrequently: false });
-      if (!ctx) return;
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0);
-      const capturedImageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
+      const liveDataUrl = compressVideoFrameToJpeg(video, 0.62, 320, true);
+      if (!liveDataUrl) return;
+      const capturedImageBase64 = liveDataUrl.split(',')[1];
       const profilePayload = String(user.profile_image).includes(',')
         ? user.profile_image
         : `data:image/jpeg;base64,${user.profile_image}`;
@@ -385,7 +380,10 @@ export function PreExamCheck({
           live_capture_base64: capturedImageBase64,
         }),
       });
-      const data = (await readJsonSafe<{ match?: boolean; skipped?: boolean; code?: string }>(response)) || {};
+      const data =
+        (await readJsonSafe<{ match?: boolean; skipped?: boolean; code?: string; error?: string }>(
+          response,
+        )) || {};
       if (response.status === 503) {
         const code = data?.code || '';
         setError(
@@ -396,6 +394,19 @@ export function PreExamCheck({
               : code === 'GEMINI_ERROR'
                 ? t.identityVerifyGeminiError
                 : t.identityVerifyError
+        );
+        return;
+      }
+      if (response.status === 403) {
+        const code = data?.code || '';
+        setError(
+          code === 'STUDENT_ONLY'
+            ? 'Yuz tekshiruvi faqat talaba hisobi uchun. Talaba ID bilan kiring.'
+            : code === 'EXAM_NOT_ASSIGNED'
+              ? 'Siz ushbu imtihon guruhiga biriktirilmagansiz. Administrator bilan bog‘laning.'
+              : code === 'DEVICE_MISMATCH'
+                ? 'Imtihon boshqa qurilmada boshlangan. O‘sha qurilmadan davom eting yoki admin yordamini so‘rang.'
+                : t.identityVerifyError,
         );
         return;
       }

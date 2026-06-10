@@ -17,27 +17,14 @@ import {
   openPreferredProctorStream,
   VIRTUAL_CAMERA_BLOCKED_MESSAGE,
 } from './lib/preferredCameraStream';
+import { compressVideoFrameToJpeg } from './lib/compressToJpeg';
 
-// Identity check: har 90 soniyada (45s → 90s: Gemini token tejash)
+// Identity check: har 90 soniyada
 const IDENTITY_CHECK_MS = 90_000;
 /** Yuz yo'q deb hisoblashdan oldin kutish (FACE_NOT_VISIBLE). */
 const NO_FACE_VIOLATION_MS = 4500;
 /** COCO: telefon/kitob/noutbuk uchun minimal ishonch. */
 const FORBIDDEN_OBJECT_MIN_SCORE = 0.52;
-
-// Rasm hajmini kamaytirish uchun (Gemini ga yuborishdan oldin)
-function compressToJpeg(video: HTMLVideoElement, quality = 0.55, maxW = 320): string {
-  const scale = maxW / (video.videoWidth || maxW);
-  const w = Math.round((video.videoWidth || maxW) * Math.min(scale, 1));
-  const h = Math.round((video.videoHeight || 240) * Math.min(scale, 1));
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return '';
-  ctx.drawImage(video, 0, 0, w, h);
-  return canvas.toDataURL('image/jpeg', quality);
-}
 
 const container = {
   hidden: { opacity: 0 },
@@ -1080,7 +1067,7 @@ export function ExamRoom({ exam, studentExamId, token, user, lang, onFinish }: E
       identityCheckBusyRef.current = true;
       try {
         // Kichik rasm: 280x210 (token tejash uchun)
-        const liveDataUrl = compressToJpeg(video, 0.55, 280);
+        const liveDataUrl = compressVideoFrameToJpeg(video, 0.55, 280);
         if (!liveDataUrl) return;
         const liveB64 = liveDataUrl.split(',')[1];
 

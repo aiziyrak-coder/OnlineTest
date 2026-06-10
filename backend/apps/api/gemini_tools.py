@@ -1,4 +1,4 @@
-"""Google Gemini (ixtiyoriy). Kalit bo'lmasa fallback. google-genai SDK.
+"""OpenAI (Chat Completions + Vision). Kalit bo'lmasa regex fallback.
 
 TOKEN TEJASH STRATEGIYASI:
 - Har bir prompt minimal, aniq strukturali
@@ -15,92 +15,39 @@ import zipfile
 from io import BytesIO
 from typing import Any
 
-from django.conf import settings
-
 import logging
+
+from apps.api.openai_client import (
+    _client,
+    _model_not_found,
+    api_key_configured,
+    chat_text,
+    chat_vision,
+)
 
 _logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Client helpers
-# ---------------------------------------------------------------------------
-
-def _client():
-    key = settings.GEMINI_API_KEY
-    if not key:
-        return None
-    from google import genai
-    return genai.Client(api_key=key)
-
-
-def _model_not_found(exc: BaseException) -> bool:
-    """404 / not found — boshqa model bilan qayta urinish mumkin."""
-    code = getattr(exc, "status_code", None)
-    if code == 404:
-        return True
-    detail = str(exc).lower()
-    return (
-        "404" in detail
-        or "not_found" in detail
-        or "not found" in detail
-        or "no longer available" in detail
-        or "invalid model" in detail
-        or "does not exist" in detail
-        or "was not found" in detail
-        or "requested entity was not found" in detail
-    )
-
-
-def _gemini_model_candidates() -> list[str]:
-    """GEMINI_MODEL + GEMINI_MODEL_FALLBACKS — takrorlarsiz tartibda."""
-    primary = (getattr(settings, "GEMINI_MODEL", None) or "").strip()
-    raw_fb = (getattr(settings, "GEMINI_MODEL_FALLBACKS", None) or "").strip()
-    parts: list[str] = []
-    if primary:
-        parts.append(primary)
-    if raw_fb:
-        parts.extend(x.strip() for x in raw_fb.split(",") if x.strip())
-    seen: set[str] = set()
-    out: list[str] = []
-    for p in parts:
-        key = p.lower()
-        if key not in seen:
-            seen.add(key)
-            out.append(p)
-    return out
-
-
-def _generate(client, prompt: str | None, contents=None, temperature: float = 0.0) -> str:
-    """Matn yoki multimodal so'rov yuboradi, javob matnini qaytaradi."""
-    from google.genai import types as _types
-    candidates = _gemini_model_candidates()
-    if not candidates:
-        raise RuntimeError("GEMINI_MODEL is empty")
-    config = _types.GenerateContentConfig(temperature=temperature)
-    contents_arg = contents if contents is not None else prompt
-    last_model_exc: BaseException | None = None
-    for model in candidates:
-        try:
-            resp = client.models.generate_content(
-                model=model,
-                contents=contents_arg,
-                config=config,
-            )
-            return resp.text or ""
-        except Exception as exc:
-            if _model_not_found(exc):
-                _logger.warning(
-                    "Gemini model %r rejected (%s); trying fallback if any.",
-                    model,
-                    exc,
-                )
-                last_model_exc = exc
+def _generate(_unused_client, prompt: str | None, contents=None, temperature: float = 0.0) -> str:
+    """Matn yoki multimodal so'rov (OpenAI). contents — vision uchun rasm qismlari."""
+    if contents is not None:
+        images: list[tuple[bytes, str]] = []
+        text_parts: list[str] = []
+        for part in contents:
+            if isinstance(part, str):
+                text_parts.append(part)
                 continue
-            raise
-    if last_model_exc:
-        raise last_model_exc
-    raise RuntimeError("Gemini generate_content failed with no candidates")
+            data = getattr(part, "data", None) or getattr(part, "inline_data", None)
+            if data is not None:
+                raw = getattr(data, "data", data)
+                mime = getattr(data, "mime_type", None) or getattr(part, "mime_type", "image/jpeg")
+                if isinstance(raw, (bytes, bytearray)):
+                    images.append((bytes(raw), str(mime)))
+        prompt_text = "\n".join(text_parts) if text_parts else (prompt or "")
+        return chat_vision(prompt_text, images, temperature=temperature)
+    if not prompt:
+        raise ValueError("prompt required")
+    return chat_text(prompt, temperature=temperature)
 
 
 def _detect_image_mime(data: bytes) -> str:
@@ -120,13 +67,11 @@ def _detect_image_mime(data: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 def compare_faces(profile_b64: str, live_b64: str) -> dict:
-    """Profile va live yuzni solishtiradi. Minimal token: faqat MATCH/NO_MATCH."""
-    client = _client()
-    if not client:
+    """Profile va live yuzni solishtiradi (OpenAI Vision)."""
+    if not api_key_configured():
         return {"success": False, "code": "GEMINI_UNAVAILABLE"}
     try:
         import base64
-        from google.genai import types
 
         def _decode(s: str) -> bytes:
             s = s.strip()
@@ -137,24 +82,20 @@ def compare_faces(profile_b64: str, live_b64: str) -> dict:
                 s += "=" * (4 - pad)
             return base64.b64decode(s)
 
-        p_bytes = _decode(profile_b64)
-        l_bytes = _decode(live_b64)
-
-        # Rasmlarni kichiklashtirish (agar PIL mavjud bo'lsa)
-        p_bytes = _resize_image_if_large(p_bytes, max_kb=80)
-        l_bytes = _resize_image_if_large(l_bytes, max_kb=80)
-
-        p_mime = _detect_image_mime(p_bytes)
-        l_mime = _detect_image_mime(l_bytes)
-
-        # Minimal prompt — faqat ikki so'z javob
-        contents = [
+        p_bytes = _resize_image_if_large(_decode(profile_b64), max_kb=120)
+        l_bytes = _resize_image_if_large(_decode(live_b64), max_kb=120)
+        prompt = (
             "Compare faces: Image1=id photo, Image2=live capture.\n"
-            "Reply with EXACTLY one word on the first line only: MATCH (same person) or NO_MATCH (different person). No other text.",
-            types.Part.from_bytes(data=p_bytes, mime_type=p_mime),
-            types.Part.from_bytes(data=l_bytes, mime_type=l_mime),
-        ]
-        raw = _generate(client, None, contents=contents)
+            "Reply with EXACTLY one word on the first line only: MATCH (same person) or "
+            "NO_MATCH (different person). No other text."
+        )
+        raw = chat_vision(
+            prompt,
+            [
+                (p_bytes, _detect_image_mime(p_bytes)),
+                (l_bytes, _detect_image_mime(l_bytes)),
+            ],
+        )
         ok = _parse_strict_match_line(raw)
         return {"success": True, "match": ok}
     except Exception as exc:
@@ -209,9 +150,9 @@ def generate_exam_ai_summary(questions: list[dict], answers: dict[str, str], lan
     """
     from apps.api.services import build_fallback_ai_summary
 
-    client = _client()
-    if not client:
+    if not api_key_configured():
         return build_fallback_ai_summary(questions, answers)
+    client = _client()
 
     # Faqat xato javoblarni ajratib olamiz
     wrong_questions = []
@@ -291,9 +232,9 @@ def generate_exam_ai_summary(questions: list[dict], answers: dict[str, str], lan
 def generate_bank_extension(
     samples: list[dict], count: int, language: str, category_names: list[str]
 ) -> list[dict]:
+    if not api_key_configured():
+        raise RuntimeError("OPENAI_API_KEY is not configured")
     client = _client()
-    if not client:
-        raise RuntimeError("GEMINI_API_KEY is not configured")
 
     # Faqat 3 ta namuna yetarli (ko'p namuna = ko'p token)
     sample_block = json.dumps(samples[:3], ensure_ascii=False)
@@ -743,9 +684,9 @@ def translate_questions_batch(questions: list[dict], source_language: str) -> li
     """
     if not questions:
         return []
-    client = _client()
-    if not client:
+    if not api_key_configured():
         return [{} for _ in questions]
+    client = _client()
 
     src = (source_language or "uz").lower()
     src_name = {
@@ -905,9 +846,9 @@ def parse_and_classify_questionnaire(raw_text: str, language: str) -> list[dict]
     if src_language == "auto":
         src_language = detect_question_language(raw_text)
 
-    client = _client()
-    if not client:
+    if not api_key_configured():
         return parse_structured_questionnaire(raw_text, src_language)
+    client = _client()
 
     lang = "Uzbek" if src_language == "uz" else "Russian" if src_language == "ru" else "English"
 
@@ -976,16 +917,10 @@ def _normalize_parsed_items(arr: list, src_language: str) -> list[dict]:
 
 def parse_and_classify_document_bytes(raw: bytes, filename: str, language: str) -> list[dict]:
     """
-    Skanerlangan/rasmli hujjatlar uchun multimodal parsing.
-    TOKEN TEJASH:
-    - PDF to'g'ridan-to'g'ri (eng samarali)
-    - DOCX: faqat dastlabki 15 ta rasm
-    - Minimal prompt
+    PDF/DOCX: avval matn (pypdf/python-docx), yetarli bo'lmasa OpenAI Vision.
     """
-    client = _client()
-    if not client:
-        raise RuntimeError("GEMINI_API_KEY is not configured")
-    from google.genai import types
+    if not api_key_configured():
+        raise RuntimeError("OPENAI_API_KEY is not configured")
 
     src_language = (language or "auto").lower()
     if src_language == "auto":
@@ -994,38 +929,79 @@ def parse_and_classify_document_bytes(raw: bytes, filename: str, language: str) 
     lang_name = "English" if src_language == "en" else "Russian" if src_language == "ru" else "Uzbek"
     name = (filename or "").lower()
 
+    extracted_text = _extract_document_text(raw, name)
+    if len(extracted_text.strip()) >= 80:
+        try:
+            return parse_and_classify_questionnaire(extracted_text, src_language)
+        except Exception:
+            pass
+
+    images = _extract_document_images(raw, name)
+    if not images:
+        if extracted_text.strip():
+            return parse_structured_questionnaire(extracted_text, src_language)
+        raise ValueError("Hujjatdan matn yoki rasm ajratilmadi")
+
     prompt = (
-        f"Extract ALL MCQs from this document. Language hint: {lang_name}.\n"
+        f"Extract ALL MCQs from these document images. Language hint: {lang_name}.\n"
         f"JSON array only: [{{\"text\":\"...\",\"options\":[...],\"correctAnswer\":\"...\","
         f"\"categoryName\":\"...\",\"categoryDescription\":\"\"}}]\n"
         f"Rules: options 2-10 items; correctAnswer=exact option; include answer key."
     )
+    if extracted_text.strip():
+        prompt += f"\n\nOCR/text hint:\n{extracted_text[:8000]}"
 
-    contents: list[Any] = [prompt]
-    if name.endswith(".pdf"):
-        contents.append(types.Part.from_bytes(data=raw, mime_type="application/pdf"))
-    elif name.endswith(".docx"):
-        with zipfile.ZipFile(BytesIO(raw)) as zf:
-            media_names = [n for n in zf.namelist() if n.startswith("word/media/")]
-            for n in media_names[:15]:  # 20 → 15: kamroq token
-                b = zf.read(n)
-                ext = n.rsplit(".", 1)[-1].lower() if "." in n else ""
-                mime = (
-                    "image/png" if ext == "png" else
-                    "image/gif" if ext == "gif" else
-                    "image/webp" if ext == "webp" else
-                    "image/jpeg"
-                )
-                contents.append(types.Part.from_bytes(data=b, mime_type=mime))
-    else:
-        raise ValueError("Unsupported document type for multimodal parse")
-
-    t = _generate(client, None, contents=contents).strip()
+    t = chat_vision(prompt, images).strip()
     arr = _extract_json_array_from_model_text(t)
     out = _normalize_parsed_items(arr, src_language)
     if not out:
         raise ValueError("Hujjatdan savollar ajratilmadi")
     return out
+
+
+def _extract_document_text(raw: bytes, name: str) -> str:
+    if name.endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(BytesIO(raw))
+            return "\n".join((page.extract_text() or "") for page in reader.pages)
+        except Exception:
+            return ""
+    if name.endswith(".docx"):
+        try:
+            from docx import Document
+
+            doc = Document(BytesIO(raw))
+            return "\n".join(p.text for p in doc.paragraphs if (p.text or "").strip())
+        except Exception:
+            return ""
+    return ""
+
+
+def _extract_document_images(raw: bytes, name: str) -> list[tuple[bytes, str]]:
+    images: list[tuple[bytes, str]] = []
+    if not name.endswith(".docx"):
+        return images
+    try:
+        with zipfile.ZipFile(BytesIO(raw)) as zf:
+            media_names = [n for n in zf.namelist() if n.startswith("word/media/")]
+            for n in media_names[:15]:
+                b = zf.read(n)
+                ext = n.rsplit(".", 1)[-1].lower() if "." in n else ""
+                mime = (
+                    "image/png"
+                    if ext == "png"
+                    else "image/gif"
+                    if ext == "gif"
+                    else "image/webp"
+                    if ext == "webp"
+                    else "image/jpeg"
+                )
+                images.append((b, mime))
+    except Exception:
+        return []
+    return images
 
 
 # ---------------------------------------------------------------------------
@@ -1036,9 +1012,9 @@ def paraphrase_medical_mcqs(questions: list[dict], exam_language: str) -> list[d
     """Savollarni qayta shakllantirish. Minimal prompt."""
     if not questions:
         return []
-    client = _client()
-    if not client:
+    if not api_key_configured():
         return questions
+    client = _client()
 
     lang = (
         "Uzbek(Latin)" if exam_language == "uz" else

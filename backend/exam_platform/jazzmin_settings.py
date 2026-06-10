@@ -1,0 +1,117 @@
+"""Django Jazzmin — FJSTI Online Exam admin panel ko‘rinishi."""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+_PUBLIC_APP = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+_FRONTEND_URL = _PUBLIC_APP or "http://localhost:5173"
+
+JAZZMIN_SETTINGS: dict[str, Any] = {
+    "site_title": "FJSTI Online Exam",
+    "site_header": "FJSTI Imtihon",
+    "site_brand": "FJSTI Online Exam",
+    "site_logo_classes": "img-circle elevation-3",
+    "welcome_sign": "Masofaviy imtihon platformasi — boshqaruv paneli",
+    "copyright": "FJSTI Online Exam",
+    "search_model": [
+        "core.AppUser",
+        "core.Exam",
+        "core.StudentExam",
+        "core.TestBankQuestion",
+    ],
+    "user_avatar": None,
+    "topmenu_links": [
+        {"name": "Bosh sahifa", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Talaba ilovasi", "url": _FRONTEND_URL, "new_window": True},
+        {"name": "API holati", "url": "/api/health", "new_window": True},
+    ],
+    "usermenu_links": [
+        {"model": "auth.user"},
+    ],
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "hide_apps": [],
+    "hide_models": [],
+    "order_with_respect_to": [
+        "core",
+        "core.appuser",
+        "core.group",
+        "core.level",
+        "core.exam",
+        "core.studentexam",
+        "core.testbankcategory",
+        "core.testbankquestion",
+        "core.violationlog",
+        "core.banappeal",
+        "auth",
+    ],
+    "icons": {
+        "auth": "fas fa-shield-alt",
+        "auth.user": "fas fa-user-shield",
+        "auth.Group": "fas fa-users",
+        "core": "fas fa-graduation-cap",
+        "core.appuser": "fas fa-id-card",
+        "core.level": "fas fa-layer-group",
+        "core.group": "fas fa-users",
+        "core.exam": "fas fa-file-alt",
+        "core.examgroup": "fas fa-link",
+        "core.examstudentexception": "fas fa-user-slash",
+        "core.examretakewindow": "fas fa-redo",
+        "core.studentexam": "fas fa-clipboard-check",
+        "core.violationlog": "fas fa-exclamation-triangle",
+        "core.unbanevidence": "fas fa-folder-open",
+        "core.banappeal": "fas fa-gavel",
+        "core.banappealevent": "fas fa-history",
+        "core.testbankcategory": "fas fa-folder",
+        "core.testbankquestion": "fas fa-question-circle",
+        "core.resultidcounter": "fas fa-hashtag",
+    },
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+    "related_modal_active": True,
+    "custom_css": "core/admin/fjsti-admin.css",
+    "custom_js": None,
+    "show_ui_builder": False,
+    "show_theme_chooser": True,
+    "changeform_format": "horizontal_tabs",
+    "changeform_format_overrides": {
+        "core.appuser": "collapsible",
+        "core.exam": "horizontal_tabs",
+        "core.studentexam": "horizontal_tabs",
+        "auth.user": "collapsible",
+    },
+}
+
+JAZZMIN_UI_TWEAKS: dict[str, Any] = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-primary",
+    "accent": "accent-primary",
+    "navbar": "navbar-dark navbar-primary",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-primary",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "zephyr",
+    "default_theme_mode": "light",
+    "button_classes": {
+        "primary": "btn-primary",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success",
+    },
+}

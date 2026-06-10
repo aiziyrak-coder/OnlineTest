@@ -26,6 +26,7 @@ if os.environ.get("TRUST_X_FORWARDED_HOST", "").strip().lower() in ("1", "true",
     USE_X_FORWARDED_HOST = True
 
 INSTALLED_APPS = [
+    "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -234,14 +235,18 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 52_428_800
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52_428_800
 
 PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-# Birlamchi: flash — ko‘pchilik AI Studio kalitlarida mavjud; pro xato bersa fallback ishlaydi.
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-# Vergul bilan ajratilgan qo‘shimcha modellar (404 / model topilmadi bo‘lsa ketma-ket uriniladi).
-GEMINI_MODEL_FALLBACKS = os.environ.get(
-    "GEMINI_MODEL_FALLBACKS",
-    "gemini-2.5-pro,gemini-1.5-flash",
+# OpenAI (yuz solishtirish, test import, AI savollar, tarjima)
+OPENAI_API_KEY = (
+    os.environ.get("OPENAI_API_KEY", "").strip()
+    or os.environ.get("GEMINI_API_KEY", "").strip()  # eski deploy fayllar
 )
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o").strip()
+OPENAI_MODEL_FALLBACKS = os.environ.get("OPENAI_MODEL_FALLBACKS", "gpt-4o-mini").strip()
+# Eski nomlar (kod va deploy skriptlari bilan moslik)
+GEMINI_API_KEY = OPENAI_API_KEY
+GEMINI_MODEL = OPENAI_MODEL
+GEMINI_MODEL_FALLBACKS = OPENAI_MODEL_FALLBACKS
 
 if not DEBUG:
     _log_json = os.environ.get("LOG_JSON", "").strip().lower() in ("1", "true", "yes")
@@ -273,3 +278,5 @@ if not DEBUG:
             "django.security": {"handlers": ["console"], "level": "WARNING", "propagate": False},
         },
     }
+
+from exam_platform.jazzmin_settings import JAZZMIN_SETTINGS, JAZZMIN_UI_TWEAKS  # noqa: E402
