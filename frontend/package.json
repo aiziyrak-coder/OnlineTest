@@ -20,7 +20,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@tensorflow-models/coco-ssd": "^2.2.2",
     "@tensorflow/tfjs": "^4.22.0",
-    "@vitejs/plugin-react": "^5.0.4",
+    "@vitejs/plugin-react": "^6.0.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.38.0",
