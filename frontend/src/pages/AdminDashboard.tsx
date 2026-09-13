@@ -9,13 +9,13 @@ import { ImtixonTab } from './ImtixonTab';
 import { AdminExamsTab } from './AdminExamsTab';
 import { ExamineesHub } from './admin/ExamineesHub';
 import { OverviewPage } from './admin/OverviewPage';
-import { LevelsPage } from './admin/LevelsPage';
-import { KafedralarPage } from './admin/KafedralarPage';
+import { StructurePage, type StructureTab } from './admin/StructurePage';
+import { ExamResultsPage } from './admin/ExamResultsPage';
+import { TestBankTab } from './TestBankTab';
 import { ReportsPage } from './admin/ReportsPage';
 import { VacancyApplicantsPage } from './admin/VacancyApplicantsPage';
 import { ExamineesPage } from './admin/ExamineesPage';
 import { ReceiptsPage } from './admin/ReceiptsPage';
-import { DirectionsPage } from './admin/DirectionsPage';
 import { GroupsPage } from './admin/GroupsPage';
 import { StudentsPage } from './admin/StudentsPage';
 import { FacultyPage } from './admin/FacultyPage';
@@ -37,8 +37,11 @@ type AdminPage =
   | 'banned'
   | 'staff'
   | 'audit'
+  | 'structure'
   | 'exam_create'
   | 'exam_list'
+  | 'exam_results'
+  | 'testbank'
   | 'reports'
   | 'vacancy'
   | 'ordinators'
@@ -144,6 +147,21 @@ const IC = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
     </svg>
   ),
+  structure: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 6v-3a1 1 0 011-1h2a1 1 0 011 1v3" />
+    </svg>
+  ),
+  exam_results: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  testbank: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
   audit: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -163,8 +181,11 @@ const PAGE_PATHS: Record<AdminPage, string> = {
   banned:       '/admin/banned',
   staff:        '/admin/staff',
   audit:        '/admin/audit',
+  structure:    '/admin/structure',
   exam_create:  '/admin/exam/create',
   exam_list:    '/admin/exam/list',
+  exam_results: '/admin/exam/results',
+  testbank:     '/admin/testbank',
   reports:      '/admin/reports',
   vacancy:      '/admin/vakansiya',
   ordinators:   '/admin/ordinatorlar',
@@ -254,15 +275,15 @@ export function AdminDashboard({
       items: [
         { id: 'exam_create', label: t.sidebarExamCreateSub },
         { id: 'exam_list', label: t.sidebarExamListSub },
+        { id: 'exam_results', label: t.sidebarExamResultsSub },
+        { id: 'testbank', label: t.sidebarTestBankSub },
       ],
     },
     {
       label: L2('Boshqaruv', 'Upravlenie', 'Management'),
       items: [
-        { id: 'kafedralar', label: t.kontingentKafedralar },
-        { id: 'directions', label: t.kontingentDirections },
+        { id: 'structure', label: t.sidebarStructureSub },
         { id: 'groups', label: t.sidebarGroupsSub },
-        { id: 'levels', label: t.sidebarLevelsSub },
         { id: 'staff', label: t.sidebarStaffSub },
         { id: 'audit', label: t.sidebarAuditSub },
       ],
@@ -405,21 +426,20 @@ export function AdminDashboard({
           {page === 'examinees' && (
             <ExamineesHub token={token} lang={lang} bannedCount={bannedCount} />
           )}
-          {page === 'levels' && (
-            <LevelsPage
+          {/* Eski /admin/levels, /admin/kafedralar, /admin/directions havolalari
+              saqlanadi — ular endi yagona tuzilma sahifasining mos tabini ochadi. */}
+          {(page === 'structure' || page === 'levels' || page === 'kafedralar' || page === 'directions') && (
+            <StructurePage
               token={token}
               lang={lang}
+              initialTab={
+                (page === 'levels' ? 'levels' : page === 'directions' ? 'directions' : 'kafedralar') as StructureTab
+              }
               onViewGroups={(level: Level) => {
                 setFilterLevelId(level.id);
                 navigateTo('groups');
               }}
             />
-          )}
-          {page === 'kafedralar' && (
-            <KafedralarPage token={token} lang={lang} />
-          )}
-          {page === 'directions' && (
-            <DirectionsPage token={token} lang={lang} />
           )}
           {page === 'groups' && (
             <GroupsPage
@@ -452,6 +472,12 @@ export function AdminDashboard({
           )}
           {page === 'exam_list' && (
             <AdminExamsTab token={token} lang={lang} />
+          )}
+          {page === 'exam_results' && (
+            <ExamResultsPage token={token} lang={lang} />
+          )}
+          {page === 'testbank' && (
+            <TestBankTab token={token} lang={lang} />
           )}
           {page === 'reports' && (
             <ReportsPage token={token} lang={lang} />

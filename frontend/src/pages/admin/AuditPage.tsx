@@ -43,6 +43,14 @@ const ACTION_COLORS: Record<string, string> = {
   add_questions:     'bg-purple-100 text-purple-700',
   retake_exam:       'bg-orange-100 text-orange-700',
   unblock_student:   'bg-cyan-100 text-cyan-700',
+  create_kafedra:     'bg-blue-100 text-blue-700',
+  update_kafedra:     'bg-amber-100 text-amber-700',
+  delete_kafedra:     'bg-red-100 text-red-700',
+  create_direction:   'bg-teal-100 text-teal-700',
+  rename_direction:   'bg-indigo-100 text-indigo-700',
+  delete_direction:   'bg-red-100 text-red-700',
+  grant_exam_retakes: 'bg-orange-100 text-orange-700',
+  fail_student_exam:  'bg-red-100 text-red-700',
 };
 
 const ALL_ACTIONS = Object.keys(ACTION_COLORS);
@@ -71,6 +79,14 @@ function getActionLabel(action: string, lang: Language): string {
     add_questions:   t.auditActionAddQuestions,
     retake_exam:     t.auditActionRetakeExam,
     unblock_student: t.auditActionUnblockStudent,
+    create_kafedra:     t.auditActionCreateKafedra,
+    update_kafedra:     t.auditActionUpdateKafedra,
+    delete_kafedra:     t.auditActionDeleteKafedra,
+    create_direction:   t.auditActionCreateDirection,
+    rename_direction:   t.auditActionRenameDirection,
+    delete_direction:   t.auditActionDeleteDirection,
+    grant_exam_retakes: t.auditActionGrantExamRetakes,
+    fail_student_exam:  t.auditActionFailStudentExam,
   };
   return map[action] ?? action;
 }

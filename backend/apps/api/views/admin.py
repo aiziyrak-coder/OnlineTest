@@ -735,6 +735,40 @@ def admin_ban_appeal_events(request, pk: int):
             }
         )
     return Response(out)
+
+
+#: Talaba yuklagan dalil faylini brauzerda ochish XAVFSIZ bo'lgan turlar.
+#: Ro'yxatda yo'q tur hech qachon o'z MIME'i bilan berilmaydi — aks holda
+#: yuklangan HTML admin domenida ishga tushib ketishi mumkin edi (XSS).
+_APPEAL_EVIDENCE_INLINE_MIME = {"image/jpeg", "image/png", "application/pdf"}
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_ban_appeal_evidence(request, pk: int):
+    """Shikoyatga biriktirilgan dalil fayli — admin qaror qabul qilishdan oldin ko'radi."""
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    row = BanAppeal.objects.filter(pk=pk).first()
+    if not row:
+        return Response({"error": "Appeal not found"}, status=404)
+    if not row.evidence_base64:
+        return Response({"error": "No evidence attached"}, status=404)
+    try:
+        raw = base64.b64decode(row.evidence_base64)
+    except Exception:
+        return Response({"error": "Corrupt evidence"}, status=422)
+
+    mime = (row.evidence_mime or "").strip().lower()
+    safe_inline = mime in _APPEAL_EVIDENCE_INLINE_MIME
+    resp = HttpResponse(raw, content_type=mime if safe_inline else "application/octet-stream")
+    fname = os.path.basename(row.evidence_name or "evidence").replace('"', "")[:255] or "evidence"
+    disposition = "inline" if safe_inline else "attachment"
+    resp["Content-Disposition"] = f'{disposition}; filename="{fname}"'
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def admin_review_queue(request):
@@ -1252,6 +1286,12 @@ def admin_group_detail(request, pk: int):
                     status=400,
                 )
         uf.append("intake_year")
+    if "is_active" in d:
+        # False = guruh bitirgan/arxivlangan. Model maydoni ancha oldin qo'shilgan,
+        # lekin PATCH uni qabul qilmagani uchun admin paneldan o'zgartirib
+        # bo'lmasdi (UI faqat ko'rsatardi).
+        g.is_active = bool(d["is_active"])
+        uf.append("is_active")
     if not uf:
         return Response({"error": "No fields to update"}, status=400)
     g.save(update_fields=list(dict.fromkeys(uf)))

@@ -55,6 +55,35 @@ export type BanAppeal = {
   exam_title?: string;
   reason: string;
   created_at: string;
+  status?: string;
+  review_note?: string;
+  evidence_name?: string;
+  evidence_mime?: string;
+  evidence_sha256?: string;
+};
+
+export type BanAppealEvent = {
+  id: number;
+  appeal_id: number;
+  actor_id: string | null;
+  action: string;
+  note: string;
+  created_at: string | null;
+};
+
+/** `/api/admin/review-queue` qatori — proktor triage ro'yxati. */
+export type ReviewQueueRow = {
+  exam_id: number;
+  exam_title: string;
+  student_id: string;
+  student_name: string;
+  status: string;
+  risk_score: number;
+  violations_count: number;
+  highest_priority: string;
+  pending_appeals: number;
+  sla_bucket: string;
+  recommended_review: boolean;
 };
 
 export type AdminStats = {

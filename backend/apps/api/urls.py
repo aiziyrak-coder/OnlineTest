@@ -72,6 +72,7 @@ urlpatterns = [
     path("admin/users/<str:user_id>", views.admin_user_detail),
     path("admin/ban-appeals", views.admin_ban_appeals),
     path("admin/ban-appeals/<int:pk>/events", views.admin_ban_appeal_events),
+    path("admin/ban-appeals/<int:pk>/evidence", views.admin_ban_appeal_evidence),
     path("admin/ban-appeals/<int:pk>/resolve", views.admin_ban_appeal_resolve),
     path("admin/student_exams/<int:pk>/retake", views.admin_student_exams_retake),
     path("admin/student_exams/<int:pk>/score", views.admin_student_exams_score),

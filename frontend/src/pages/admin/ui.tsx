@@ -201,6 +201,55 @@ export const AdminSectionLabel = ({
   </h2>
 );
 
+/* ── Segmented tabs (bir xil ko'rinish: Tuzilma va boshqa ko'p bo'limli sahifalar) ── */
+export interface AdminTabSpec<T extends string> {
+  id: T;
+  label: string;
+  count?: number;
+}
+
+export function AdminTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+  className,
+}: {
+  tabs: AdminTabSpec<T>[];
+  active: T;
+  onChange: (id: T) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      className={`inline-flex items-center h-9 bg-gray-100 rounded-lg p-0.5 ${className ?? ''}`}
+    >
+      {tabs.map((tab) => {
+        const isActive = active === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(tab.id)}
+            className={`h-full px-3.5 rounded-md text-[13px] font-semibold transition-colors whitespace-nowrap ${
+              isActive ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span className={`ml-1.5 text-[11px] tabular-nums ${isActive ? 'text-indigo-400' : 'text-gray-400'}`}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Icon Button (yopish / kichik ikonka tugmalar) ───────────────────────── */
 interface IconBtnProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   tone?: 'gray' | 'red';
@@ -486,7 +535,9 @@ export function usePagedList<T>(items: T[], pageSize: number = ADMIN_PAGE_SIZE) 
   }, [items.length]);
   const start = (safePage - 1) * pageSize;
   const pageItems = items.slice(start, start + pageSize);
-  return { page: safePage, setPage, totalPages, pageItems, total: items.length, pageSize };
+  // `startIndex` — qator raqamlarini butun ro'yxat bo'yicha davom ettirish uchun
+  // (aks holda har sahifada raqamlash 1 dan boshlanardi).
+  return { page: safePage, setPage, totalPages, pageItems, total: items.length, pageSize, startIndex: start };
 }
 
 export function AdminPagination({
