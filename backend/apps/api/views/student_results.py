@@ -140,7 +140,15 @@ def student_results(request):
     u = request.user
     if not _is_student_user(u):
         return Response({"error": "Forbidden"}, status=403)
-    if not u.group_id:
+    # O'qituvchi (faculty) va ordinator GURUHGA kirmaydi - ular imtihonga
+    # kafedra orqali biriktiriladi. Guruh sharti ular uchun har doim rost
+    # bo'lib chiqardi va natijalar ro'yxati BO'SH qaytardi: imtihonni
+    # topshirgan kishi o'z ballini ko'ra olmasdi. Quyidagi so'rov baribir
+    # student_id bo'yicha filtrlaydi, ya'ni guruh tekshiruvi ortiqcha.
+    _role = str(getattr(u, "role", "") or "").strip().lower()
+    if not u.group_id and _role not in (
+        "faculty", "ordinator", "magistr", "vacancy", "entrant"
+    ):
         return Response([])
     rows = (
         StudentExam.objects.filter(student_id=u.id, status__in=["Completed", "Banned", "Failed"])
@@ -216,7 +224,9 @@ def student_result_details(request, exam_id: int):
         return Response({"error": "Certificate not available for this attempt"}, status=404)
     _upgrade_ai_summary_if_needed(se, request)
     b = _result_details_bundle(se, request) or b
-    return Response(b)
+    from apps.api.result_privacy import hide_review
+
+    return Response(hide_review(b, se.exam))
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def student_certificate_pdf(request, exam_id: int):
@@ -235,6 +245,9 @@ def student_certificate_pdf(request, exam_id: int):
         return HttpResponse("Not found", status=404)
     _upgrade_ai_summary_if_needed(se, request)
     b = _result_details_bundle(se, request, lang=lang) or b
+    from apps.api.result_privacy import hide_review
+
+    b = hide_review(b, se.exam)
     rows = result_questions_to_pdf_rows(b["questions"])
     pdf = build_certificate_pdf(
         result_id=b["result_public_id"],
@@ -248,11 +261,68 @@ def student_certificate_pdf(request, exam_id: int):
         integrity_code=b["integrity_code"],
         overview=b["overview"],
         rows=rows,
-        pass_threshold=PASS_PERCENT_THRESHOLD,
+        pass_threshold=exam_pass_threshold(se.exam),
         lang=lang,
     )
     resp = HttpResponse(pdf, content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="{b["result_public_id"]}.pdf"'
+    return resp
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def admin_student_exam_certificate_pdf(request, pk: int):
+    """Admin HAR QANDAY topshiruvchining sertifikatini yuklab oladi.
+
+    Ilgari sertifikatni faqat topshiruvchining o'zi kabinetidan olardi.
+    HR va kafedra mudiriga nomzod natijasini hujjat sifatida biriktirish
+    kerak bo'ladi — endi "Nomzodlar" sahifasidan to'g'ridan-to'g'ri
+    yuklab olinadi.
+    """
+    if _request_user_role_norm(request.user) != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    se = (
+        StudentExam.objects.select_related("exam", "student")
+        .filter(pk=pk)
+        .first()
+    )
+    if not se:
+        return HttpResponse("Not found", status=404)
+    if se.status != "Completed":
+        return HttpResponse("Exam not completed", status=409)
+
+    lang = resolve_pdf_language(request, se.exam)
+    b = _result_details_bundle(se, request, lang=lang)
+    if not b or b == "corrupt":
+        return HttpResponse("Not found", status=404)
+    rows = result_questions_to_pdf_rows(b["questions"])
+    pdf = build_certificate_pdf(
+        result_id=b["result_public_id"],
+        student_name=b["student_name"],
+        student_group=b.get("student_group", ""),
+        exam_title=b["exam_title"],
+        completed_at=b["completed_at"],
+        score=b["score"],
+        total=b["total"],
+        verify_url=b["verify_url"],
+        integrity_code=b["integrity_code"],
+        overview=b["overview"],
+        rows=rows,
+        pass_threshold=exam_pass_threshold(se.exam),
+        lang=lang,
+    )
+    audit(
+        request,
+        "download_certificate",
+        "student_exam",
+        pk,
+        str(getattr(se.student, "name", "") or ""),
+        "exam=" + str(getattr(se.exam, "title", "")),
+    )
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = (
+        'attachment; filename="%s.pdf"' % b["result_public_id"]
+    )
     return resp
 
 

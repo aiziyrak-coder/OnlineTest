@@ -193,6 +193,12 @@ def public_verify_result(request, result_id: str):
                 "references": (ai_row or {}).get("references") or question_references(q),
             }
         )
+    from apps.api.result_privacy import review_hidden as _review_hidden
+
+    _hidden = _review_hidden(se.exam)
+    if _hidden:
+        per_q = []
+        ai = {**ai, "overview": ""}
     pdf_rel = f"/api/public/verify-result/{result_id}/certificate.pdf?k={k}"
     return Response(
         {
@@ -207,6 +213,7 @@ def public_verify_result(request, result_id: str):
             "student_name": se.student.name,
             "student_group": se.student.group.name if se.student.group_id else "",
             "questions": per_q,
+            "questions_hidden": _hidden,
             "pdf_url": pdf_rel,
         }
     )
@@ -303,6 +310,11 @@ def public_verify_certificate_pdf(request, result_id: str):
                 or question_references(q),
             }
         )
+    from apps.api.result_privacy import review_hidden as _review_hidden
+
+    if _review_hidden(se.exam):
+        per_q = []
+        ai = {**ai, "overview": ""}
     rows = result_questions_to_pdf_rows(per_q)
     pdf = build_certificate_pdf(
         result_id=result_id,
@@ -351,3 +363,15 @@ def public_verify_ban_report(request):
             "violations_count": violations_count,
         }
     )
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def public_desktop_info(request):
+    """FerMI Exam Platform ilovasi: talab qilinadimi, joriy versiya va yuklab olish manzili."""
+    from apps.api.desktop_guard import desktop_download_info
+
+    resp = Response(desktop_download_info())
+    resp["Cache-Control"] = "no-store"
+    return resp

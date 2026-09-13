@@ -300,6 +300,19 @@ def finalize_student_exam_session(
         questions = safe_json_loads(exam.questions_json, [])
     raw_questions = list(questions)
     raw_answers = answers if isinstance(answers, dict) else {}
+    # Savolga vaqt rejimi: qulflangan javoblar question_lock_json da — avto-yakunlashda
+    # (ilova yopilgan, vaqt tugagan) ular yo'qolmasin.
+    try:
+        from apps.api.question_lock import load_lock as _ql_load
+
+        _lk = _ql_load(se)
+    except Exception:  # noqa: BLE001
+        _lk = None
+    if _lk:
+        raw_answers = {
+            **{str(k): v for k, v in raw_answers.items()},
+            **{str(k): v for k, v in (_lk.get("locked") or {}).items() if v},
+        }
     questions = prepare_questions_for_grading(questions, exam, raw_answers)
     # Bardoshli rejim: ilgari bitta nomuvofiq javob `norm = {}` ga olib kelardi —
     # ya'ni talabaning BARCHA javoblari yo'qolib, ball 0 bo'lardi. Endi faqat

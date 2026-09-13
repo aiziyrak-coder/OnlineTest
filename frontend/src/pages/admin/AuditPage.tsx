@@ -4,7 +4,8 @@ import { translations, Language } from '../../i18n';
 import { apiUrl } from '../../lib/apiUrl';
 import { authHeaders } from '../../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../../lib/http';
-import { AdminCard, AdminEmpty, AdminInput, AdminSelect, AdminBtn } from './ui';
+import { AdminCard, AdminEmpty, AdminInput, AdminSelect, AdminBtn, AdminAlert
+} from './ui';
 
 interface Props { token: string; lang: Language; }
 
@@ -76,9 +77,22 @@ function getActionLabel(action: string, lang: Language): string {
 
 type Period = '' | 'today' | 'week' | 'month' | 'year';
 
+/** Audit paroli sessiya davomida eslab qolinadi (yopilsa — qaytadan). */
+const AUDIT_PW_KEY = 'fjsti_audit_pw';
+
 export function AuditPage({ token, lang }: Props) {
   const t = translations[lang];
-  const h = authHeaders(token, lang);
+  const [pw, setPw] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem(AUDIT_PW_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [pwInput, setPwInput] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [unlocked, setUnlocked] = useState(false);
+  const h = { ...authHeaders(token, lang), 'X-Audit-Password': pw };
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -101,20 +115,90 @@ export function AuditPage({ token, lang }: Props) {
   const reload = useCallback(async (pg = 0) => {
     setLoading(true);
     const res = await fetch(apiUrl(`/api/admin/audit-log?${buildParams(pg)}`), { headers: h });
+    // DIQQAT: qulf tekshiruvi `checkAdminAuthResponse` dan OLDIN. Aks holda
+    // u qulfni sessiya xatosi deb hisoblab, login sahifasiga uloqtiradi.
+    if (res.status === 423) {
+      // Parol noto'g'ri yoki hali kiritilmagan — qulf oynasini ko'rsatamiz.
+      setUnlocked(false);
+      setPwError(pw ? 'Parol noto‘g‘ri' : '');
+      try { sessionStorage.removeItem(AUDIT_PW_KEY); } catch { /* ignore */ }
+      setLoading(false);
+      return;
+    }
     if (!checkAdminAuthResponse(res)) { setLoading(false); return; }
     const data = await readJsonSafe<{ total: number; rows: AuditRow[] }>(res);
     setRows(data?.rows ?? []);
     setTotal(data?.total ?? 0);
+    setUnlocked(true);
     setLoading(false);
-  }, [token, actorFilter, actionFilter, period]);
+  }, [token, actorFilter, actionFilter, period, pw]);
 
   useEffect(() => { setPage(0); }, [actorFilter, actionFilter, period]);
   useEffect(() => { reload(page); }, [reload, page]);
+
+  const submitPw = (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = pwInput.trim();
+    if (!v) return;
+    try { sessionStorage.setItem(AUDIT_PW_KEY, v); } catch { /* ignore */ }
+    setPwError('');
+    setPw(v);
+    setPwInput('');
+  };
+
+  if (!unlocked) {
+    return (
+      <div className="max-w-sm mx-auto mt-10">
+        <form
+          onSubmit={submitPw}
+          autoComplete="off"
+          className="bg-white rounded-xl border border-gray-200 p-6 space-y-4"
+        >
+          <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <p className="text-[15px] font-semibold text-gray-900">
+              {lang === 'ru' ? 'Zhurnal audita zakryt' : lang === 'en'
+                ? 'Audit log is locked' : 'Audit jurnali qulflangan'}
+            </p>
+            <p className="text-[13px] text-gray-500 mt-1">
+              {lang === 'ru' ? 'Vvedite parol dlya prosmotra' : lang === 'en'
+                ? 'Enter the password to view it' : 'Ko‘rish uchun parolni kiriting'}
+            </p>
+          </div>
+          <input type="text" name="fakeuser" autoComplete="username"
+            tabIndex={-1} aria-hidden className="hidden" />
+          <AdminInput
+            type="password"
+            name="audit_pw"
+            autoComplete="new-password"
+            value={pwInput}
+            onChange={(e) => setPwInput(e.target.value)}
+            placeholder={lang === 'ru' ? 'Parol' : lang === 'en' ? 'Password' : 'Parol'}
+            autoFocus
+          />
+          {pwError ? <AdminAlert type="error">{pwError}</AdminAlert> : null}
+          <AdminBtn type="submit" className="w-full" disabled={!pwInput.trim()}>
+            {lang === 'ru' ? 'Otkryt' : lang === 'en' ? 'Unlock' : 'Ochish'}
+          </AdminBtn>
+        </form>
+      </div>
+    );
+  }
 
   const exportCsv = async () => {
     setExporting(true);
     const url = apiUrl(`/api/admin/audit-log?${buildParams(0, true)}`);
     const res = await fetch(url, { headers: h });
+    if (res.status === 423) {
+      setUnlocked(false);
+      setExporting(false);
+      return;
+    }
     if (!checkAdminAuthResponse(res)) { setExporting(false); return; }
     const blob = await res.blob();
     const a = document.createElement('a');

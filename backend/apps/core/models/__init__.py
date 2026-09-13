@@ -18,9 +18,12 @@ __all__ = [
     "StudentExam",
     "ViolationLog",
     "UnbanEvidence",
+    "PaymentReceipt",
     "BanAppeal",
     "BanAppealEvent",
     "TestBankCategory",
     "TestBankQuestion",
     "ResultIdCounter",
 ]
+from apps.core.models.payment import PaymentReceipt  # noqa: F401
+from apps.core.models.screen_snapshot import ScreenSnapshot  # noqa: F401,E402

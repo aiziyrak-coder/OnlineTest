@@ -6,6 +6,8 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
 import { StudentDashboard } from './pages/StudentDashboard';
 import { PublicVerifyResult } from './pages/PublicVerifyResult';
+import { ProfilePhotoPage } from './pages/ProfilePhotoPage';
+import { VacancyPage } from './pages/VacancyPage';
 import { ExamResultSummary, type ExamResultPayload } from './components/ExamResultSummary';
 import { PreExamCheck } from './pages/PreExamCheck';
 import { ExamRoom } from './pages/ExamRoom';
@@ -17,6 +19,9 @@ import { apiUrl } from './lib/apiUrl';
 import { authHeaders } from './lib/uiLangHeader';
 import { pollExamResultAiUpgrade } from './lib/upgradeExamResultAi';
 import { readJsonSafe } from './lib/http';
+import { DesktopRequired } from './pages/DesktopRequired';
+import { ExitGuard } from './components/ExitGuard';
+import { fetchDesktopInfo, getDesktop, isDesktopApp, versionLess, type DesktopInfo } from './lib/desktop';
 
 const SUPPORTED_LANGS: Language[] = ['uz', 'ru', 'en'];
 const EXAM_FLOW_KEY = 'fjsti_exam_flow';
@@ -26,6 +31,18 @@ type ExamFlowPersist = {
   activeExam: any;
   studentExamId: number;
 };
+
+/** Imtihon topshiradigan rollar — `isExaminee` bilan bir xil ro'yxat.
+ *  Imtihon oqimini saqlash/tiklash SHULARNING hammasi uchun ishlashi
+ *  kerak: ilgari faqat 'student' tekshirilardi va nomzod sahifani
+ *  yangilaganda oq ekran qolardi. */
+const EXAMINEE_ROLES = [
+  'student', 'faculty', 'ordinator', 'magistr', 'vacancy', 'entrant',
+];
+
+function isExamineeRole(role: unknown): boolean {
+  return EXAMINEE_ROLES.includes(String(role || '').trim().toLowerCase());
+}
 
 function readExamFlow(): ExamFlowPersist | null {
   try {
@@ -133,6 +150,22 @@ function AppContent() {
   });
   const navigate = useNavigate();
   const location = useLocation();
+  // FerMI Exam Platform ilovasi talabi (server sozlamasi DESKTOP_APP_REQUIRED): brauzerdan
+  // kirgan test topshiruvchiga imtihon o'rniga "ilovani yuklab oling" sahifasi chiqadi.
+  const [desktopInfo, setDesktopInfo] = useState<DesktopInfo | null>(null);
+  // Brauzerda sozlama kelguncha kirish sahifasi ko'rsatilmaydi (miltillamasin).
+  const [desktopInfoLoaded, setDesktopInfoLoaded] = useState(() => isDesktopApp());
+  useEffect(() => {
+    let alive = true;
+    void fetchDesktopInfo(apiUrl).then((info) => {
+      if (!alive) return;
+      setDesktopInfo(info);
+      setDesktopInfoLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [user?.id]);
   const { examId: routeExamIdRaw } = useParams<{ examId?: string }>();
   const routeExamId = routeExamIdRaw ? Number(routeExamIdRaw) : null;
   const routePhase = location.pathname.endsWith('/room')
@@ -210,7 +243,7 @@ function AppContent() {
   }, [user?.role, location.pathname, navigate]);
 
   useEffect(() => {
-    if (examFlowRestoredRef.current || user?.role !== 'student' || !token) return;
+    if (examFlowRestoredRef.current || !isExamineeRole(user?.role) || !token) return;
     examFlowRestoredRef.current = true;
     const saved = readExamFlow();
     if (!saved) return;
@@ -246,7 +279,7 @@ function AppContent() {
   }, [user?.role, token, navigate]);
 
   useEffect(() => {
-    if (user?.role !== 'student') return;
+    if (!isExamineeRole(user?.role)) return;
     if (
       (examStatus === 'checking' || examStatus === 'taking') &&
       activeExam &&
@@ -259,7 +292,7 @@ function AppContent() {
   }, [examStatus, activeExam, studentExamId, user?.role]);
 
   useEffect(() => {
-    if (user?.role !== 'student' || !token || !routeExamId || Number.isNaN(routeExamId)) return;
+    if (!isExamineeRole(user?.role) || !token || !routeExamId || Number.isNaN(routeExamId)) return;
     if (activeExam?.id === routeExamId) return;
     fetch(apiUrl('/api/student/exams'), { headers: { ...authHeaders(token, lang), 'X-Student-Lang': lang } })
       .then(async (r) => {
@@ -342,7 +375,7 @@ function AppContent() {
           'X-Student-Lang': lang,
           ...examAuthHeaders(token),
         },
-        body: JSON.stringify({ pin, student_lang: lang }),
+        body: JSON.stringify({ pin, student_lang: lang, client_features: ['question_lock'] }),
       });
       const data = await readJsonSafe<{
         error?: string;
@@ -359,7 +392,7 @@ function AppContent() {
         return;
       }
       if (data.deviceToken) {
-        setDeviceSessionToken(data.deviceToken);
+        setDeviceSessionToken(data.deviceToken, token);
       }
       beginExam(
         {
@@ -414,6 +447,10 @@ function AppContent() {
     navigate('/');
   };
 
+  // Saytda (ilovadan tashqarida) test topshiruvchi uchun kirish yo'q — faqat ilovani
+  // yuklab olish sahifasi. Administrator /admin/login orqali kiradi.
+  const webDownloadOnly = !isDesktopApp() && Boolean(desktopInfo?.required);
+
   if (!token || !user) {
     return (
       <AnimatePresence mode="wait">
@@ -425,18 +462,54 @@ function AppContent() {
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }} 
           className="min-h-screen w-full"
         >
-          <Routes location={location}>
-            <Route path="/login" element={<Login onLogin={handleLogin} lang={lang} setLang={setLang} />} />
-            <Route path="*" element={<Navigate to="/login" />} />
-          </Routes>
+          {!desktopInfoLoaded ? (
+            <div className="min-h-screen flex items-center justify-center bg-[#f4f6fb]">
+              <span className="h-8 w-8 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+            </div>
+          ) : webDownloadOnly && desktopInfo ? (
+            <Routes location={location}>
+              <Route path="/admin/login" element={<Login onLogin={handleLogin} lang={lang} setLang={setLang} />} />
+              <Route
+                path="*"
+                element={<DesktopRequired info={desktopInfo} lang={lang} setLang={setLang} adminLoginHref="/admin/login" />}
+              />
+            </Routes>
+          ) : (
+            <Routes location={location}>
+              <Route path="/login" element={<Login onLogin={handleLogin} lang={lang} setLang={setLang} />} />
+              <Route path="/admin/login" element={<Login onLogin={handleLogin} lang={lang} setLang={setLang} />} />
+              <Route path="*" element={<Navigate to="/login" />} />
+            </Routes>
+          )}
         </motion.div>
       </AnimatePresence>
     );
   }
 
+  const desktopOutdated = Boolean(
+    desktopInfo?.min_version && isDesktopApp() && versionLess(getDesktop()?.version || '0', desktopInfo.min_version),
+  );
+  if (desktopInfo && desktopInfo.required && isExamineeRole(user?.role) && (!isDesktopApp() || desktopOutdated)) {
+    return (
+      <DesktopRequired
+        info={desktopInfo}
+        lang={lang}
+        setLang={setLang}
+        user={user}
+        onLogout={handleLogout}
+        updateOnly={isDesktopApp()}
+      />
+    );
+  }
+
   const t = translations[lang];
-  const examTaking = user.role === 'student' && examStatus === 'taking';
-  const preExamFullBleed = user.role === 'student' && examStatus === 'checking';
+  // Imtihon topshiruvchi rollar: talabadan tashqari o'qituvchi (faculty) va
+  // ordinator ham kabinetga kiradi va imtihon topshiradi. Ilgari bu yerda
+  // faqat 'student' tekshirilardi va o'qituvchi kirsa sahifa bo'm-bo'sh
+  // ochilardi — hech qanday xato ham ko'rinmasdi.
+  const isExaminee = isExamineeRole(user?.role);
+  const examTaking = isExaminee && examStatus === 'taking';
+  const preExamFullBleed = isExaminee && examStatus === 'checking';
   // Imtihon topshirish paytida sahifa to'liq ekran (kiosk): header yashiriladi,
   // hech qanday chetki bo'shliq/scroll qolmaydi.
   const fullBleed = preExamFullBleed || examTaking;
@@ -448,7 +521,7 @@ function AppContent() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 h-[62px] sm:h-[66px]">
         <div
           className={`flex items-center justify-between h-full ${
-            user.role === 'admin' ? 'px-4 sm:px-6' : 'px-4 sm:px-6 max-w-7xl mx-auto'
+            user.role === 'admin' ? 'px-4 sm:px-6' : 'px-4 sm:px-6 lg:px-8'
           }`}
         >
           {/* ── Left ── */}
@@ -456,7 +529,7 @@ function AppContent() {
             <InstituteLogo size="sm" className="shrink-0" />
             <div className="min-w-0 hidden xs:block sm:block">
               <h1 className="text-[16px] sm:text-[18px] font-semibold tracking-tight text-gray-900 truncate leading-tight">
-                {t.appBrandTitle}
+                {isDesktopApp() ? 'FerMI Exam Platform' : t.appBrandTitle}
               </h1>
               <p className="text-[11px] font-medium leading-none mt-0.5 text-gray-400 truncate hidden sm:block">
                 {user.role === 'admin' ? t.adminDash : user.role === 'staff' ? t.roleZoneStaff : t.roleZoneStudent}
@@ -523,16 +596,16 @@ function AppContent() {
               : 'max-w-none px-0 pt-0'
             : user.role === 'admin'
               ? 'max-w-none px-0 pt-[62px] sm:pt-[66px]'
-              : 'max-w-7xl mx-auto px-3 sm:px-6 pt-24 sm:pt-28 pb-6 sm:pb-8'
+              : 'max-w-none px-4 sm:px-6 lg:px-8 pt-[78px] sm:pt-[84px] pb-6 sm:pb-8'
         }`}
       >
         <AnimatePresence mode="wait">
           <motion.div
             key={user.role + examStatus}
-            initial={user.role === 'admin' ? { opacity: 0 } : { opacity: 0, y: 20, filter: 'blur(10px)' }}
-            animate={user.role === 'admin' ? { opacity: 1 } : { opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={user.role === 'admin' ? { opacity: 0 } : { opacity: 0, y: -20, filter: 'blur(10px)' }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            initial={user.role === 'admin' ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            animate={user.role === 'admin' ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            exit={user.role === 'admin' ? { opacity: 0 } : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
             {user.role === 'admin' && location.pathname.startsWith('/admin') && (
               <div className="min-h-[calc(100vh-62px)] sm:min-h-[calc(100vh-66px)] bg-white [--admin-header-h:62px] sm:[--admin-header-h:66px]">
@@ -542,12 +615,12 @@ function AppContent() {
             {user.role === 'staff' && (location.pathname === '/' || location.pathname === '/staff') && (
               <StaffDashboard token={token} lang={lang} />
             )}
-            {user.role === 'student' && location.pathname === '/' && examStatus === 'pending' && (
+            {isExaminee && location.pathname === '/' && examStatus === 'pending' && (
               <div>
                 <StudentDashboard token={token} user={user} onStartExam={startExamCheck} onResumeExam={resumeExam} lang={lang} />
               </div>
             )}
-            {user.role === 'student' && examStatus === 'checking' && activeExam && (
+            {isExaminee && examStatus === 'checking' && activeExam && (
               <PreExamCheck
                 exam={activeExam}
                 token={token}
@@ -558,7 +631,7 @@ function AppContent() {
                 onCancel={exitExamFlow}
               />
             )}
-            {user.role === 'student' && examStatus === 'taking' && activeExam && (
+            {isExaminee && examStatus === 'taking' && activeExam && (
               <ExamRoom 
                 exam={activeExam} 
                 studentExamId={studentExamId ?? 0} 
@@ -569,7 +642,7 @@ function AppContent() {
                 onRetakeRestart={retakeRestartExam}
               />
             )}
-            {user.role === 'student' && location.pathname === '/' && examStatus === 'finished' && lastSubmitResult && (
+            {isExaminee && location.pathname === '/' && examStatus === 'finished' && lastSubmitResult && (
               <ExamResultSummary
                 data={lastSubmitResult}
                 token={token}
@@ -581,7 +654,7 @@ function AppContent() {
                 }}
               />
             )}
-            {user.role === 'student' && location.pathname === '/' && examStatus === 'finished' && !lastSubmitResult && (
+            {isExaminee && location.pathname === '/' && examStatus === 'finished' && !lastSubmitResult && (
               <div className="text-center py-32 glass-panel max-w-2xl mx-auto mt-12">
                 <div className="w-24 h-24 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -596,12 +669,12 @@ function AppContent() {
       </main>
 
       {/* Kiosk (imtihonga kirish/topshirish) paytida footer yashiriladi — ekranga to'liq sig'sin, scroll bo'lmasin. */}
-      {!fullBleed && (
+      {!fullBleed && !isDesktopApp() && (
       <footer className="w-full mt-auto py-2 px-4 border-t border-gray-200/40 bg-white/20">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 max-w-3xl mx-auto">
           <InstituteLogo size="xs" className="opacity-90" />
           <p className="text-[10px] leading-tight text-gray-400 font-normal tracking-wide text-center">
-            © {new Date().getFullYear()} Fjsti Online Exam · {t.instituteFullName}
+            © {new Date().getFullYear()} {isDesktopApp() ? 'FerMI Exam Platform' : 'Fjsti Online Exam'} · {t.instituteFullName}
           </p>
         </div>
       </footer>
@@ -613,8 +686,19 @@ function AppContent() {
 export default function App() {
   return (
     <Router>
+      {/* FerMI Exam ilovasi: X bilan chiqishda kirish paroli so'raladi. */}
+      <ExitGuard />
       <Routes>
         <Route path="/verify/result/:resultId" element={<PublicVerifyResult />} />
+        {/* Profil rasmini o'zi yangilash. Ilova qobig'idan TASHQARIDA:
+            sahifa token/user ni brauzer xotirasidan o'zi o'qiydi va
+            kabinet holatiga bog'liq bo'lmaydi. */}
+        <Route path="/profil-rasm" element={<ProfilePhotoPage />} />
+        {/* Vakansiya (ishga qabul) — nomzod uchun alohida kirish nuqtasi,
+            talaba/o'qituvchi kabinetidan butunlay ajratilgan. */}
+        <Route path="/vakansiya" element={<VacancyPage view="landing" />} />
+        <Route path="/vakansiya/register" element={<VacancyPage view="register" />} />
+        <Route path="/vakansiya/login" element={<VacancyPage view="login" />} />
         <Route path="/exam/:examId/check" element={<AppContent />} />
         <Route path="/exam/:examId/room" element={<AppContent />} />
         <Route path="*" element={<AppContent />} />

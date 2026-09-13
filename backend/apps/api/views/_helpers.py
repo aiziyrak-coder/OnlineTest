@@ -30,7 +30,7 @@ import jwt
 import bcrypt
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, F
+from django.db.models import Count, F, Max
 from django.http import HttpResponse
 from django.utils import timezone as dj_tz
 from django.core.cache import cache
@@ -50,7 +50,7 @@ from apps.api.throttles import (
     PublicVerifyThrottle,
     ViolationThrottle,
 )
-from apps.api.certificate_pdf import build_ban_report_pdf, build_certificate_pdf, PASS_PERCENT_THRESHOLD, result_questions_to_pdf_rows
+from apps.api.certificate_pdf import build_ban_report_pdf, build_certificate_pdf, PASS_PERCENT_THRESHOLD, exam_pass_threshold, result_questions_to_pdf_rows
 from apps.api.pdf_i18n import resolve_pdf_language
 from apps.api.identity_log import log_identity
 from apps.api.proctor_exam_retake import (
@@ -108,6 +108,7 @@ from apps.api.vac_settings import (
     exam_min_submit_seconds,
     identity_verify_max_age_seconds,
     identity_verify_required,
+    is_non_desktop_client,
     vac_challenge_guard_enabled,
     vac_device_lock_enabled,
     vac_hmac_guard_enabled,
@@ -172,11 +173,39 @@ def _hash_pw(plain: str) -> str:
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=10)).decode("utf-8")
 
 
+#: Guruhga emas, KAFEDRAGA biriktiriladigan auditoriyalar.
+KAFEDRA_AUDIENCES = ("faculty", "ordinator", "magistr", "vacancy", "entrant")
+
 MIN_APP_PASSWORD_LEN = 10
 
 
 def _student_assigned_to_exam(user, exam_id: int) -> bool:
-    """Talaba guruhi ushbu imtihonga biriktirilgan bo‘lsa True."""
+    """Talaba guruhi ushbu imtihonga biriktirilgan bo‘lsa True.
+
+    O'qituvchi (faculty) va ordinator GURUHGA kirmaydi — ular imtihonga
+    KAFEDRA orqali biriktiriladi. Guruh tekshiruvi ular uchun doim False
+    berardi va pre-exam identity bosqichida 403 EXAM_NOT_ASSIGNED chiqib,
+    imtihonga umuman kira olmasdilar. Mantiq student_exams_list va
+    student_exams_start dagi kafedra tekshiruvi bilan bir xil.
+    """
+    role = _request_user_role_norm(user)
+    if role in ("faculty", "ordinator", "magistr", "vacancy", "entrant"):
+        ex = Exam.objects.filter(pk=exam_id).values("audience", "kafedra_id").first()
+        if not ex:
+            return False
+        if str(ex.get("audience") or "student").strip().lower() != role:
+            return False
+        # Ordinator va magistr ham KAFEDRA orqali biriktiriladi - DAK va
+        # bitiruv imtihonlari mutaxassislik kafedrasiga tegishli.
+        if not getattr(user, "kafedra_id", None) and role == "ordinator":
+            return True
+        user_kaf = getattr(user, "kafedra_id", None)
+        if user_kaf is None:
+            user_kaf = AppUser.objects.filter(pk=user.id).values_list("kafedra_id", flat=True).first()
+        exam_kaf = ex.get("kafedra_id")
+        if not user_kaf or not exam_kaf:
+            return False
+        return int(exam_kaf) == int(user_kaf)
     gid = getattr(user, "group_id", None)
     if gid is None:
         return False
@@ -192,6 +221,14 @@ def _request_user_role_norm(user) -> str:
 
 
 def _is_student_user(user) -> bool:
+    """Examinee rollari (talaba / o'qituvchi / ordinator) — imtihon API uchun."""
+    # vacancy — ishga kiruvchi nomzod: u ham imtihon topshiradi.
+    return _request_user_role_norm(user) in (
+        "student", "faculty", "ordinator", "magistr", "vacancy", "entrant"
+    )
+
+
+def _is_bachelor_student(user) -> bool:
     return _request_user_role_norm(user) == "student"
 
 
@@ -319,20 +356,33 @@ def _enforce_bound_device_or_403(se: StudentExam, request) -> Response | None:
     expected_token = (se.device_session_token or "").strip()
     if expected_token:
         got = _device_session_token_from_request(request)
+        if got and hmac.compare_digest(expected_token, got):
+            return None
+        # Qurilma tokeni brauzerda domen bo'yicha bitta kalitda saqlanadi.
+        # Kompyuter sinfida bir mashinadan ketma-ket kirgan ikkinchi o'qituvchi
+        # birinchisining tokenini ustidan yozadi va birinchi sessiya butunlay
+        # qulflanib qoladi (save-progress, clock, submit — hammasi 403).
+        # Qurilma barmoq izi o'zgarmagan bo'lsa, bu IKKINCHI QURILMA emas:
+        # qulfning maqsadi buzilmaydi, sessiyani shu mashinaga qayta bog'laymiz.
+        bound_fp = (se.device_fingerprint or "").strip()
+        req_fp = _device_fp_from_request(request)
+        if req_fp and bound_fp and hmac.compare_digest(req_fp, bound_fp):
+            se.device_session_token = got or expected_token
+            se.device_bound_at = dj_tz.now()
+            se.save(update_fields=["device_session_token", "device_bound_at"])
+            return None
         if not got:
             return Response(
                 {"error": "Missing device session token", "code": "DEVICE_TOKEN_REQUIRED"},
                 status=403,
             )
-        if not hmac.compare_digest(expected_token, got):
-            return Response(
-                {
-                    "error": "This exam session is locked to another device",
-                    "code": "DEVICE_MISMATCH",
-                },
-                status=403,
-            )
-        return None
+        return Response(
+            {
+                "error": "This exam session is locked to another device",
+                "code": "DEVICE_MISMATCH",
+            },
+            status=403,
+        )
     expected = (se.device_fingerprint or "").strip()
     if not expected:
         return None
@@ -354,8 +404,32 @@ def _exam_guarded_response(request, response: Response) -> Response:
     return _attach_vac_response_headers(response, request)
 
 
+def _reject_non_desktop_or_none(request) -> Response | None:
+    """VAC_PC_ONLY: telefon/planshet → 403 VAC_PC_ONLY."""
+    if not is_non_desktop_client(request):
+        return None
+    ui = resolve_ui_language(request)
+    return Response(
+        {
+            "error": student_api_msg("desktop_only", ui),
+            "code": "VAC_PC_ONLY",
+        },
+        status=403,
+    )
+
+
 def _identity_verification_fresh(se: StudentExam | None, now) -> bool:
+    """Imtihonni boshlash uchun shaxs tasdig'i YETARLIMI.
+
+    DIQQAT: `identity_verified_at` YANGI bo'lishining o'zi kamlik qiladi.
+    Oxirgi tekshiruv MOS KELMAGAN bo'lsa (`identity_last_matched is False`)
+    imtihon boshlanmasligi kerak — auditda aynan shu holatdagi 61 ta sessiya
+    bemalol yakunlangani aniqlandi. Endi oxirgi natija salbiy bo'lsa,
+    talaba qaytadan kameraga qarab tasdiqdan o'tishi shart.
+    """
     if not se or not se.identity_verified_at:
+        return False
+    if getattr(se, "identity_last_matched", None) is False:
         return False
     age = (now - se.identity_verified_at).total_seconds()
     return age <= identity_verify_max_age_seconds()
@@ -426,7 +500,12 @@ def _verify_exam_hmac_or_403(se: StudentExam, request) -> Response | None:
         cache_key = f"vac:hmac:nonce:{se.id}:{nonce}"
         if not cache.add(cache_key, 1, timeout=max_drift * 2):
             return Response({"error": "Replay detected", "code": "VAC_HMAC_REPLAY"}, status=403)
-        msg = f"{se.id}:{se.student_id}:{se.exam_id}:{ts_i}:{nonce}:{request.method}:{request.path}"
+        try:
+            body_bytes = request.body if request.body is not None else b""
+        except Exception:
+            body_bytes = b""
+        body_hash = hashlib.sha256(body_bytes).hexdigest()
+        msg = f"{se.id}:{se.student_id}:{se.exam_id}:{ts_i}:{nonce}:{request.method}:{request.path}:{body_hash}"
         exp = hmac.new(se.session_signing_key.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(exp, sig):
             return Response({"error": "Invalid signature", "code": "VAC_HMAC_INVALID"}, status=403)
@@ -569,7 +648,7 @@ def _question_risk_timeline(se: StudentExam, exam: Exam) -> list[dict]:
 def _review_queue_rows(limit: int = 100, teacher_id: str | None = None) -> list[dict]:
     rows = list(
         ViolationLog.objects.values("exam_id", "student_id", "violation_type")
-        .annotate(cnt=Count("id"))
+        .annotate(cnt=Count("id"), last_ts=Max("timestamp"))
     )
     if teacher_id:
         allowed = set(Exam.objects.filter(teacher_id=teacher_id).values_list("id", flat=True))
@@ -590,8 +669,12 @@ def _review_queue_rows(limit: int = 100, teacher_id: str | None = None) -> list[
                 "violations_count": 0,
                 "risk_score": 0,
                 "highest_priority": "medium",
+                "last_ts": None,
             }
         row = by_key[key]
+        last_ts = r.get("last_ts")
+        if last_ts and (row["last_ts"] is None or last_ts > row["last_ts"]):
+            row["last_ts"] = last_ts
         row["violations_count"] += cnt
         row["risk_score"] += _priority_weight(p) * cnt
         if rank.get(p, 1) > rank.get(row["highest_priority"], 1):
@@ -605,6 +688,12 @@ def _review_queue_rows(limit: int = 100, teacher_id: str | None = None) -> list[
             .first()
         )
         if not se:
+            continue
+        # Admin qatorni yopgan (blokdan chiqargan yoki qayta imkon bergan)
+        # bo'lsa va undan keyin yangi buzilish bo'lmagan bo'lsa — navbatda
+        # ko'rsatmaymiz. Aks holda bajarilgan ish qaytib turaverardi.
+        cleared_at = getattr(se, "review_cleared_at", None)
+        if cleared_at and row.get("last_ts") and row["last_ts"] <= cleared_at:
             continue
         pending_appeals = BanAppeal.objects.filter(
             student_id=student_id, exam_id=exam_id, status="Pending"
@@ -621,6 +710,10 @@ def _review_queue_rows(limit: int = 100, teacher_id: str | None = None) -> list[
         out.append(
             {
                 "exam_id": exam_id,
+                # Admin panelda "Blokdan chiqarish" va "Qayta imkon berish"
+                # tugmalari shu id orqali ishlaydi (ilgari qator faqat
+                # ma'lumot edi, hech qanday amal bajarib bo'lmasdi).
+                "student_exam_id": se.id,
                 "exam_title": se.exam.title,
                 "student_id": student_id,
                 "student_name": se.student.name,
@@ -725,8 +818,34 @@ def _exam_row_dict(e: Exam, teacher_name: str | None = None):
         "identity_retakes_allowed": exam_identity_retakes_allowed(e),
         "proctor_profile": str(getattr(e, "proctor_profile", "") or "standard"),
         "ambient_audio_enabled": bool(getattr(e, "ambient_audio_enabled", True)),
+        "audience": str(getattr(e, "audience", None) or "student"),
         "languages_ready": _exam_languages_ready(e),
+        # Hisobot oynasi uchun: qaysi kafedra va qaysi fan. Nomni frontend
+        # /api/admin/kafedralar dan oladi; bu yerda JOIN qilsak har imtihon
+        # uchun bitta qo'shimcha so'rov ketardi (56 ta imtihon = 56 so'rov).
+        "kafedra_id": getattr(e, "kafedra_id", None),
+        "faculty_subject": str(getattr(e, "faculty_subject", None) or ""),
+        "course": int(getattr(e, "course", 0) or 0),
+        "ai_question_count": int(getattr(e, "ai_question_count", 0) or 0),
     }
+
+def _int_arg(raw, lo: int, hi: int) -> int:
+    """Butun son argumenti, chegara ichida qisiladi."""
+    try:
+        v = int(raw or 0)
+    except (TypeError, ValueError):
+        return lo
+    return max(lo, min(hi, v))
+
+
+def _course_arg(raw) -> int:
+    """Kurs raqami: 0 = belgilanmagan, 1-6 oralig'ida."""
+    try:
+        v = int(raw or 0)
+    except (TypeError, ValueError):
+        return 0
+    return v if 0 <= v <= 6 else 0
+
 
 def _bool_arg(raw, default: bool) -> bool:
     """Form-data ham, JSON ham keladi: "false"/"0"/False hammasi False."""
@@ -760,15 +879,30 @@ def _admin_exams_create_impl(request):
         mode = "imentor_mixed"
     elif raw_mode == "bank_mixed":
         mode = "bank_mixed"
+    elif raw_mode == "faculty_ai_books":
+        mode = "faculty_ai_books"
     else:
         mode = "static"
+    audience = str(d.get("audience") or "student").strip().lower()
+    if audience not in ("student", "faculty", "ordinator", "magistr",
+                        "vacancy", "entrant"):
+        audience = "student"
+    # AI-kitob rejimi kafedra asosidagi auditoriyalar uchun: o'qituvchi va
+    # ishga kiruvchi (vakansiya). Ilgari bu yer har doim "faculty" qilib
+    # qo'yardi va vakansiya imtihoni o'qituvchilarnikiga aylanib qolardi.
+    if mode == "faculty_ai_books" and audience not in ("faculty", "vacancy"):
+        audience = "faculty"
     bank_cats_json = "[]"
     imentor_codes_json = "[]"
     bank_count = 0
     questions: list = []
     variant_label_for_direction: str | None = None
 
-    if mode == "imentor_mixed":
+    if mode == "faculty_ai_books":
+        # Savollar start paytida kafedra kitoblaridan AI bilan yaratiladi.
+        bank_count = 20
+        questions = []
+    elif mode == "imentor_mixed":
         from apps.api.imentor_service import (
             dump_imentor_selection,
             parse_imentor_selection,
@@ -888,6 +1022,15 @@ def _admin_exams_create_impl(request):
                 raise ValueError()
         except Exception:
             return Response({"error": "Invalid manual questions format"}, status=400)
+    elif audience in ("ordinator", "magistr"):
+        # Ordinator/magistr DAK imtihoni: savol bankini admin alohida oynada
+        # yuklaydi (`admin/exams/<id>/question-bank`). Imtihon avval bo'sh
+        # bank bilan yaratiladi — sana/kafedra tasdiqlansin, savollar keyin.
+        questions = []
+        try:
+            bank_count = max(1, min(200, int(d.get("bank_question_count") or 20)))
+        except (TypeError, ValueError):
+            bank_count = 20
     else:
         return Response({"error": "No questions provided"}, status=400)
 
@@ -939,7 +1082,11 @@ def _admin_exams_create_impl(request):
 
     group_ids_raw = d.get("group_ids")
     gids = safe_json_loads(group_ids_raw, []) if isinstance(group_ids_raw, str) else (group_ids_raw or [])
-    if not isinstance(gids, list) or not gids:
+    if mode == "faculty_ai_books" or audience in KAFEDRA_AUDIENCES:
+        # Kafedra bo'yicha biriktiriladigan auditoriyalar (o'qituvchi,
+        # ordinator, magistr, vakansiya) guruhga kirmaydi.
+        gids = []
+    elif not isinstance(gids, list) or not gids:
         return Response(
             {"error": admin_api_msg("group_required", resolve_ui_language(request))},
             status=400,
@@ -970,6 +1117,27 @@ def _admin_exams_create_impl(request):
         ex_list = []
 
     with transaction.atomic():
+        kafedra_id = None
+        faculty_subject = ""
+        if mode == "faculty_ai_books" or audience in KAFEDRA_AUDIENCES:
+            faculty_subject = str(d.get("faculty_subject") or d.get("subject") or "").strip()[:300]
+            if not faculty_subject:
+                return Response(
+                    {"error": admin_api_msg("faculty_subject_required", resolve_ui_language(request))},
+                    status=400,
+                )
+            raw_kaf = d.get("kafedra_id")
+            if raw_kaf in (None, "", "null"):
+                return Response(
+                    {"error": admin_api_msg("kafedra_required", resolve_ui_language(request))},
+                    status=400,
+                )
+            try:
+                kafedra_id = int(raw_kaf)
+            except (TypeError, ValueError):
+                return Response({"error": "Invalid kafedra_id"}, status=400)
+            if not Kafedra.objects.filter(pk=kafedra_id).exists():
+                return Response({"error": "Invalid kafedra"}, status=400)
         ex = Exam.objects.create(
             teacher_id=_resolve_exam_teacher_id(request, d),
             title=title,
@@ -980,17 +1148,23 @@ def _admin_exams_create_impl(request):
             language=lang,
             custom_rules=d.get("custom_rules") or "",
             exam_mode=mode,
+            audience=audience,
             bank_category_ids=bank_cats_json,
             bank_question_count=bank_count,
             imentor_subject_codes=imentor_codes_json,
             direction_id=direction_id,
+            kafedra_id=kafedra_id,
+            faculty_subject=faculty_subject,
+            course=_course_arg(d.get("course")),
+            ai_question_count=_int_arg(d.get("ai_question_count"), 0, 50),
             technical_retakes_allowed=violation_retakes,
             identity_retakes_allowed=identity_retakes,
             proctor_profile=profile,
             # Tashqi shovqin nazorati — default YOQILGAN.
             ambient_audio_enabled=_bool_arg(d.get("ambient_audio_enabled"), True),
         )
-        ExamGroup.objects.bulk_create([ExamGroup(exam_id=ex.id, group_id=gid) for gid in gids])
+        if gids:
+            ExamGroup.objects.bulk_create([ExamGroup(exam_id=ex.id, group_id=gid) for gid in gids])
         eid = ex.id
         for item in ex_list:
             if not isinstance(item, dict):
@@ -999,7 +1173,12 @@ def _admin_exams_create_impl(request):
             if not sid:
                 continue
             reason = str(item.get("reason") or "Imtihonga kiritilmadingiz.").strip()[:8000]
-            if not AppUser.objects.filter(pk=sid, role="student").exists():
+            # Istisnolar barcha topshiruvchi rollariga tegishli.
+            if not AppUser.objects.filter(
+                pk=sid,
+                role__in=("student", "faculty", "ordinator", "magistr",
+                          "vacancy", "entrant"),
+            ).exists():
                 continue
             ExamStudentException.objects.update_or_create(
                 exam_id=eid, student_id=sid, defaults={"reason": reason}
@@ -1095,8 +1274,8 @@ def _result_details_bundle(se: StudentExam, request, for_pdf: bool = False, lang
         "score": se.score,
         "total": total,
         "percentage": pct,
-        "pass_threshold": PASS_PERCENT_THRESHOLD,
-        "passed": pct >= PASS_PERCENT_THRESHOLD,
+        "pass_threshold": exam_pass_threshold(exam),
+        "passed": pct >= exam_pass_threshold(exam),
         "completed_at": completed_iso,
         "exam_title": exam.title,
         "student_name": se.student.name,

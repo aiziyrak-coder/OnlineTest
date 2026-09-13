@@ -43,9 +43,10 @@ const DETECTOR_MIN_SCORE = 0.2;
  * noto'g'ri aniqlanadi.
  */
 const SCORE_THRESHOLD_BY_TYPE: Record<string, number> = {
-  FORBIDDEN_OBJECT_CELL_PHONE: 0.25,
-  FORBIDDEN_OBJECT_BOOK: 0.38,
-  FORBIDDEN_OBJECT_LAPTOP: 0.38,
+  // 2026-09-13: sezgirlik oshirildi (telefon 0.25 -> 0.21, kitob/noutbuk 0.38 -> 0.33).
+  FORBIDDEN_OBJECT_CELL_PHONE: 0.18,
+  FORBIDDEN_OBJECT_BOOK: 0.30,
+  FORBIDDEN_OBJECT_LAPTOP: 0.30,
 };
 
 /** Freym tahlili oralig'i. Qancha tez-tez bo'lsa, tasdiqlash shuncha tez. */
@@ -65,7 +66,7 @@ export const OBJECT_GRACE_MS = DETECT_INTERVAL_MS * 3 + 100;
  *  Telefonni bir zumga ko'tarib javobni ko'rish uchun 1.5s yetarli edi. */
 export const OBJECT_CONFIRM_MS = 400;
 /** Rasmiy */
-export const OBJECT_ESCALATE_MS = 1800;
+export const OBJECT_ESCALATE_MS = 1000;
 
 export type ForbiddenObjectHit = {
   violationType: string;

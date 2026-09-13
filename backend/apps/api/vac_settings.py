@@ -45,6 +45,54 @@ def vac_pc_only_enabled() -> bool:
     return _env_bool("VAC_PC_ONLY", True)
 
 
+def vac_block_tablet_enabled() -> bool:
+    """Planshetni non-desktop deb hisoblash (VAC_PC_ONLY bilan birga)."""
+    return _env_bool("VAC_BLOCK_TABLET", True)
+
+
+def is_non_desktop_client(request) -> bool:
+    """
+    Telefon/planshet — True. Desktop/laptop — False.
+    UA + ixtiyoriy X-Client-Form-Factor: desktop|mobile|tablet|phone
+    """
+    if not vac_pc_only_enabled():
+        return False
+
+    ff = str(request.META.get("HTTP_X_CLIENT_FORM_FACTOR") or "").strip().lower()
+    if ff in ("mobile", "phone"):
+        return True
+    if ff == "tablet" and vac_block_tablet_enabled():
+        return True
+
+    ua = (request.META.get("HTTP_USER_AGENT") or "").lower()
+    phone_markers = (
+        "iphone",
+        "ipod",
+        "windows phone",
+        "webos",
+        "blackberry",
+        "opera mini",
+        "iemobile",
+    )
+    if any(m in ua for m in phone_markers):
+        return True
+    # "Mobile" odatda telefon; iPad ba'zan "Mobile" ham yozadi — tablet yo'li birinchi.
+    tablet_markers = ("ipad", "tablet", "kindle", "silk", "playbook")
+    is_tablet_ua = any(m in ua for m in tablet_markers) or (
+        "android" in ua and "mobile" not in ua
+    )
+    if is_tablet_ua and vac_block_tablet_enabled():
+        return True
+    if "mobile" in ua and not is_tablet_ua:
+        return True
+    if "android" in ua and "mobile" in ua:
+        return True
+    # Form-factor desktop deb yolg'on yuborsa ham UA telefon/planshet bo'lsa yopamiz.
+    if ff == "desktop":
+        return False
+    return False
+
+
 def exam_min_submit_seconds() -> int:
     raw = os.environ.get("EXAM_MIN_SUBMIT_SECONDS")
     if raw is not None:

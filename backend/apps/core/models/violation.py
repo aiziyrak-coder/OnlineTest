@@ -12,6 +12,10 @@ class ViolationLog(models.Model):
     violation_type = models.CharField(max_length=80)
     timestamp = models.DateTimeField()
     screenshot_url = models.TextField(blank=True)
+    # Aniq fakt: qaysi dastur, nechta monitor, nima qilindi (ilova/brauzer yuboradi).
+    detail = models.TextField(blank=True, default="")
+    # Server qarori: warning:N | ban | retake | merged | technical | review
+    outcome = models.CharField(max_length=40, blank=True, default="")
 
     class Meta:
         app_label = "core"

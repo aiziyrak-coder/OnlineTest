@@ -52,6 +52,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.SecurityHeadersMiddleware",
+    # FerMI Exam ilovasi talabi (DESKTOP_APP_REQUIRED=1 bo'lganda)
+    "apps.api.desktop_guard.DesktopAppGuardMiddleware",
 ]
 
 X_FRAME_OPTIONS = "DENY"
@@ -130,6 +132,10 @@ DATABASES = {
         ssl_require=_ssl,
     )
 }
+# Parallel imtihon starti: Postgres ulanishlarini tezkor ushlab turish
+DATABASES["default"].setdefault("OPTIONS", {})
+DATABASES["default"]["OPTIONS"].setdefault("connect_timeout", 10)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 if "postgresql" not in DATABASES["default"].get("ENGINE", ""):
     raise RuntimeError(
         "Faqat PostgreSQL qo'llab-quvvatlanadi. DATABASE_URL=postgres://... o'rnating "
@@ -311,10 +317,15 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "login": "60/h",        # 10 → 60: har soatda 60 urinish (5 ta foydalanuvchi × 12)
+        # DIQQAT: bu cheklov IP bo'yicha ishlaydi. Institut butun binosi bitta
+        # tashqi IP orqali chiqadi, ya'ni 181 o'qituvchi BITTA limitni bo'lishadi.
+        # 60/h da imtihon kuni ertalab bir necha o'nlab kishi kirgach, qolganlar
+        # "Too many requests" olib, tizimga umuman kira olmasdi.
+        "login": os.environ.get("LOGIN_THROTTLE_RATE", "1200/h"),
         "face_verify": "25/m",  # 3s interval=20/min + ~5 person-swap burst
         "public_verify": "300/h",
-        "anon": "200/m",
+        # Anonim so'rovlar ham IP bo'yicha — yuqoridagi sabab bilan kengaytirildi.
+        "anon": os.environ.get("ANON_THROTTLE_RATE", "600/m"),
         "user": "600/m",
         "exam_autosave": "60/m",
         "bank_ai_import": "20/h",
@@ -335,6 +346,14 @@ OPENAI_API_KEY = (
     or os.environ.get("GEMINI_API_KEY", "").strip()  # eski deploy fayllar
 )
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+# Imtihon savollarini yaratish uchun alohida model. Bo'sh bo'lsa
+# OPENAI_MODEL ishlatiladi. Tibbiy o'zbekcha atamalar sifati uchun
+# kuchliroq model tavsiya etiladi (masalan "gpt-4o").
+OPENAI_EXAM_MODEL = os.environ.get("OPENAI_EXAM_MODEL", "").strip()
+
+# Audit jurnalini ochish uchun qo'shimcha parol. Bo'sh bo'lsa —
+# qo'shimcha parol so'ralmaydi (admin roli yetarli).
+AUDIT_PASSWORD = os.environ.get("AUDIT_PASSWORD", "").strip()
 OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o").strip()
 OPENAI_MODEL_FALLBACKS = os.environ.get("OPENAI_MODEL_FALLBACKS", "gpt-4o-mini").strip()
 # Eski nomlar (kod va deploy skriptlari bilan moslik)

@@ -4,6 +4,28 @@ from __future__ import annotations
 from apps.api.views._helpers import *  # noqa: F401,F403
 
 from apps.api.views.student import _notify_student_unblocked
+from apps.api.permissions import EXAMINEE_ROLES
+
+#: Tizimdagi BARCHA rollar. Foydalanuvchi yaratish/tahrirlashda ilgari faqat
+#: admin/student/staff ruxsat etilardi -- o'qituvchi yoki ordinatorni admin
+#: paneldan qo'shib ham, rolini o'zgartirib ham bo'lmasdi.
+ALL_APP_ROLES = (
+    "admin", "staff", "student", "faculty", "ordinator", "magistr", "vacancy",
+    "entrant",
+)
+
+
+def _kafedra_arg(raw):
+    """kafedra_id ni tekshiradi: None, id yoki "INVALID"."""
+    if raw in ("", None, "null"):
+        return None
+    try:
+        kid = int(raw)
+    except (TypeError, ValueError):
+        return "INVALID"
+    if not Kafedra.objects.filter(pk=kid).exists():
+        return "INVALID"
+    return kid
 
 
 @api_view(["GET", "POST"])
@@ -12,7 +34,7 @@ def admin_users(request):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
     if request.method == "GET":
-        qs = AppUser.objects.select_related("group").all()
+        qs = AppUser.objects.select_related("group", "kafedra").all()
         gid = request.query_params.get("group_id")
         if gid not in (None, ""):
             try:
@@ -21,7 +43,20 @@ def admin_users(request):
                 pass
         role_f = request.query_params.get("role")
         if role_f:
-            qs = qs.filter(role=role_f)
+            # Bir nechta rol: "faculty,ordinator,magistr". Banlanganlar oynasi
+            # va hisobotlar hamma rolni bitta so'rovda oladi -- ilgari faqat
+            # "student" so'ralar, o'qituvchi/ordinator ko'rinmasdi.
+            roles = [x.strip() for x in str(role_f).split(",") if x.strip()]
+            qs = qs.filter(role__in=roles) if len(roles) > 1 else qs.filter(role=roles[0])
+        kaf_f = request.query_params.get("kafedra_id")
+        if kaf_f not in (None, ""):
+            try:
+                qs = qs.filter(kafedra_id=int(kaf_f))
+            except (TypeError, ValueError):
+                pass
+        q_f = str(request.query_params.get("q") or "").strip()
+        if q_f:
+            qs = qs.filter(Q(name__icontains=q_f) | Q(id__icontains=q_f))
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
@@ -49,6 +84,14 @@ def admin_users(request):
                     "has_photo": bool(u.profile_image and len(u.profile_image) > 50),
                     "profile_image": None,
                     "group_name": u.group.name if u.group_id else None,
+                    # O'qituvchi / ordinator / magistr uchun kerakli maydonlar.
+                    # Ilgari bular javobga umuman qo'shilmasdi: kafedra filtri
+                    # ishlamasdi, tahrirlash oynasi bo'sh ochilardi.
+                    "kafedra_id": u.kafedra_id,
+                    "kafedra_name": u.kafedra.name if u.kafedra_id else None,
+                    "position": u.position or "",
+                    "stavka": u.stavka or "",
+                    "course": int(getattr(u, "course", 0) or 0),
                 }
             )
         resp = Response({"results": rows, "total": total, "limit": limit, "offset": offset})
@@ -65,8 +108,12 @@ def admin_users(request):
             {"error": f"Parol kamida {MIN_APP_PASSWORD_LEN} belgi bo‘lishi kerak"},
             status=400,
         )
-    if role not in ("admin", "student", "staff"):
-        return Response({"error": "Role must be admin, student, or staff"}, status=400)
+    if role not in ALL_APP_ROLES:
+        return Response(
+            {"error": "Role must be one of: " + ", ".join(ALL_APP_ROLES)}, status=400
+        )
+    # Rasm FAQAT talabaga majburiy: o'qituvchi va ordinator ro'yxatga rasmsiz
+    # kiritiladi, suratni keyin kabinetidan o'zi yuklaydi.
     if role == "student" and (not profile_image or len(str(profile_image)) < 50):
         return Response(
             {"error": admin_api_msg("student_photo_required", resolve_ui_language(request))},
@@ -79,12 +126,19 @@ def admin_users(request):
     if AppUser.objects.filter(pk=uid).exists():
         return Response({"error": "User ID already exists"}, status=400)
     gid = None if group_id in ("", None) else group_id
+    kid = _kafedra_arg(d.get("kafedra_id"))
+    if kid == "INVALID":
+        return Response({"error": "Invalid kafedra"}, status=400)
     AppUser.objects.create(
         id=uid,
         password=_hash_pw(str(password)),
         role=role,
         name=name,
         group_id=gid,
+        kafedra_id=kid,
+        position=str(d.get("position") or "")[:200],
+        stavka=str(d.get("stavka") or "")[:64],
+        course=_course_arg(d.get("course")),
         profile_image=profile_image or "",
     )
     audit(request, "create_user", "user", uid, name, f"role={role}")
@@ -108,6 +162,11 @@ def admin_user_detail(request, user_id: str):
                 "group_id": row.group_id,
                 "has_photo": has_photo,
                 "profile_image": row.profile_image if has_photo else None,
+                "kafedra_id": row.kafedra_id,
+                "kafedra_name": row.kafedra.name if row.kafedra_id else None,
+                "position": row.position or "",
+                "stavka": row.stavka or "",
+                "course": int(getattr(row, "course", 0) or 0),
             }
         )
     if request.method == "DELETE":
@@ -127,9 +186,9 @@ def admin_user_detail(request, user_id: str):
     d = request.data or {}
     next_role = d["role"] if "role" in d else row.role
     next_profile = d["profile_image"] if "profile_image" in d else row.profile_image
-    if "role" in d and d["role"] not in ("admin", "student", "staff"):
+    if "role" in d and d["role"] not in ALL_APP_ROLES:
         return Response({"error": "Invalid role"}, status=400)
-    if row.role == "admin" and next_role in ("student", "staff"):
+    if row.role == "admin" and next_role != "admin":
         if AppUser.objects.filter(role="admin").count() <= 1:
             return Response({"error": "Cannot demote the last admin"}, status=400)
     if next_role == "student" and (not next_profile or len(str(next_profile)) < 50):
@@ -143,6 +202,17 @@ def admin_user_detail(request, user_id: str):
     if "group_id" in d:
         v = d["group_id"]
         row.group_id = None if v in ("", None) else v
+    if "kafedra_id" in d:
+        kid = _kafedra_arg(d["kafedra_id"])
+        if kid == "INVALID":
+            return Response({"error": "Invalid kafedra"}, status=400)
+        row.kafedra_id = kid
+    if "position" in d:
+        row.position = str(d["position"] or "")[:200]
+    if "stavka" in d:
+        row.stavka = str(d["stavka"] or "")[:64]
+    if "course" in d:
+        row.course = _course_arg(d["course"])
     if "status" in d:
         row.status = d["status"]
     if "profile_image" in d:
@@ -157,12 +227,13 @@ def admin_user_detail(request, user_id: str):
                 status=400,
             )
         row.password = _hash_pw(str(d["password"]))
-    touched = any(
-        k in d for k in ("name", "role", "group_id", "status", "profile_image", "password")
+    editable = (
+        "name", "role", "group_id", "status", "profile_image", "password",
+        "kafedra_id", "position", "stavka", "course",
     )
-    if not touched:
+    if not any(k in d for k in editable):
         return Response({"error": "No fields to update"}, status=400)
-    changed = [k for k in ("name", "role", "group_id", "status", "profile_image", "password") if k in d]
+    changed = [k for k in editable if k in d]
     row.save()
     detail = "changed: " + ", ".join(changed)
     audit(request, "update_user", "user", row.id, row.name, detail)
@@ -230,6 +301,41 @@ def admin_users_unban(request, user_id: str):
         )
     audit(request, "unban_user", "user", user_id, row.name, f"reason={reason[:100]}")
     return Response({"success": True})
+def _ensure_retake_window(se, exam) -> dict | None:
+    """Imtihon vaqti tugagan bo'lsa, qayta topshirish uchun oyna ochadi.
+
+    Ilgari "Qayta imkon berish" faqat sessiyani tozalardi. Kechagi imtihon
+    uchun bu yetarli emas edi: vaqt oynasi yopilgani uchun odam baribir kira
+    olmasdi va admin "ruxsat berdim, lekin ochilmadi" degan holatga tushardi.
+    Endi tugmaning o'zi kirish oynasini ham ochadi.
+    """
+    now = dj_tz.now()
+    if student_in_exam_access_window(exam, str(se.student_id), now):
+        return None
+
+    hours = os.environ.get("RETAKE_WINDOW_HOURS", "").strip()
+    if hours:
+        try:
+            end = now + timedelta(hours=max(1, int(hours)))
+        except (TypeError, ValueError):
+            end = now + timedelta(hours=12)
+    else:
+        # Kun oxirigacha: 20:00 mahalliy vaqt (boshqa imtihonlar bilan bir xil).
+        local_now = dj_tz.localtime(now)
+        end_local = local_now.replace(hour=20, minute=0, second=0, microsecond=0)
+        if end_local <= local_now:
+            end_local = end_local + timedelta(days=1)
+        end = end_local
+
+    win = ExamRetakeWindow.objects.create(
+        exam_id=exam.id,
+        student_id=se.student_id,
+        window_start=now - timedelta(minutes=5),
+        window_end=end,
+        note="Admin qayta imkon berdi — imtihon vaqti tugagani uchun oyna ochildi",
+    )
+    return {"id": win.id, "window_end": win.window_end.isoformat()}
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def admin_student_exams_retake(request, pk: int):
@@ -242,6 +348,14 @@ def admin_student_exams_retake(request, pk: int):
     if not _staff_can_manage_student_exam(u, se_obj):
         return Response({"error": "Forbidden"}, status=403)
 
+    from apps.api.views.ordinator import is_one_attempt_exam
+
+    if u.role != "admin" and is_one_attempt_exam(se_obj.exam):
+        return Response(
+            {"error": "Bir martalik imtihon: qayta imkonni faqat administrator beradi"},
+            status=403,
+        )
+
     from apps.api.proctor_admin_retake import apply_admin_granted_retake
 
     payload = apply_admin_granted_retake(
@@ -252,13 +366,18 @@ def admin_student_exams_retake(request, pk: int):
         reset_session=True,
         notify_reason="Administrator qayta topshirishga ruxsat berdi",
     )
+    window = _ensure_retake_window(se_obj, se_obj.exam)
+    if window:
+        payload = {**payload, "retake_window": window}
+    # Qayta imkon berilgan kishi navbatda qolib ketmasin.
+    StudentExam.objects.filter(pk=pk).update(review_cleared_at=dj_tz.now())
     audit(
         request,
         "retake_exam",
         "student_exam",
         pk,
         getattr(se_obj.student, "name", str(pk)),
-        f"exam={getattr(se_obj.exam, 'title', '')}",
+        f"exam={getattr(se_obj.exam, 'title', '')}" + (", oyna ochildi" if window else ""),
     )
     return Response(payload)
 
@@ -292,6 +411,10 @@ def admin_student_exams_unblock(request, pk: int):
             proctor_last_warning_at=None,
         )
 
+    # Ko'rib chiqish navbatidan olib tashlash uchun belgi. Busiz admin
+    # "Bajarildi" xabarini ko'rardi-yu, qator joyida turaverardi.
+    StudentExam.objects.filter(pk=pk).update(review_cleared_at=dj_tz.now())
+
     _notify_student_unblocked(
         student_id,
         pk,
@@ -303,6 +426,106 @@ def admin_student_exams_unblock(request, pk: int):
     audit(request, "unblock_student", "student_exam", pk, student_name,
           f"exam_id={exam_id}, can_retake={can_retake}")
     return Response({"success": True, "can_retake": can_retake, "student_name": student_name})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def admin_student_exams_score(request, pk: int):
+    """Natijani (to'g'ri javoblar sonini) qo'lda tuzatish — FAQAT admin.
+
+    Apellyatsiya yoki savol xatosi aniqlangan holatlar uchun. Foiz va
+    "o'tdi/o'tmadi" ballardan hisoblanadi, ya'ni ular o'zi yangilanadi.
+    Har bir o'zgarish audit jurnaliga eski va yangi qiymat bilan yoziladi.
+    """
+    if _request_user_role_norm(request.user) != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+
+    se = StudentExam.objects.select_related("student", "exam").filter(pk=pk).first()
+    if not se:
+        return Response({"error": "Not found"}, status=404)
+
+    raw = (request.data or {}).get("score")
+    try:
+        new_score = int(raw)
+    except (TypeError, ValueError):
+        return Response({"error": "Invalid score"}, status=400)
+
+    # Maxraj: sessiyada berilgan savollar soni (yo'q bo'lsa imtihon banki).
+    total = len(safe_json_loads(se.session_questions_json or "", []))
+    if not total:
+        total = int(getattr(se.exam, "bank_question_count", 0) or 0)
+    if not total:
+        total = len(safe_json_loads(se.exam.questions_json or "[]", []))
+    if total and (new_score < 0 or new_score > total):
+        return Response(
+            {"error": "Score out of range", "total": total},
+            status=400,
+        )
+    if new_score < 0:
+        return Response({"error": "Score out of range"}, status=400)
+
+    old_score = se.score
+    if old_score == new_score:
+        return Response({"success": True, "score": new_score, "total": total, "changed": False})
+
+    se.score = new_score
+    _fields = ["score"]
+
+    # Javoblarni ballga moslash: aks holda natija oynasida "7 ta belgilangan,
+    # 15 ball" degan ziddiyat qoladi. Tasodifiy N ta savol to'g'ri deb
+    # belgilanadi, qolganiga noto'g'ri variant qo'yiladi.
+    _old_answers = se.answers_json or ""
+    _questions = safe_json_loads(se.session_questions_json or "", [])
+    if not _questions:
+        _questions = safe_json_loads(se.exam.questions_json or "[]", [])
+    _questions = [q for q in _questions if isinstance(q, dict)]
+    if _questions and total:
+        import random as _r
+
+        _idx = list(range(len(_questions)))
+        _r.shuffle(_idx)
+        _correct_set = set(_idx[: max(0, min(new_score, len(_idx)))])
+        _new_answers = {}
+        for _i, _q in enumerate(_questions):
+            _qid = str(_q.get("id") if _q.get("id") is not None else _i + 1)
+            _opts = [str(o) for o in (_q.get("options") or []) if str(o).strip()]
+            _cor = str(_q.get("correctAnswer") or "")
+            if _i in _correct_set:
+                _new_answers[_qid] = _cor
+            else:
+                _wrong = next((o for o in _opts if o != _cor), "")
+                if _wrong:
+                    _new_answers[_qid] = _wrong
+        se.answers_json = json.dumps(_new_answers, ensure_ascii=False)
+        _fields.append("answers_json")
+        # Tahlil (AI xulosasi) eski javoblardan tuzilgan — qayta hisoblansin.
+        if se.ai_summary_json:
+            se.ai_summary_json = ""
+            _fields.append("ai_summary_json")
+
+    se.save(update_fields=_fields)
+
+    audit(
+        request,
+        "edit_exam_score",
+        "student_exam",
+        pk,
+        getattr(se.student, "name", str(pk)),
+        "exam=" + str(getattr(se.exam, "title", "")) + ", " + str(old_score)
+        + " -> " + str(new_score) + "/" + str(total)
+        + ("; javoblar qayta yig'ildi, eski: " + _old_answers[:400]
+           if "answers_json" in _fields else ""),
+    )
+    pct = round((new_score / total) * 100) if total else 0
+    return Response(
+        {
+            "success": True,
+            "score": new_score,
+            "total": total,
+            "percentage": pct,
+            "changed": True,
+        }
+    )
 
 
 def _staff_can_manage_student_exam(user, se: StudentExam) -> bool:
@@ -326,6 +549,14 @@ def admin_student_exams_grant_technical_retakes(request, pk: int):
         return Response({"error": "Not found"}, status=404)
     if not _staff_can_manage_student_exam(u, se):
         return Response({"error": "Forbidden"}, status=403)
+
+    from apps.api.views.ordinator import is_one_attempt_exam
+
+    if u.role != "admin" and is_one_attempt_exam(se.exam):
+        return Response(
+            {"error": "Bir martalik imtihon: qayta imkonni faqat administrator beradi"},
+            status=403,
+        )
 
     from apps.api.proctor_admin_retake import apply_admin_granted_retake
 
@@ -533,6 +764,13 @@ def admin_stats(request):
             "totalLevels": Level.objects.count(),
             "totalGroups": Group.objects.count(),
             "totalStudents": AppUser.objects.filter(role="student").count(),
+            # Har bir rol alohida: bosh sahifada faqat talabalar soni
+            # ko'rsatilardi, 761 ta o'qituvchi va ordinatorlar hech qayerda
+            # sanalmasdi.
+            "totalFaculty": AppUser.objects.filter(role="faculty").count(),
+            "totalOrdinators": AppUser.objects.filter(role="ordinator").count(),
+            "totalMagistrs": AppUser.objects.filter(role="magistr").count(),
+            "totalVacancy": AppUser.objects.filter(role="vacancy").count(),
         }
     )
 
@@ -1027,6 +1265,25 @@ def admin_audit_log(request):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
 
+    # Qo'shimcha parol: jurnal barcha ma'muriy amallar tarixini saqlaydi,
+    # shuning uchun admin roli yetarli emas deb belgilangan bo'lishi mumkin.
+    # Tekshiruv SERVERDA — brauzerdagi oyna chetlab o'tilsa ham jurnal
+    # ochilmaydi.
+    import hmac as _hmac
+
+    _need = str(getattr(settings, "AUDIT_PASSWORD", "") or "")
+    if _need:
+        _got = str(request.headers.get("X-Audit-Password") or "")
+        if not _hmac.compare_digest(_got, _need):
+            # 423 Locked - ATAYLAB 403 emas: 403 ni umumiy klient tekshiruvi
+            # "sessiya tugadi" deb qabul qilib, adminni login sahifasiga
+            # chiqarib yuborardi. Qulf autentifikatsiya xatosi emas.
+            return Response(
+                {"error": "Audit paroli noto\u2018g\u2018ri",
+                 "code": "AUDIT_PASSWORD_REQUIRED"},
+                status=423,
+            )
+
     from apps.core.models import AuditLog
     from django.utils import timezone
     import datetime, csv
@@ -1463,6 +1720,19 @@ def admin_imentor_departments(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def admin_faculty_assessment_schedule(request):
+    """O'qituvchi baholash jadvali — DOCX dagi kafedra nomlari va fanlar."""
+    if request.user.role != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    from apps.core.management.commands.seed_faculty_assessment_exams import (
+        build_faculty_assessment_schedule,
+    )
+
+    return Response({"departments": build_faculty_assessment_schedule()})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def admin_imentor_department_subjects(request, department_code: str):
     """iMentor katalog: tanlangan kafedra fanlari (2-qadam)."""
     if request.user.role != "admin":
@@ -1687,16 +1957,41 @@ def admin_exam_detail(request, pk: int):
             return Response({"error": "questions must be a non-empty array"}, status=400)
         normalized = []
         for i, q in enumerate(qs):
-            opts = [str(x) for x in (q.get("options") or [])][:4]
-            while len(opts) < 4:
-                opts.append(f"Variant {len(opts) + 1}")
+            # DIQQAT: variantlar soni 4 ga KESILMAYDI. Ordinator/magistr
+            # banklarida 3 yoki 5 variantli savollar bor va ilgari tahrirlash
+            # oynasini ochib "Saqlash" bosilsa, ortiqchasi jimgina o'chardi.
+            opts = [str(x) for x in (q.get("options") or []) if str(x).strip()]
+            while len(opts) < 2:
+                opts.append("Variant %d" % (len(opts) + 1))
             cor = str(q.get("correctAnswer") or opts[0])
             if cor not in opts:
                 cor = opts[0]
-            normalized.append(
-                {"id": i + 1, "text": str(q.get("text") or f"Savol {i+1}"), "options": opts, "correctAnswer": cor}
-            )
-        questions_json = json.dumps(normalized)
+            item = {
+                "id": i + 1,
+                "text": str(q.get("text") or "Savol %d" % (i + 1)),
+                "options": opts,
+                "correctAnswer": cor,
+            }
+            # Tarjimalar va manba maydonlari saqlanadi.
+            for extra in (
+                "text_ru", "text_en", "options_ru", "options_en",
+                "correctAnswer_ru", "correctAnswer_en",
+                "explanation", "source_id", "bank_id",
+            ):
+                if q.get(extra):
+                    item[extra] = q[extra]
+            normalized.append(item)
+        questions_json = json.dumps(normalized, ensure_ascii=False)
+
+    if e.exam_mode in ("static", "") and d.get("bank_question_count") is not None:
+        # Ordinator/magistr imtihoni: bank katta, har bir topshiruvchiga
+        # shundan tasodifiy N ta savol tushadi. N shu yerda tahrirlanadi.
+        pool = len(safe_json_loads(questions_json, []))
+        try:
+            n = int(d.get("bank_question_count") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        bank_count = max(0, min(n, pool)) if pool else max(0, n)
 
     if e.exam_mode == "bank_mixed" and (
         d.get("bank_category_ids") is not None or d.get("bank_question_count") is not None
@@ -1812,6 +2107,29 @@ def admin_exam_detail(request, pk: int):
                 e.ambient_audio_enabled = _bool_arg(d.get("ambient_audio_enabled"), True)
             if d.get("identity_retakes_allowed") is not None:
                 e.identity_retakes_allowed = max(0, min(5, int(d.get("identity_retakes_allowed") or 0)))
+            # Kafedraga biriktiriladigan auditoriyalar uchun kafedra va fan
+            # ham tahrirlanadi. Ilgari bularni faqat yaratishda belgilash
+            # mumkin edi: xato kafedra tanlansa, imtihonni o'chirib qaytadan
+            # yaratishdan boshqa yo'l yo'q edi.
+            if "kafedra_id" in d:
+                kid = _kafedra_arg(d["kafedra_id"])
+                if kid == "INVALID":
+                    raise ValueError("KAFEDRA")
+                e.kafedra_id = kid
+            if "faculty_subject" in d:
+                e.faculty_subject = str(d["faculty_subject"] or "")[:300]
+            if "course" in d:
+                e.course = _course_arg(d["course"])
+            if "ai_question_count" in d:
+                try:
+                    e.ai_question_count = max(0, min(50, int(d["ai_question_count"] or 0)))
+                except (TypeError, ValueError):
+                    e.ai_question_count = 0
+            if "audience" in d:
+                aud = str(d["audience"] or "").strip().lower()
+                if aud in ("student", "faculty", "ordinator", "magistr",
+                           "vacancy", "entrant"):
+                    e.audience = aud
             if "teacher_id" in d:
                 tu = AppUser.objects.filter(pk=str(d["teacher_id"]).strip()).first()
                 if tu and _request_user_role_norm(tu) in ("admin", "staff"):
@@ -1827,15 +2145,25 @@ def admin_exam_detail(request, pk: int):
             e.save()
             if d.get("group_ids") is not None:
                 gids = d["group_ids"]
-                if not isinstance(gids, list) or not gids:
+                if not isinstance(gids, list):
+                    raise ValueError("GROUP_IDS")
+                cur_aud = str(getattr(e, "audience", None) or "student").lower()
+                # O'qituvchi/ordinator/magistr/vakansiya imtihoni GURUHGA
+                # biriktirilmaydi -- u kafedra bo'yicha ochiladi. Ilgari bu
+                # yerda bo'sh ro'yxat xato deb qaytarilardi va bunday
+                # imtihonni umuman tahrirlab bo'lmasdi ("Guruh tanlang").
+                if not gids and cur_aud == "student":
                     raise ValueError("GROUP_IDS")
                 ExamGroup.objects.filter(exam_id=pk).delete()
-                ExamGroup.objects.bulk_create(
-                    [ExamGroup(exam_id=pk, group_id=gid) for gid in gids]
-                )
+                if gids:
+                    ExamGroup.objects.bulk_create(
+                        [ExamGroup(exam_id=pk, group_id=gid) for gid in gids]
+                    )
     except ValueError as ve:
         if str(ve) == "DIRECTION":
             return Response({"error": "Invalid direction"}, status=400)
+        if str(ve) == "KAFEDRA":
+            return Response({"error": "Invalid kafedra"}, status=400)
         return Response(
             {"error": admin_api_msg("group_required", resolve_ui_language(request))},
             status=400,
@@ -1941,7 +2269,9 @@ def admin_exam_exceptions(request, pk: int):
             if not sid:
                 continue
             reason = str(item.get("reason") or "Imtihonga kiritilmadingiz.").strip()[:8000]
-            if AppUser.objects.filter(pk=sid, role="student").exists():
+            # Istisno HAR QANDAY topshiruvchiga qo'yiladi: o'qituvchi ham,
+            # ordinator ham imtihondan chetlatilishi mumkin.
+            if AppUser.objects.filter(pk=sid, role__in=EXAMINEE_ROLES).exists():
                 ExamStudentException.objects.create(exam_id=pk, student_id=sid, reason=reason)
     return Response({"success": True})
 @api_view(["GET", "POST"])
@@ -1978,7 +2308,10 @@ def admin_exam_retake_windows(request, pk: int):
             {"error": admin_api_msg("retake_window_invalid", resolve_ui_language(request))},
             status=400,
         )
-    if not AppUser.objects.filter(pk=sid, role="student").exists():
+    # Qayta topshirish oynasi HAR QANDAY topshiruvchiga beriladi. Ilgari
+    # faqat talaba qabul qilinardi -- kechikib qolgan o'qituvchi yoki
+    # ordinatorga oyna ochish uchun bazaga qo'lda kirishga to'g'ri kelardi.
+    if not AppUser.objects.filter(pk=sid, role__in=EXAMINEE_ROLES).exists():
         return Response(
             {"error": admin_api_msg("student_not_found", resolve_ui_language(request))},
             status=404,

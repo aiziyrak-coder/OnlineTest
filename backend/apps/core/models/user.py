@@ -18,6 +18,10 @@ class Kafedra(models.Model):
     code = models.CharField(max_length=50, unique=True, null=True, blank=True)
     sort_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    # Klinik (bemor bilan ishlaydigan) yoki noklinik kafedra. Vakansiya
+    # sahifasida ro'yxat shu bo'yicha ikkiga bo'lib ko'rsatiladi — 45 ta
+    # kafedra ichidan kerakligini topish uchun.
+    is_clinical = models.BooleanField(default=False)
 
     class Meta:
         app_label = "core"
@@ -80,6 +84,15 @@ class Group(models.Model):
 
 
 class AppUser(models.Model):
+    """Foydalanuvchi.
+
+    Rollar:
+      - admin / staff — boshqaruv / kuzatuvchi
+      - student — bakalavr talaba (examinee)
+      - faculty — o'qituvchi (examinee; eski deprecated `teacher` emas)
+      - ordinator — ordinatura (examinee; keyingi bosqich)
+    """
+
     id = models.CharField(max_length=64, primary_key=True)
     password = models.CharField(max_length=128)
     role = models.CharField(max_length=20)
@@ -88,6 +101,24 @@ class AppUser(models.Model):
     group = models.ForeignKey(
         Group, null=True, blank=True, on_delete=models.SET_NULL, db_column="group_id"
     )
+    # O'qituvchi / ordinator uchun asosiy kafedra (talaba uchun odatda NULL).
+    kafedra = models.ForeignKey(
+        Kafedra,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_column="kafedra_id",
+        related_name="users",
+    )
+    position = models.CharField(max_length=200, blank=True, default="")
+    # Vakansiya nomzodi ro'yxatdan o'tishda tanlagan fan (iMentor katalogidan).
+    # Test aynan shu fanning sillabus mavzulari bo'yicha yaratiladi.
+    vacancy_subject = models.CharField(max_length=200, blank=True, default="")
+    vacancy_subject_code = models.CharField(max_length=120, blank=True, default="")
+    stavka = models.CharField(max_length=64, blank=True, default="")
+    # Ordinator / magistr kursi: 0 = belgilanmagan, 1 = 1-kurs, 2 = 2-kurs.
+    # Kabinetda faqat shu kursning imtihonlari ko'rinadi.
+    course = models.PositiveSmallIntegerField(default=0)
     profile_image = models.TextField(blank=True)
 
     class Meta:

@@ -235,41 +235,151 @@ export function analyzeVoiceFrame(analyser: AnalyserNode): VoiceFrame {
  * bilan hisoblanadi — bu klass faqat shu freymda nutq bor-yo'qligini aytadi.
  */
 export class VoiceActivityTracker {
-  private noiseFloor = 0.02;
-  private calibrateLeft = 60;
+  // DIQQAT — bu yerda jiddiy xato bor edi. Ilgari shovqin sathi birinchi 60
+  // freymdagi ENG BALAND RMS deb olinardi (`Math.max`) va keyin umuman
+  // yangilanmasdi. Imtihon boshida bir og'iz gapirilsa sath nutq darajasiga
+  // chiqib qolardi va `rms > floor * 1.51` sharti boshqa hech qachon
+  // bajarilmasdi — nazorat butun imtihon davomida kar bo'lib qolardi.
+  // Platforma tarixida MOUTH_MOVEMENT_TALKING nolga teng bo'lganining sababi
+  // aynan shu.
+  private floor = new NoiseFloorEstimator();
   private prevRms = 0;
+  private warmup = 8;   // ~1.6 s — mikrofon ochilishidagi tebranish o'tsin
 
   push(frame: VoiceFrame): boolean {
-    if (this.calibrateLeft > 0) {
-      this.noiseFloor = Math.max(this.noiseFloor, frame.rms * 0.9);
-      this.calibrateLeft -= 1;
-      return false; // kalibrlash paytida hech narsa "gapirish" deb yozilmasin
+    const floor = this.floor.push(frame.rms);
+    if (this.warmup > 0) {
+      this.warmup -= 1;
+      return false;
     }
 
     const spike = this.prevRms > 0.015 && frame.rms > this.prevRms * 3.2;
     this.prevRms = frame.rms * 0.65 + this.prevRms * 0.35;
     if (spike) return false;
 
-    // Fon shovqinidan ajralishi kerak. 1.3× haddan sezgir edi (soxta signal),
-    // 1.85× esa past ovozni o'tkazib yubordi — ~40% sezgirroq: 1.51×.
-    // Oldingi barqaror qiymat: 1.85.
-    const aboveFloor = frame.rms > this.noiseFloor * 1.51;
+    const aboveFloor = frame.rms > floor * 1.51;
     return frame.humanVoice && aboveFloor;
   }
 }
 
-// Tashqi shovqin — faqat HAQIQATAN baland va davomiy (musiqa/TV). Oddiy xona
-// (ventilyator, noutbuk kuleri, uzoq shovqin) jazolanmasin.
-const AMBIENT_RMS_MIN = 0.2;
+// Tashqi shovqin — davomiy va sezilarli (musiqa/TV/yonidagi suhbat).
+// Ilgari bu chegara 0.2 edi — bu ~-14 dBFS, ya'ni deyarli baqiriq darajasi.
+// Shu sabab SUSPICIOUS_AUDIO platforma tarixida BIRONTA ham yozilmagan.
+// Oddiy xona shovqini (ventilyator, kuler) baribir o'tmaydi, chunki
+// `AMBIENT_FLOOR_MULT` fon sathidan ustunlikni ham talab qiladi.
+const AMBIENT_RMS_MIN = 0.06;
 const AMBIENT_FLOOR_MULT = 3.8;
+
+/**
+ * Shovqin sathini (noise floor) baholovchi.
+ *
+ * NEGA ALOHIDA KLASS: ilgari sath "birinchi 12 soniyadagi eng baland RMS"
+ * deb olinardi va keyin hech qachon o'zgarmasdi. Imtihon boshida bir
+ * marta gapirilsa sath nutq darajasiga chiqib, nazorat butun imtihon
+ * davomida kar bo'lib qolardi.
+ *
+ * To'g'ri usul — MINIMUMGA ergashish: jimlik topilganda sath tez pastga
+ * tushadi, shovqin ortsa sekin ko'tariladi va HECH QACHON `FLOOR_CEIL` dan
+ * oshmaydi (nutq darajasi shovqin deb qabul qilinmasin).
+ */
+const FLOOR_CEIL = 0.045;
+const FLOOR_INIT = 0.012;
+
+export class NoiseFloorEstimator {
+  private floor = FLOOR_INIT;
+
+  push(rms: number): number {
+    if (rms < this.floor) {
+      this.floor = this.floor * 0.88 + rms * 0.12;   // pastga TEZ
+    } else {
+      this.floor = this.floor * 0.997 + rms * 0.003; // tepaga SEKIN
+    }
+    if (this.floor > FLOOR_CEIL) this.floor = FLOOR_CEIL;
+    if (this.floor < 0.0015) this.floor = 0.0015;
+    return this.floor;
+  }
+
+  get value(): number {
+    return this.floor;
+  }
+}
+
+// --- PICHIRLASH (ovozsiz nutq) mezonlari -----------------------------------
+// Pichirlashda ohang (f0) va garmonikalar YO'Q, shuning uchun `humanVoice`
+// uni hech qachon ushlay olmaydi. Ajratuvchi belgi — BO'G'INLI tuzilish:
+// ovoz balandligi 3-8 Hz da to'lqinlanadi. Barqaror shovqin (ventilyator,
+// oq shovqin, ko'cha gurillashi) bunday to'lqinlanmaydi.
+const WHISPER_WINDOW = 12;              // ~2.4 s (200 ms freym)
+const WHISPER_FLOOR_MULT = 1.7;         // fon sathidan ustunlik
+const WHISPER_RMS_MAX = 0.30;           // baqiriq emas
+const WHISPER_LOW_FREQ_MAX = 0.45;      // past gurillash emas
+const WHISPER_SPEECH_RATIO_MIN = 0.08;  // energiyasining bir qismi nutq bandida
+const WHISPER_ZCR_MIN = 0.35;           // ovozsiz ("sh") tovush belgisi
+const WHISPER_PERIODICITY_MAX = 0.35;   // ohangsiz
+const WHISPER_MODULATION_MIN = 0.35;    // bo'g'inlilik darajasi
+// ASOSIY AJRATUVCHI — spektr shakli. Pichirlash oq shovqin (0.69) bilan
+// qog'oz shitirlashi (0.00) orasida, ~0.25 da turadi.
+const WHISPER_ACTIVE_MIN = 0.10;
+const WHISPER_ACTIVE_MAX = 0.45;
+
+/** Oynadagi RMS larning o'zgaruvchanligi: barqaror shovqinda kichik,
+ *  bo'g'inli nutqda katta. */
+function modulationDepth(hist: number[]): number {
+  if (hist.length < 4) return 0;
+  let sum = 0;
+  for (const v of hist) sum += v;
+  const mean = sum / hist.length;
+  if (mean <= 1e-6) return 0;
+  let varSum = 0;
+  for (const v of hist) varSum += (v - mean) * (v - mean);
+  return Math.sqrt(varSum / hist.length) / mean;
+}
+
+/**
+ * Pichirlash / ovozsiz nutqni aniqlaydi — `VoiceActivityTracker` dan
+ * ALOHIDA, chunki u ohangga tayanadi va pichirlashda ohang yo'q.
+ */
+export class WhisperTracker {
+  private floor = new NoiseFloorEstimator();
+  private hist: number[] = [];
+
+  push(frame: VoiceFrame): boolean {
+    const floor = this.floor.push(frame.rms);
+    this.hist.push(frame.rms);
+    if (this.hist.length > WHISPER_WINDOW) this.hist.shift();
+    if (this.hist.length < WHISPER_WINDOW) return false;
+
+    // 1) fon sathidan yuqori, lekin baqiriq emas
+    if (frame.rms <= floor * WHISPER_FLOOR_MULT) return false;
+    if (frame.rms > WHISPER_RMS_MAX) return false;
+    // 2) OHANGSIZ — ovozli nutqni `VoiceActivityTracker` ushlaydi
+    if (frame.harmonicity >= WHISPER_PERIODICITY_MAX) return false;
+    // 3) ovozsiz "sh" tovushi — nol kesishuvlar zich
+    if (frame.zcr < WHISPER_ZCR_MIN) return false;
+    // 4) past chastotali gurillash (ventilyator, transport) emas
+    if (frame.lowFreqRatio > WHISPER_LOW_FREQ_MAX) return false;
+    // 5) energiyasining bir qismi nutq diapazonida bo'lsin
+    if (frame.speechRatio < WHISPER_SPEECH_RATIO_MIN) return false;
+    // 6) SPEKTR SHAKLI — oq shovqin (tekis, 0.69) ham, qog'oz shitirlashi
+    //    (juda tor, 0.00) ham emas
+    if (frame.activeBandRatio < WHISPER_ACTIVE_MIN) return false;
+    if (frame.activeBandRatio > WHISPER_ACTIVE_MAX) return false;
+    // 7) impuls emas (klaviatura, eshik, idish)
+    if (frame.crestFactor >= CREST_IMPULSE_MIN) return false;
+    // 8) BO'G'INLILIK: barqaror shovqin emas, nutq ritmi
+    return modulationDepth(this.hist) >= WHISPER_MODULATION_MIN;
+  }
+}
 
 /**
  * Baland tashqi shovqin (musiqa, televizor, eshik — inson nutqi emas) — xom holat.
  */
 export class AmbientNoiseTracker {
-  private noiseFloor = 0.025;
-  private calibrateLeft = 60;
+  // `VoiceActivityTracker` dagi bilan bir xil xato edi: sath birinchi 12
+  // soniyadagi eng baland qiymat bo'yicha muzlatilardi.
+  private floor = new NoiseFloorEstimator();
   private prevRms = 0;
+  private warmup = 8;
 
   /**
    * @param isSpeech nutq qarori. Berilsa — Silero VAD dan keladi (ishonchliroq),
@@ -277,9 +387,9 @@ export class AmbientNoiseTracker {
    *                 "shovqin" deb ham yozilmasligi uchun kerak.
    */
   push(frame: VoiceFrame, isSpeech?: boolean): boolean {
-    if (this.calibrateLeft > 0) {
-      this.noiseFloor = Math.max(this.noiseFloor, frame.rms * 0.9);
-      this.calibrateLeft -= 1;
+    const floor = this.floor.push(frame.rms);
+    if (this.warmup > 0) {
+      this.warmup -= 1;
       return false;
     }
 
@@ -291,7 +401,7 @@ export class AmbientNoiseTracker {
     return (
       !speech &&
       frame.rms >= AMBIENT_RMS_MIN &&
-      frame.rms > this.noiseFloor * AMBIENT_FLOOR_MULT &&
+      frame.rms > floor * AMBIENT_FLOOR_MULT &&
       (frame.lowFreqRatio > 0.4 || frame.speechRatio < 0.4)
     );
   }

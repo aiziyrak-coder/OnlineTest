@@ -72,6 +72,11 @@ VIOLATION_REASONS: dict[str, dict[str, str]] = {
         "Обнаружено удалённое управление!",
         "Remote control detected!",
     ),
+    "MULTI_MONITOR_DETECTED": _tri(
+        "Bir nechta monitor aniqlandi! Faqat bitta displey qoldiring.",
+        "Обнаружено несколько мониторов! Оставьте только один дисплей.",
+        "Multiple monitors detected! Use only a single display.",
+    ),
     "IDENTITY_SUBSTITUTION": _tri(
         "Boshqa shaxs aniqlandi! Imtihon xavfsizligi buzildi.",
         "Обнаружен другой человек! Нарушена безопасность экзамена.",
@@ -101,6 +106,12 @@ VIOLATION_REASONS: dict[str, dict[str, str]] = {
         "Gapirish aniqlandi! O'zingiz yoki atrofingizda ovoz chiqmasin, jimlik saqlang.",
         "Обнаружена речь! Не разговаривайте сами и не допускайте разговоров вокруг.",
         "Speech detected! Do not talk and keep the area quiet.",
+    ),
+    "MICROPHONE_MUTED": _tri(
+        "Mikrofon o'chirilgan! Imtihon oldida u ishlayotgani tekshirilgan edi — "
+        "tovushni qaytaring.",
+        "Микрофон отключён! Перед экзаменом он работал — включите звук.",
+        "Microphone was muted! It was verified before the exam — turn it back on.",
     ),
     "CAMERA_MIC_ACCESS_FAILED": _tri(
         "Kamera yoki mikrofon ishlamayapti! Ruxsat bering.",
@@ -151,6 +162,36 @@ VIOLATION_REASONS: dict[str, dict[str, str]] = {
         "Kamera oqimi to'xtab qoldi! Kamera ulanishini tekshiring.",
         "Поток камеры прерван! Проверьте подключение камеры.",
         "Camera feed lost! Check your camera connection.",
+    ),
+    "SCREEN_SHARE_STOPPED": _tri(
+        "Ekranni ulashish to'xtatildi! Butun ekranni qayta ulashing.",
+        "Демонстрация экрана остановлена! Снова откройте доступ ко всему экрану.",
+        "Screen sharing stopped! Share your entire screen again.",
+    ),
+    "DESKTOP_FORBIDDEN_APP": _tri(
+        "Taqiqlangan dastur ochildi (messenjer, AI yordamchi yoki ekran yozish)! Uni darhol yoping.",
+        "Открыта запрещённая программа (мессенджер, AI-помощник или запись экрана)! Немедленно закройте её.",
+        "A forbidden app is open (messenger, AI assistant or screen recorder)! Close it now.",
+    ),
+    "GAZE_DOWN_TOTAL": _tri(
+        "Imtihon davomida juda ko'p pastga qaradingiz (telefon yoki qog'oz)! Faqat ekranga qarang.",
+        "Вы слишком долго смотрите вниз (телефон или бумага)! Смотрите только на экран.",
+        "You have been looking down too much (phone or paper)! Look only at the screen.",
+    ),
+    "BLUETOOTH_AUDIO_DEVICE": _tri(
+        "Simsiz (Bluetooth) quloqchin ulangan! Uni darhol uzing — imtihonda taqiqlangan.",
+        "Подключены беспроводные (Bluetooth) наушники! Немедленно отключите — на экзамене запрещено.",
+        "Wireless (Bluetooth) earphones are connected! Disconnect them now — they are forbidden.",
+    ),
+    "HAND_NEAR_EAR": _tri(
+        "Qo'lingiz uzoq vaqt quloq yonida (telefon yoki quloqchin)! Qo'llaringizni stolga qo'ying.",
+        "Рука долго у уха (телефон или наушник)! Положите руки на стол.",
+        "Your hand stayed near your ear (phone or earpiece)! Put your hands on the desk.",
+    ),
+    "GAZE_SIDE_TOTAL": _tri(
+        "Imtihon davomida juda ko'p chetga (yonga) qaradingiz! Faqat ekranga qarang.",
+        "Вы слишком часто смотрели в сторону! Смотрите только на экран.",
+        "You looked to the side too much during the exam! Look only at the screen.",
     ),
 }
 

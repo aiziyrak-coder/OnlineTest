@@ -119,12 +119,20 @@ describe('VoiceActivityTracker', () => {
     assert.equal(saw, true);
   });
 
-  it('stays quiet during calibration even if speech frames arrive', () => {
+  it('isitish (warmup) paytida jim turadi, keyin ESHITADI', () => {
+    // Ilgari bu yerda 60 freym (12 soniya) "kalibrlash" bor edi va o'sha
+    // davrdagi eng baland ovoz umrbod shovqin sathi bo'lib qolardi — imtihon
+    // boshida bir og'iz gapirilsa nazorat butun imtihon davomida kar
+    // bo'lardi. Endi sath uzluksiz baholanadi, isitish esa atigi 8 freym.
     const tracker = new VoiceActivityTracker();
-    // Kalibrlash tugamasdan (60 freym) speech kelmasin.
-    for (let i = 0; i < 40; i++) {
-      assert.equal(tracker.push(speech), false);
+    for (let i = 0; i < 8; i++) {
+      assert.equal(tracker.push(speech), false, "isitish paytida jim turishi kerak");
     }
+    let saw = false;
+    for (let i = 0; i < 10; i++) {
+      if (tracker.push(speech)) saw = true;
+    }
+    assert.equal(saw, true, "isitishdan keyin nutq aniqlanishi kerak");
   });
 });
 

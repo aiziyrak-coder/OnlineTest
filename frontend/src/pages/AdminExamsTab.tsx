@@ -4,7 +4,6 @@ import { authHeaders } from '../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../lib/http';
 import { translations, Language } from '../i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import { ExamSettings } from '../components/ExamSettings';
 import { LiveMonitor } from '../components/LiveMonitor';
 import { ExamEditModal } from '../components/ExamEditModal';
 import { AdminBtn, AdminSelect, AdminEmpty, AdminPagination, usePagedList } from './admin/ui';
@@ -15,12 +14,10 @@ const item: any = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, tra
 export function AdminExamsTab({
   token,
   lang,
-  hideExamSettings,
   apiVariant = 'admin',
 }: {
   token: string;
   lang: Language;
-  hideExamSettings?: boolean;
   apiVariant?: 'admin' | 'staff';
 }) {
   const [exams, setExams] = useState<any[]>([]);
@@ -30,10 +27,23 @@ export function AdminExamsTab({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [examListFilter, setExamListFilter] = useState<string>('All');
+  /* Auditoriya filtri: 56 ta imtihon orasidan ordinator imtihonini
+     topish uchun. Ilgari ro'yxatda imtihon KIM UCHUN ekani umuman
+     ko'rsatilmasdi -- sarlavhadan taxmin qilishga to'g'ri kelardi. */
+  const [audienceFilter, setAudienceFilter] = useState<string>('All');
+  const AUD_LABEL: Record<string, string> = {
+    student: lang === 'ru' ? 'Studenty' : lang === 'en' ? 'Students' : 'Talabalar',
+    faculty: lang === 'ru' ? 'Prepodavateli' : lang === 'en' ? 'Teachers' : "O'qituvchilar",
+    ordinator: lang === 'ru' ? 'Ordinatory' : lang === 'en' ? 'Residents' : 'Ordinatorlar',
+    magistr: lang === 'ru' ? 'Magistry' : lang === 'en' ? 'Masters' : 'Magistrlar',
+    vacancy: lang === 'ru' ? 'Kandidaty' : lang === 'en' ? 'Applicants' : 'Nomzodlar',
+  };
   const [recommendedOnly, setRecommendedOnly] = useState(false);
   const [activeMonitorExamId, setActiveMonitorExamId] = useState<number | null>(null);
   const [editingExamId, setEditingExamId] = useState<number | null>(null);
+  const [questionsExamId, setQuestionsExamId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [kafedraNames, setKafedraNames] = useState<Record<number, string>>({});
   const t = translations[lang];
   const statusLabel = (status?: string | null) =>
     status === 'Completed' ? t.examStatusCompleted
@@ -62,6 +72,21 @@ export function AdminExamsTab({
   }, [token, isStaffPortal]);
 
   useEffect(() => { void fetchExams(); void fetchGroups(); }, [fetchExams, fetchGroups]);
+
+  useEffect(() => {
+    if (isStaffPortal) return;
+    (async () => {
+      try {
+        const r = await fetch(apiUrl('/api/admin/kafedralar'), { headers: authHeaders(token, lang) });
+        if (!r.ok) return;
+        const raw = await readJsonSafe<any>(r);
+        const list = Array.isArray(raw) ? raw : (raw && raw.results) || [];
+        const map: Record<number, string> = {};
+        list.forEach((k: any) => { map[Number(k.id)] = String(k.name || ''); });
+        setKafedraNames(map);
+      } catch { /* kafedra nomlari ko'rsatish uchun -- xato bo'lsa jim o'tamiz */ }
+    })();
+  }, [token, lang, isStaffPortal]);
 
   const viewResults = async (examId: number) => {
     const res = await fetch(apiUrl(resultsUrl(examId)), { headers: authHeaders(token, lang) });
@@ -164,6 +189,9 @@ export function AdminExamsTab({
   };
 
   const filteredExams = exams.filter((e) => {
+    if (audienceFilter !== 'All' && String(e.audience || 'student') !== audienceFilter) {
+      return false;
+    }
     if (examListFilter === 'All') return true;
     const st = getExamTimeStatus(e);
     if (examListFilter === 'Upcoming') return st === 'upcoming';
@@ -175,13 +203,6 @@ export function AdminExamsTab({
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-5">
-      {/* Exam settings (create form) */}
-      {!hideExamSettings && (
-        <motion.div variants={item}>
-          <ExamSettings token={token} lang={lang} groups={groups} onSuccess={fetchExams} />
-        </motion.div>
-      )}
-
       {/* ── Exams list ── */}
       <motion.div variants={item}>
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -211,6 +232,18 @@ export function AdminExamsTab({
                 <option value="Upcoming">{t.examFilterUpcoming}</option>
                 <option value="Live">{t.examFilterLive}</option>
                 <option value="Ended">{t.examFilterEnded}</option>
+              </AdminSelect>
+              <AdminSelect
+                value={audienceFilter}
+                onChange={(e) => setAudienceFilter(e.target.value)}
+                className="h-9 w-full sm:w-auto min-w-[10rem] text-[13px]"
+              >
+                <option value="All">
+                  {lang === 'ru' ? 'Vse auditorii' : lang === 'en' ? 'All audiences' : 'Barcha auditoriyalar'}
+                </option>
+                {Object.entries(AUD_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
               </AdminSelect>
               <AdminBtn
                 variant="ghost"
@@ -247,6 +280,13 @@ export function AdminExamsTab({
                     <div className="flex items-start gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 text-[15px] leading-snug">{e.title}</p>
+                        {(e.faculty_subject || e.kafedra_id) && (
+                          <p className="text-[12px] text-gray-400 mt-0.5 truncate">
+                            {[kafedraNames[Number(e.kafedra_id)], e.faculty_subject]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        )}
                         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                           <ExamStatusBadge e={e} />
                           {(e.exam_mode === 'bank_mixed' || e.exam_mode === 'imentor_mixed') && (
@@ -254,6 +294,9 @@ export function AdminExamsTab({
                               {e.exam_mode === 'imentor_mixed' ? t.imentorExamBadge : t.bankExamBadge}
                             </span>
                           )}
+                          <span className="text-[11px] font-semibold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">
+                            {AUD_LABEL[String(e.audience || 'student')] || e.audience}
+                          </span>
                           <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium uppercase">{e.language}</span>
                           {e.language === 'auto' && e.languages_ready != null && (
                             <span
@@ -290,7 +333,7 @@ export function AdminExamsTab({
                         <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span className="text-[12px] text-gray-600 font-semibold">{e.duration_minutes} min</span>
                       </div>
-                      {(e.exam_mode === 'bank_mixed' || e.exam_mode === 'imentor_mixed') && e.bank_question_count > 0 && (
+                      {e.bank_question_count > 0 && (
                         <div className="bg-indigo-50 rounded-lg px-2.5 py-1.5 border border-indigo-100">
                           <span className="text-[12px] text-indigo-700 font-semibold">{e.bank_question_count} {t.questionsShort}</span>
                         </div>
@@ -311,6 +354,16 @@ export function AdminExamsTab({
                         </AdminBtn>
                       )}
                     </div>
+                    {!isStaffPortal && (
+                      <AdminBtn
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setQuestionsExamId(e.id)}
+                        className="w-full mt-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                      >
+                        {qtext(lang).button}
+                      </AdminBtn>
+                    )}
                   </motion.div>
                 ))}
               </div>
@@ -516,6 +569,183 @@ export function AdminExamsTab({
           }}
         />
       )}
+
+      {questionsExamId != null && (
+        <ExamQuestionsModal
+          token={token}
+          lang={lang}
+          examId={questionsExamId}
+          apiVariant={apiVariant}
+          onClose={() => setQuestionsExamId(null)}
+        />
+      )}
     </motion.div>
+  );
+}
+// ── Imtihon savollarini ko'rish ────────────────────────────────────────────
+// Ma'lumot allaqachon API da bor: GET /api/admin/exams/<id> javobida
+// `questions` massivi qaytadi. Bu yerda uni faqat ekranga chiqaramiz.
+
+type QuestionsText = {
+  button: string; title: string; count: string; loading: string;
+  empty: string; error: string; correct: string; close: string; noAnswer: string;
+};
+
+const QUESTIONS_TEXT: Record<string, QuestionsText> = {
+  uz: {
+    button: 'Savollarni ko‘rish',
+    title: 'Imtihon savollari',
+    count: 'ta savol',
+    loading: 'Yuklanmoqda…',
+    empty: 'Bu imtihonda hali savol yo‘q.',
+    error: 'Savollarni yuklab bo‘lmadi.',
+    correct: 'To‘g‘ri javob',
+    close: 'Yopish',
+    noAnswer: 'javob belgilanmagan',
+  },
+  ru: {
+    button: 'Посмотреть вопросы',
+    title: 'Вопросы экзамена',
+    count: 'вопросов',
+    loading: 'Загрузка…',
+    empty: 'В этом экзамене пока нет вопросов.',
+    error: 'Не удалось загрузить вопросы.',
+    correct: 'Правильный ответ',
+    close: 'Закрыть',
+    noAnswer: 'ответ не указан',
+  },
+  en: {
+    button: 'View questions',
+    title: 'Exam questions',
+    count: 'questions',
+    loading: 'Loading…',
+    empty: 'This exam has no questions yet.',
+    error: 'Could not load questions.',
+    correct: 'Correct answer',
+    close: 'Close',
+    noAnswer: 'no answer marked',
+  },
+};
+
+function qtext(lang: string): QuestionsText {
+  return QUESTIONS_TEXT[lang] || QUESTIONS_TEXT.uz;
+}
+
+function ExamQuestionsModal({
+  token,
+  lang,
+  examId,
+  apiVariant,
+  onClose,
+}: {
+  token: string;
+  lang: Language;
+  examId: number;
+  apiVariant: 'admin' | 'staff';
+  onClose: () => void;
+}) {
+  const L = qtext(lang);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [title, setTitle] = useState('');
+  const [questions, setQuestions] = useState<any[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      setError('');
+      const base = '/api/admin/exams/';
+      try {
+        const res = await fetch(apiUrl(base + examId), { headers: authHeaders(token, lang) });
+        if (!checkAdminAuthResponse(res)) return;
+        const data = await readJsonSafe<any>(res);
+        if (!alive) return;
+        if (!res.ok || !data) {
+          setError(L.error);
+        } else {
+          setTitle(String(data.title || ''));
+          setQuestions(Array.isArray(data.questions) ? data.questions : []);
+        }
+      } catch {
+        if (alive) setError(L.error);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [examId, token, lang, apiVariant]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+        onClick={(ev) => ev.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-gray-100">
+          <div className="text-base font-semibold text-gray-900">{L.title}</div>
+          <div className="text-[13px] text-gray-500 mt-0.5">
+            {title}
+            {!loading && !error ? ` · ${questions.length} ${L.count}` : ''}
+          </div>
+        </div>
+
+        <div className="px-5 py-4 overflow-y-auto grow">
+          {loading && <div className="text-sm text-gray-500">{L.loading}</div>}
+          {!loading && error && <div className="text-sm text-red-600">{error}</div>}
+          {!loading && !error && questions.length === 0 && (
+            <div className="text-sm text-gray-500">{L.empty}</div>
+          )}
+          {!loading && !error && questions.map((q: any, qi: number) => {
+            const opts: any[] = Array.isArray(q?.options) ? q.options : [];
+            const correct = String(q?.correctAnswer ?? '');
+            return (
+              <div key={q?.id ?? qi} className="mb-5 last:mb-0">
+                <div className="text-sm font-medium text-gray-900">
+                  {qi + 1}. {String(q?.text ?? '')}
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {opts.map((o: any, oi: number) => {
+                    const val = String(o ?? '');
+                    const isCorrect = correct !== '' && val === correct;
+                    return (
+                      <li
+                        key={oi}
+                        className={
+                          'text-[13px] px-2.5 py-1.5 rounded-lg border ' +
+                          (isCorrect
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium'
+                            : 'bg-gray-50 border-gray-100 text-gray-700')
+                        }
+                      >
+                        {String.fromCharCode(65 + oi)}. {val}
+                        {isCorrect ? ` ✓ ${L.correct}` : ''}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {correct === '' && (
+                  <div className="text-[12px] text-amber-600 mt-1">{L.noAnswer}</div>
+                )}
+                {q?.explanation ? (
+                  <div className="text-[12px] text-gray-500 mt-1.5">{String(q.explanation)}</div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
+          <AdminBtn variant="ghost" size="sm" onClick={onClose}>
+            {L.close}
+          </AdminBtn>
+        </div>
+      </div>
+    </div>
   );
 }

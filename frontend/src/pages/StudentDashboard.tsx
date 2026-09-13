@@ -10,6 +10,89 @@ import { pollExamResultAiUpgrade } from '../lib/upgradeExamResultAi';
 import { examAuthHeaders } from '../lib/deviceFingerprint';
 import { formatCountdown, formatExamDateTime, msUntil } from '../lib/datetimeLocal';
 import { AdminBtn, AdminAlert, AdminInput, AdminSelect } from './admin/ui';
+import { ExamFacts, ExamReadiness, StartExamConfirm } from '../components/ExamReadiness';
+
+/* Ordinator/magistr uchun to'lov matnlari — imtihon to'lovdan keyin ochiladi. */
+const PAY: Record<Language, Record<string, string>> = {
+  uz: {
+    required: "Imtihon to'lovdan keyin ochiladi",
+    requiredHint: "To'lovni amalga oshirib, kvitansiyani rasmga oling va shu yerga yuklang. Buxgalteriya tasdiqlagach imtihon ochiladi.",
+    used: 'Imkoniyat ishlatilgan',
+    usedHint: "Yangi urinish uchun to'lov qilinadi. Kvitansiyani yuklang — tasdiqlangach imtihon qaytadan ochiladi va savollar boshqacha bo'ladi.",
+    upload: 'Kvitansiya yuklash',
+    pending: 'Kvitansiya tekshirilmoqda',
+    pendingHint: 'Admin tasdiqlashini kuting.',
+    rejected: 'Kvitansiya rad etildi',
+    freeLeft: 'Tizim nosozligi uchun bepul qayta urinish',
+    paid: 'Berilgan pullik urinish',
+    modalTitle: 'Kvitansiyani yuklash',
+    pick: 'Rasm yoki PDF tanlang',
+    note: 'Izoh (ixtiyoriy)',
+    send: 'Yuborish',
+    cancel: 'Bekor qilish',
+    sent: 'Kvitansiya yuborildi. Admin tasdiqlashini kuting.',
+    tooBig: 'Fayl juda katta (8 MB dan oshmasin)',
+    already: 'Sizda tekshirilayotgan kvitansiya bor.',
+    debt: 'Fandan qarzdorligingiz mavjud',
+    debtHint: "Shu sababli test topshira olmaysiz. Qarzdorlik masalasi bo'yicha administratorga murojaat qiling.",
+    debtCall: 'Administrator',
+    notAllowed: 'Sizga bu imtihonga ruxsat berilmagan',
+    notAllowedHint: "Ruxsat attestatsiya grafigi bo'yicha ma'muriyat tomonidan beriladi. Savollar bo'lsa, ma'muriyatga murojaat qiling.",
+    oneUsedHint: "Bu imtihon bir martalik — urinishingiz ishlatilgan. Qayta topshirish berilmaydi; istisno faqat ma'muriyat qarori bilan.",
+  },
+  ru: {
+    required: 'Ekzamen otkryvayetsya posle oplaty',
+    requiredHint: 'Oplatite, sfotografiruyte kvitantsiyu i zagruzite eyo zdes. Posle podtverzhdeniya buhgalteriyey ekzamen otkroyetsya.',
+    used: 'Popytka ispolzovana',
+    usedHint: 'Novaya popytka — platnaya. Zagruzite kvitantsiyu; posle podtverzhdeniya ekzamen otkroyetsya s drugimi voprosami.',
+    upload: 'Zagruzit kvitantsiyu',
+    pending: 'Kvitantsiya na proverke',
+    pendingHint: 'Ozhidayte podtverzhdeniya administratora.',
+    rejected: 'Kvitantsiya otklonena',
+    freeLeft: 'Besplatnyh popytok pri sboye',
+    paid: 'Vydano platnyh popytok',
+    modalTitle: 'Zagruzka kvitantsii',
+    pick: 'Vyberite foto ili PDF',
+    note: 'Kommentariy',
+    send: 'Otpravit',
+    cancel: 'Otmena',
+    sent: 'Kvitantsiya otpravlena. Ozhidayte podtverzhdeniya.',
+    tooBig: 'Fayl slishkom bolshoy (do 8 MB)',
+    already: 'U vas uzhe yest kvitantsiya na proverke.',
+    debt: 'U vas yest zadolzhennost po predmetu',
+    debtHint: 'Poetomu vy ne mozhete sdavat test. Obratites k administratoru.',
+    debtCall: 'Administrator',
+    notAllowed: 'Dostup k etomu ekzamenu ne predostavlen',
+    notAllowedHint: 'Dostup vydayetsya administratsiyey po grafiku attestatsii. Po voprosam obrashchaytes v administratsiyu.',
+    oneUsedHint: 'Etot ekzamen odnorazovyy — vasha popytka ispolzovana. Peresdacha ne predostavlyayetsya; isklyucheniye — tolko resheniyem administratsii.',
+  },
+  en: {
+    required: 'The exam opens after payment',
+    requiredHint: 'Make the payment, photograph the receipt and upload it here. The exam opens once accounting confirms it.',
+    used: 'Attempt used',
+    usedHint: 'A new attempt is paid. Upload the receipt; once approved the exam reopens with different questions.',
+    upload: 'Upload receipt',
+    pending: 'Receipt under review',
+    pendingHint: 'Please wait for the administrator.',
+    rejected: 'Receipt rejected',
+    freeLeft: 'Free retries after a technical fault',
+    paid: 'Paid attempts granted',
+    modalTitle: 'Upload receipt',
+    pick: 'Choose a photo or PDF',
+    note: 'Note (optional)',
+    send: 'Send',
+    cancel: 'Cancel',
+    sent: 'Receipt sent. Please wait for approval.',
+    tooBig: 'File too large (max 8 MB)',
+    already: 'You already have a receipt under review.',
+    debt: 'You have an outstanding subject debt',
+    debtHint: 'You therefore cannot take the test. Please contact the administrator.',
+    debtCall: 'Administrator',
+    notAllowed: 'You have not been granted access to this exam',
+    notAllowedHint: 'Access is granted by the administration according to the attestation schedule. Contact the administration with any questions.',
+    oneUsedHint: 'This is a one-time exam — your attempt has been used. No retake is granted; exceptions only by administration decision.',
+  },
+};
 
 const REFRESH_INTERVAL_MS = 30_000;
 const REFRESH_BANNED_WAIT_MS = 8_000;
@@ -35,6 +118,10 @@ const LOCAL: Record<Language, Record<string, string>> = {
     absentStatus: 'Kelmagan',
     absentHint: 'Imtihonga umuman kirmadingiz',
     retakeAvailable: 'Oldingi urinish yiqildi. Imtihon vaqti tugamaguncha qayta boshlashingiz mumkin.',
+    facultyPickHint: 'Jadvaldagi fanlardan faqat BIRINI tanlang: 20 daqiqa, 20 ta qiyin USMLE savol.',
+    facultyKafedra: 'Kafedra',
+    questionsPreparing: 'Savollar tayyorlanmoqda…',
+    facultyUsmleBadge: 'USMLE 20',
   },
   ru: {
     greeting: 'Добро пожаловать',
@@ -55,6 +142,10 @@ const LOCAL: Record<Language, Record<string, string>> = {
     absentStatus: 'Не явился',
     absentHint: 'Вы не заходили на экзамен',
     retakeAvailable: 'Прошлая попытка провалена. Пока экзамен открыт, можно начать заново.',
+    facultyPickHint: 'Выберите только ОДИН предмет из таблицы: 20 минут, 20 сложных вопросов USMLE.',
+    facultyKafedra: 'Кафедра',
+    questionsPreparing: 'Вопросы готовятся…',
+    facultyUsmleBadge: 'USMLE 20',
   },
   en: {
     greeting: 'Welcome',
@@ -75,6 +166,10 @@ const LOCAL: Record<Language, Record<string, string>> = {
     absentStatus: 'Absent',
     absentHint: 'You did not enter the exam',
     retakeAvailable: 'Previous attempt failed. You can restart while the exam is open.',
+    facultyPickHint: 'Pick only ONE subject from the schedule: 20 minutes, 20 hard USMLE questions.',
+    facultyKafedra: 'Department',
+    questionsPreparing: 'Questions are being prepared…',
+    facultyUsmleBadge: 'USMLE 20',
   },
 };
 
@@ -215,6 +310,17 @@ export function StudentDashboard({
   const [appealMsgByExam, setAppealMsgByExam] = useState<Record<number, string>>({});
   /** Urinish tarixi modali — kartochkani to'ldirmasin deb alohida oynada. */
   const [historyModal, setHistoryModal] = useState<{ title: string; items: any[] } | null>(null);
+  /** Boshlashdan oldin tasdiqlash oynasi va tayyorlik tekshiruvi natijasi. */
+  const [confirmExam, setConfirmExam] = useState<any | null>(null);
+  const [readinessIssues, setReadinessIssues] = useState(0);
+  const onReadiness = useCallback((r: { issues: number }) => setReadinessIssues(r.issues), []);
+  /** Kvitansiya yuklash oynasi (ordinator/magistr). */
+  const [payExam, setPayExam] = useState<any | null>(null);
+  const [payFile, setPayFile] = useState<File | null>(null);
+  const [payNote, setPayNote] = useState('');
+  const [payBusy, setPayBusy] = useState(false);
+  const [payMsg, setPayMsg] = useState('');
+  const P = PAY[lang];
   const t = translations[lang];
   const L = LOCAL[lang];
   const cancelledRef = useRef(false);
@@ -294,6 +400,58 @@ export function StudentDashboard({
   }, [fetchData]);
 
   const hasBannedResult = results.some((r: any) => r.status === 'Banned');
+  /** Kvitansiyani base64 ga o'girib serverga yuboradi. */
+  const sendReceipt = useCallback(async () => {
+    if (!payFile || !payExam) return;
+    if (payFile.size > 8 * 1024 * 1024) {
+      setPayMsg(P.tooBig);
+      return;
+    }
+    setPayBusy(true);
+    setPayMsg('');
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('read'));
+        fr.onload = () => {
+          const raw = String(fr.result || '');
+          resolve(raw.includes(',') ? raw.split(',')[1] : raw);
+        };
+        fr.readAsDataURL(payFile);
+      });
+      const res = await fetch(apiUrl('/api/student/payment-receipts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token, lang) },
+        body: JSON.stringify({
+          file_base64: b64,
+          file_name: payFile.name.slice(0, 200),
+          file_mime: payFile.type || 'image/jpeg',
+          note: payNote.slice(0, 1000),
+          exam_id: payExam.id,
+        }),
+      });
+      const j = await readJsonSafe<Record<string, unknown>>(res);
+      if (res.status === 409) {
+        setPayMsg(P.already);
+        return;
+      }
+      if (!res.ok) {
+        setPayMsg(String(j?.error ?? 'Xatolik'));
+        return;
+      }
+      setPayExam(null);
+      setPayFile(null);
+      setPayNote('');
+      setPayMsg('');
+      window.alert(P.sent);
+      fetchData(true);
+    } catch {
+      setPayMsg('Xatolik');
+    } finally {
+      setPayBusy(false);
+    }
+  }, [payFile, payExam, payNote, token, lang, P, fetchData]);
+
   const refreshMs = hasBannedResult ? REFRESH_BANNED_WAIT_MS : REFRESH_INTERVAL_MS;
 
   useEffect(() => {
@@ -447,7 +605,18 @@ export function StudentDashboard({
   };
 
   return (
-    <div className="px-3 sm:px-6 py-4 sm:py-6 max-w-6xl mx-auto relative">
+    <div className="w-full py-2 sm:py-3 relative">
+      <StartExamConfirm
+        exam={confirmExam}
+        lang={lang}
+        readinessIssues={readinessIssues}
+        onCancel={() => setConfirmExam(null)}
+        onConfirm={() => {
+          const ex = confirmExam;
+          setConfirmExam(null);
+          if (ex) onStartExam(ex, 0);
+        }}
+      />
       {/* Result detail overlay — createPortal orqali document.body ga chiqariladi. */}
       {detailPayload && createPortal(
         <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm">
@@ -462,7 +631,7 @@ export function StudentDashboard({
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <div className="px-3 sm:px-4 pb-[max(1rem,env(safe-area-inset-bottom))] max-w-4xl mx-auto -mt-2">
+            <div className="px-3 sm:px-4 pb-[max(1rem,env(safe-area-inset-bottom))] max-w-6xl mx-auto -mt-2">
               <ExamResultSummary
                 data={detailPayload}
                 token={token}
@@ -488,6 +657,9 @@ export function StudentDashboard({
                 </>
               : L.subtitleNone}
           </p>
+          {String((user as any)?.role || '').toLowerCase() === 'faculty' && visibleExams.some((e: any) => e.exam_mode === 'faculty_ai_books') && (
+            <p className="text-[12.5px] text-indigo-700 mt-1.5 max-w-xl leading-relaxed">{L.facultyPickHint}</p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-gray-500 tabular-nums">
@@ -496,6 +668,20 @@ export function StudentDashboard({
             </svg>
             {formatExamDateTime(new Date(now).toISOString(), lang)}
           </div>
+          {/* Profil rasmini yangilash: kichik HR kadrlari sabab imtihonga
+              kirishda yuz tanilmasdi — shu yerdan pasport rasmini yuklaydi. */}
+          <a
+            href="/profil-rasm"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="hidden sm:inline">
+              {lang === 'ru' ? 'Обновить фото' : lang === 'en' ? 'Update photo' : 'Rasmni yangilash'}
+            </span>
+          </a>
           <AdminBtn
             variant="ghost"
             size="md"
@@ -544,6 +730,9 @@ export function StudentDashboard({
         />
       </div>
 
+      {/* ── Imtihonga tayyorlik va yordam ── */}
+      <ExamReadiness lang={lang} hasPhoto={Boolean((user as any)?.profile_image)} onSummary={onReadiness} />
+
       {/* ── Tabs + natija filtri (bir qator) ── */}
       <div className="flex items-center justify-between gap-2 sm:gap-3 mb-5 min-w-0">
         <div className="flex items-center gap-1 h-11 rounded-xl bg-gray-100 p-1 border border-gray-200 min-w-0 shrink">
@@ -581,7 +770,7 @@ export function StudentDashboard({
 
       {/* Loading skeleton */}
       {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-xl border border-gray-200 bg-white p-5 space-y-3 animate-pulse">
               <div className="h-4 bg-gray-100 rounded w-3/4" />
@@ -603,7 +792,7 @@ export function StudentDashboard({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
-              className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+              className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4"
             >
               {exams.length === 0 ? (
                 <EmptyState
@@ -685,9 +874,13 @@ export function StudentDashboard({
                           >
                             {e.language === 'auto' ? t.langAuto : e.language}
                           </span>
-                          {(e.exam_mode === 'bank_mixed' || e.exam_mode === 'imentor_mixed') && (
+                          {(e.exam_mode === 'bank_mixed' || e.exam_mode === 'imentor_mixed' || e.exam_mode === 'faculty_ai_books') && (
                             <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md">
-                              {e.exam_mode === 'imentor_mixed' ? t.imentorExamBadge : t.bankExamBadge}
+                              {e.exam_mode === 'imentor_mixed'
+                                ? t.imentorExamBadge
+                                : e.exam_mode === 'faculty_ai_books'
+                                  ? L.facultyUsmleBadge
+                                  : t.bankExamBadge}
                             </span>
                           )}
                         </div>
@@ -695,6 +888,19 @@ export function StudentDashboard({
 
                       <div className="px-5 pt-2.5 pb-4 flex-1">
                         <h3 className="text-[15.5px] font-semibold text-gray-900 leading-snug mb-3.5">{e.title}</h3>
+                        {e.faculty_subject ? (
+                          <div className="mb-3 -mt-2">
+                            <p className="text-[12px] text-indigo-700 font-medium">{e.faculty_subject}</p>
+                            {e.kafedra_name ? (
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                {L.facultyKafedra}: {e.kafedra_name}
+                              </p>
+                            ) : null}
+                            {e.exam_mode === 'faculty_ai_books' && e.questions_ready === false ? (
+                              <p className="text-[11px] text-amber-700 mt-1 font-medium">{L.questionsPreparing}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
 
                         <dl className="space-y-2.5 text-[13px]">
                           <MetaRow
@@ -705,7 +911,7 @@ export function StudentDashboard({
                           <MetaRow
                             icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />}
                             label={t.endTime}
-                            value={formatExamDateTime(e.end_time, lang)}
+                            value={formatExamDateTime(e.access_until || e.end_time, lang)}
                           />
                           <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-gray-100">
                             <span className="text-gray-500 inline-flex items-center gap-2">
@@ -728,6 +934,8 @@ export function StudentDashboard({
                             />
                           )}
                         </dl>
+
+                        <ExamFacts exam={e} lang={lang} now={now} />
 
                         {((e.violation_retakes_used ?? 0) > 0 || (e.identity_retakes_used ?? 0) > 0) && (() => {
                           const isViolation = (e.violation_retakes_used ?? 0) > 0;
@@ -773,7 +981,94 @@ export function StudentDashboard({
                       </div>
 
                       <div className="px-5 pb-5">
-                        {e.in_progress && !retakesBlocked ? (
+                        {e.access?.locked ? (
+                          /* Ordinator/magistr: imtihon TO'LOVDAN keyin ochiladi.
+                             Bu yerda urinishlar soni ham ko'rinib turadi. */
+                          (() => {
+                            const acc = e.access || {};
+                            const rc = acc.receipt || null;
+                            const waiting = rc && rc.status === 'Pending';
+                            const attemptUsed = acc.code === 'ATTEMPT_USED';
+                            const debtHold = acc.code === 'DEBT_HOLD';
+                            if (acc.one_attempt) {
+                              /* Bir martalik imtihon (1-kurs grant attestatsiyasi):
+                                 to'lov/kvitansiya yo'q — faqat holat ko'rsatiladi. */
+                              return (
+                                <div className="rounded-lg border px-3 py-2.5 border-rose-200 bg-rose-50">
+                                  <p className="text-[13px] font-bold text-rose-800">
+                                    {attemptUsed ? P.used : debtHold ? P.debt : P.notAllowed}
+                                  </p>
+                                  <p className="text-[12px] mt-1 leading-snug text-gray-600">
+                                    {attemptUsed ? P.oneUsedHint : debtHold ? P.debtHint : P.notAllowedHint}
+                                  </p>
+                                  {debtHold && acc.contact && (
+                                    <a
+                                      href={`tel:${String(acc.contact).replace(/[^\d+]/g, '')}`}
+                                      className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-white border border-rose-200 px-2.5 py-1.5 text-[13px] font-bold text-rose-800"
+                                    >
+                                      {P.debtCall}: {acc.contact}
+                                    </a>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="space-y-2.5">
+                                <div
+                                  className={`rounded-lg border px-3 py-2.5 ${
+                                    waiting
+                                      ? 'border-amber-200 bg-amber-50'
+                                      : 'border-rose-200 bg-rose-50'
+                                  }`}
+                                >
+                                  <p
+                                    className={`text-[13px] font-bold ${
+                                      waiting ? 'text-amber-800' : 'text-rose-800'
+                                    }`}
+                                  >
+                                    {waiting ? P.pending : attemptUsed ? P.used : P.required}
+                                  </p>
+                                  <p className="text-[12px] mt-1 leading-snug text-gray-600">
+                                    {waiting
+                                      ? P.pendingHint
+                                      : attemptUsed
+                                        ? P.usedHint
+                                        : P.requiredHint}
+                                  </p>
+                                  {rc && rc.status === 'Rejected' && (
+                                    <p className="text-[12px] mt-1.5 font-semibold text-rose-700">
+                                      {P.rejected}
+                                      {rc.admin_note ? `: ${rc.admin_note}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 text-[11.5px]">
+                                  <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-600 font-medium">
+                                    {P.freeLeft}: {acc.tech_retries_left ?? acc.free_tech_retries ?? 3}/
+                                    {acc.free_tech_retries ?? 3}
+                                  </span>
+                                  <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-600 font-medium">
+                                    {P.paid}: {acc.paid_attempts ?? 0}
+                                  </span>
+                                </div>
+                                <AdminBtn
+                                  variant={waiting ? 'ghost' : 'amber'}
+                                  size="lg"
+                                  className="w-full"
+                                  disabled={!!waiting}
+                                  onClick={() => {
+                                    setPayExam(e);
+                                    setPayFile(null);
+                                    setPayNote('');
+                                    setPayMsg('');
+                                  }}
+                                >
+                                  {waiting ? P.pending : P.upload}
+                                </AdminBtn>
+                              </div>
+                            );
+                          })()
+                        ) : e.in_progress && !retakesBlocked ? (
                           <div className="space-y-2.5">
                             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md">
                               {t.examInProgressBadge}
@@ -830,11 +1125,17 @@ export function StudentDashboard({
                             </AdminBtn>
                           </div>
                         ) : isOngoing ? (
-                          <AdminBtn variant="blue" size="lg" className="w-full" onClick={() => onStartExam(e, 0)} iconRight={
+                          e.exam_mode === 'faculty_ai_books' && e.questions_ready === false ? (
+                            <AdminBtn variant="ghost" size="lg" className="w-full" disabled>
+                              {L.questionsPreparing}
+                            </AdminBtn>
+                          ) : (
+                          <AdminBtn variant="blue" size="lg" className="w-full" onClick={() => setConfirmExam(e)} iconRight={
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M9 5l7 7-7 7" /></svg>
                           }>
                             {t.takeExam}
                           </AdminBtn>
+                          )
                         ) : (
                           <AdminBtn variant="ghost" size="lg" className="w-full" disabled>
                             {t.examStateUpcoming}{untilStart > 0 ? ` · ${formatCountdown(untilStart, lang)}` : ''}
@@ -854,7 +1155,7 @@ export function StudentDashboard({
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
               {results.length === 0 ? (
                 <EmptyState
                   icon={
@@ -1144,6 +1445,56 @@ export function StudentDashboard({
                 </li>
               ))}
             </ol>
+          </motion.div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Kvitansiya yuklash — ordinator/magistr */}
+      {payExam && createPortal(
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !payBusy && setPayExam(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+            className="w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="text-[15px] font-bold text-gray-900">{P.modalTitle}</h3>
+              <p className="text-[12.5px] text-gray-500 mt-0.5 truncate">{payExam.title}</p>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-[12.5px] text-gray-600 leading-snug">{P.requiredHint}</p>
+              <label className="block">
+                <span className="text-[12px] font-semibold text-gray-600">{P.pick}</span>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(ev) => setPayFile(ev.target.files?.[0] ?? null)}
+                  className="mt-1.5 block w-full text-[13px] text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-indigo-700 file:font-semibold"
+                />
+              </label>
+              <AdminInput
+                value={payNote}
+                onChange={(ev) => setPayNote(ev.target.value)}
+                placeholder={P.note}
+              />
+              {payMsg && <AdminAlert type="error">{payMsg}</AdminAlert>}
+              <div className="flex justify-end gap-2 pt-1">
+                <AdminBtn variant="ghost" onClick={() => setPayExam(null)} disabled={payBusy}>
+                  {P.cancel}
+                </AdminBtn>
+                <AdminBtn variant="emerald" onClick={sendReceipt} loading={payBusy} disabled={!payFile}>
+                  {P.send}
+                </AdminBtn>
+              </div>
+            </div>
           </motion.div>
         </div>,
         document.body,

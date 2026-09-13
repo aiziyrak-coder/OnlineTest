@@ -130,6 +130,10 @@ export function StudentsPage({ token, lang, initialGroupId }: Props) {
     setEditError('');
     const fd = new FormData(e.currentTarget);
     const pw = String(fd.get('password') || '').trim();
+    if (pw && pw.length < 10) {
+      setEditError(t.pwdMinPlaceholder);
+      return;
+    }
     const payload: Record<string, unknown> = {
       name: fd.get('name'), status: fd.get('status'),
       group_id: fd.get('group_id') ? Number(fd.get('group_id')) : null,
@@ -338,18 +342,29 @@ export function StudentsPage({ token, lang, initialGroupId }: Props) {
             {editLoading ? (
                 <p className="text-[14px] text-gray-400 text-center py-8">{t.loading}</p>
               ) : (
-                <form onSubmit={saveEdit} className="space-y-4">
+                <form onSubmit={saveEdit} className="space-y-4" autoComplete="off">
+                  {/* Chrome parol formalarida "autocomplete=off" ni e'tiborsiz
+                      qoldiradi va tasodifiy maydonlarga saqlangan login/parolni
+                      yozib qo'yadi (masalan "Stavka" ga). Ko'rinmas soxta
+                      maydonlar avtoto'ldirishni o'ziga tortadi. */}
+                  <input type="text" name="fakeuser" autoComplete="username"
+                    tabIndex={-1} aria-hidden className="hidden" />
+                  <input type="password" name="fakepass" autoComplete="current-password"
+                    tabIndex={-1} aria-hidden className="hidden" />
                   <AdminField label={t.userFullName}>
-                    <AdminInput name="name" defaultValue={editing.name} required />
+                    <AdminInput key={`nm-${editing.id}`} name="name"
+                      defaultValue={editing.name} required autoComplete="off" />
                   </AdminField>
                   <AdminField label={t.userStatus}>
-                    <AdminSelect name="status" defaultValue={editing.status}>
+                    <AdminSelect key={`st-${editing.id}-${editing.status}`}
+                      name="status" defaultValue={editing.status}>
                       <option value="Active">{t.adminStatusActive}</option>
                       <option value="Banned">{t.adminStatusBanned}</option>
                     </AdminSelect>
                   </AdminField>
                   <AdminField label={t.kontingentGroups}>
-                    <AdminSelect name="group_id" defaultValue={editing.group_id ?? ''}>
+                    <AdminSelect key={`gr-${editing.id}-${editing.group_id ?? 'x'}`}
+                      name="group_id" defaultValue={editing.group_id ?? ''}>
                       <option value="">{t.adminEditGroupEmpty}</option>
                       {groups.map((g) => (
                         <option key={g.id} value={g.id}>
@@ -359,7 +374,9 @@ export function StudentsPage({ token, lang, initialGroupId }: Props) {
                     </AdminSelect>
                   </AdminField>
                   <AdminField label={t.newPasswordOptional}>
-                    <AdminInput name="password" type="password" minLength={10} placeholder={t.adminPasswordPlaceholder} />
+                    <AdminInput key={`pw-${editing.id}`} name="password" type="password"
+                      minLength={10} autoComplete="new-password"
+                      placeholder={t.adminPasswordPlaceholder} />
                   </AdminField>
                   <div>
                     <p className="text-[13px] font-medium text-gray-600 mb-1.5">{t.profilePhotoLabel}</p>

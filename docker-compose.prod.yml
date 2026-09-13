@@ -1,0 +1,106 @@
+# Umumiy serverda ishlash qoidalari (ichki operatsion qo'llanma, 04 va 07-bo'limlar).
+# Bu serverda 23 ta loyiha, 87 ta konteyner va 40 ta domen bir vaqtda ishlaydi —
+# quyidagilar boshqa loyihalarga zarar bermaslik uchun MAJBURIY.
+#
+# Ishlatish (HAR DOIM ikkala fayl bilan):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Faqat bitta xizmatni yangilash (04/09-bo'lim — `--no-deps` bazani asramaydi):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps app
+#
+# Nima o'zgaradi:
+#   1. `app` porti 127.0.0.1 ga bog'lanadi (0.0.0.0 emas) — tashqariga faqat
+#      host nginx orqali chiqiladi.
+#   2. `db` ning host porti butunlay olib tashlanadi. Baza tarmoqqa ko'rinmasligi
+#      kerak; app/worker/beat unga compose tarmog'i ichida `db:5432` orqali
+#      ulanadi. Bu 5432 portni ham bo'shatadi.
+#   3. Har bir xizmatga log chegarasi qo'yiladi. Serverda umumiy
+#      /etc/docker/daemon.json yo'q — cheklamasa bitta konteyner diskni to'ldirib,
+#      barcha loyihalarni yiqitishi mumkin.
+#   4. `app` ga `restart: unless-stopped` qo'shiladi (asosiy faylda yo'q edi).
+#
+# VOLUME NOMLARI ATAYLAB O'ZGARTIRILMAGAN. Compose ularga loyiha nomini prefiks
+# qiladi (`onlinetest_pg-data`, `onlinetest_redis-data`), ya'ni ular allaqachon
+# noyob. Nomni o'zgartirish = bo'sh yangi volume = BAZA YO'QOLADI.
+
+x-logging: &logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  db:
+    # Baza tashqariga ochilmaydi (qo'llanma, 03 va 08-bo'lim).
+    ports: !reset []
+    # max_connections standart 100 edi (3 tasi superuser zaxirasi -> 97 ta).
+    # 2026-09-04 imtihonida shu limit tugab, "sorry, too many clients already"
+    # xatosi chiqdi va imtihon uzilib-uzilib ishladi. Serverda 94 GB xotira
+    # bor, shuning uchun 300 ta ulanish bemalol.
+    command:
+      - postgres
+      - -c
+      - max_connections=300
+      - -c
+      - shared_buffers=512MB
+    logging: *logging
+
+  redis:
+    logging: *logging
+
+  app:
+    restart: unless-stopped
+    # Faqat localhost — nginx shu manzilga uzatadi.
+    ports: !override
+      - "127.0.0.1:${APP_PORT:-8090}:8080"
+    environment:
+      # Prod'da debug hech qachon yoqilmasin (asosiy fayl dev uchun mo'ljallangan).
+      DJANGO_DEBUG: "0"
+      IDENTITY_VERIFY_DEBUG_LOG: "0"
+      # Vakansiya nomzodiga savollar so'rov ichida AI bilan yaratiladi va
+      # bu 1-5 daqiqa davom etadi. Standart 300s aynan chegarada edi —
+      # oshirilmasa worker so'rovni uzib yuborardi.
+      GUNICORN_TIMEOUT: "600"
+    logging: *logging
+
+  worker:
+    logging: *logging
+
+  beat:
+    # Celery beat vazifalarni Redis navbatiga qo'yardi, lekin worker ularni
+    # olmasdi — navbatda mingdan ortiq bajarilmagan xabar to'planib qolgan va
+    # tashlab ketilgan sessiyalar hech qachon yopilmasdi. Shuning uchun bu
+    # konteyner endi o'sha ikki vazifani BROKERSIZ, to'g'ridan-to'g'ri bajaradi.
+    # Proctoring kadrlari (analyze_frame) avvalgidek Celery orqali ishlaydi.
+    entrypoint: ["python", "-c"]
+    command:
+      - |
+        import os, sys, time, logging, django
+        sys.path.insert(0, '/app/backend')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'exam_platform.settings')
+        django.setup()
+        from apps.api.tasks import run_sweep_stale_sessions, run_finalize_ended_exams
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+        log = logging.getLogger('maintenance')
+        sweep_every = int(os.environ.get('PROCTOR_SWEEP_INTERVAL_SECONDS', '60'))
+        finalize_every = int(os.environ.get('EXAM_FINALIZE_INTERVAL_SECONDS', '300'))
+        log.info('Xizmat sikli: sweep=%ss finalize=%ss', sweep_every, finalize_every)
+        last_finalize = 0.0
+        while True:
+            started = time.time()
+            try:
+                r = run_sweep_stale_sessions()
+                if r and any(r.values()):
+                    log.info('sweep -> %s', r)
+            except Exception:
+                log.exception('sweep xato')
+            if started - last_finalize >= finalize_every:
+                try:
+                    r = run_finalize_ended_exams()
+                    if r and any(r.values()):
+                        log.info('finalize -> %s', r)
+                except Exception:
+                    log.exception('finalize xato')
+                last_finalize = started
+            time.sleep(max(5, sweep_every - (time.time() - started)))
+    logging: *logging

@@ -41,6 +41,44 @@ class StudentExam(models.Model):
     bonus_technical_retakes = models.PositiveSmallIntegerField(default=0)
     identity_retakes_used = models.PositiveSmallIntegerField(default=0)
     ban_reason = models.CharField(max_length=32, blank=True, default="")
+    # Admin "Ko'rib chiqish navbati"da qatorni yopgan payt. Navbat
+    # violations_log dan quriladi va yozuvlar hech qachon o'chmaydi, shuning
+    # uchun blokdan chiqarilgan/qayta imkon berilgan kishi ham navbatda qolib
+    # ketardi — admin bir xil qatorni qayta-qayta bosardi. Shu vaqtdan oldingi
+    # buzilishlar ko'rib chiqilgan hisoblanadi.
+    review_cleared_at = models.DateTimeField(null=True, blank=True)
+    # Ordinator/magistr: imtihon TO'LOVDAN keyin ochiladi. Standart holatda
+    # yopiq turadi, admin to'lovni tasdiqlagach True bo'ladi.
+    access_granted = models.BooleanField(default=False)
+    # Admin to'lov asosida nechta urinish bergani (kvitansiya tasdiqlangani).
+    paid_attempts_granted = models.PositiveSmallIntegerField(default=0)
+    # Shu kishiga ALLAQACHON berilgan savol raqamlari. Qayta urinishda
+    # ular chetlab o'tiladi - savollar takrorlanmasligi kerak.
+    served_question_ids = models.TextField(blank=True, default="[]")
+    # Ruxsatni ushlab turish sababi ("DEBT" — fandan qarzdorlik). Ruxsat
+    # berilmagan bo'lsa talabaga sababi va murojaat telefoni ko'rsatiladi.
+    # Admin "Ruxsat berish"ni bossa tozalanadi (qarz yopildi degani).
+    access_hold_reason = models.CharField(max_length=32, blank=True, default="")
+    # Har bir savolga sarflangan vaqt (frontend yuboradi, answer_timing.clean_timings
+    # bilan tozalanadi): uzun klinik savolga bir necha soniyada to'g'ri javob — belgi.
+    answer_timings_json = models.TextField(blank=True, default="")
+    # Savolga vaqt va orqaga qaytmaslik holati (apps.api.question_lock):
+    # {"enabled", "idx", "shown_at", "seconds", "locked": {qid: javob}, "armed"}.
+    question_lock_json = models.TextField(blank=True, default="")
+
+    # --- Nazorat qoidalariga ROZILIK (apellyatsiya uchun dalil) ---------
+    #: Rozilik berilgan payt. Bo'sh bo'lsa imtihon boshlanmaydi.
+    vac_consent_at = models.DateTimeField(null=True, blank=True)
+    #: Ko'rsatilgan qoidalar matnining barmoq izi (sha256, 16 belgi) va
+    #: tili. Qoidalar keyin o'zgarsa ham, u AYNAN nimaga rozi bo'lgani
+    #: aniqlanadi.
+    vac_consent_version = models.CharField(max_length=64, blank=True, default="")
+    #: Rozilik berilgan IP va qurilma — kim va qayerdan tasdiqlagani.
+    vac_consent_ip = models.CharField(max_length=64, blank=True, default="")
+    #: Imtihon boshida O'LCHANGAN mikrofon darajasi (RMS 0..1).
+    #: Keyinchalik mikrofon jim bo'lib qolsa, bu qiymat uning boshida
+    #: ishlaganini isbotlaydi.
+    mic_level_at_start = models.FloatField(null=True, blank=True)
 
     class Meta:
         app_label = "core"

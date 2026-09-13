@@ -4,7 +4,8 @@ import { translations, Language } from '../../i18n';
 import { apiUrl } from '../../lib/apiUrl';
 import { authHeaders } from '../../lib/uiLangHeader';
 import { readJsonSafe, parseAdminUsersList, checkAdminAuthResponse } from '../../lib/http';
-import { AdminInput, AdminBtn, AdminCard, AdminAlert, AdminEmpty, AdminLabel, AdminTextarea, AdminModal, AdminFileInput, AdminPageMessage, AdminPagination, usePagedList } from './ui';
+import { AdminInput, AdminBtn, AdminCard, AdminAlert, AdminEmpty, AdminLabel, AdminTextarea, AdminModal, AdminFileInput, AdminPageMessage, AdminPagination, usePagedList, AdminSelect,
+} from './ui';
 import type { BanAppeal, Group, StudentRow } from './types';
 
 interface Props { token: string; lang: Language; }
@@ -23,6 +24,7 @@ export function BannedPage({ token, lang }: Props) {
   const [pageMsg, setPageMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [appealNotes, setAppealNotes] = useState<Record<number, string>>({});
   const [appealBusy, setAppealBusy] = useState<Record<number, boolean>>({});
+  const [queueBusy, setQueueBusy] = useState<Record<number, boolean>>({});
 
   // Unban modal
   const [unbanUser, setUnbanUser] = useState<StudentRow | null>(null);
@@ -30,11 +32,29 @@ export function BannedPage({ token, lang }: Props) {
   const [unbanFile, setUnbanFile] = useState<File | null>(null);
   const [unbanError, setUnbanError] = useState('');
   const [unbanBusy, setUnbanBusy] = useState(false);
+  const [roleFilter, setRoleFilter] = useState('');
+  const ROLE_LABEL: Record<string, string> = {
+    student: lang === 'ru' ? 'Student' : lang === 'en' ? 'Student' : 'Talaba',
+    faculty: lang === 'ru' ? 'Prepodavatel' : lang === 'en' ? 'Teacher' : "O'qituvchi",
+    ordinator: lang === 'ru' ? 'Ordinator' : lang === 'en' ? 'Resident' : 'Ordinator',
+    magistr: lang === 'ru' ? 'Magistr' : lang === 'en' ? 'Master' : 'Magistr',
+    vacancy: lang === 'ru' ? 'Kandidat' : lang === 'en' ? 'Applicant' : 'Nomzod',
+    staff: lang === 'ru' ? 'Nablyudatel' : lang === 'en' ? 'Proctor' : 'Kuzatuvchi',
+  };
 
   const load = useCallback(async () => {
     const [rG, rB, rA, rQ] = await Promise.all([
       fetch(apiUrl('/api/admin/groups'), { headers: h }),
-      fetch(apiUrl('/api/admin/users?role=student&status=Banned'), { headers: h }),
+      // Bloklanganlar ro'yxati BARCHA rollarni qamrab oladi. Ilgari faqat
+      // talaba so'ralardi: bloklangan o'qituvchi, ordinator, magistr yoki
+      // vakansiya nomzodi bu oynada umuman ko'rinmasdi va banini ochishning
+      // iloji yo'q edi.
+      fetch(
+        apiUrl(
+          '/api/admin/users?role=student,faculty,ordinator,magistr,vacancy,staff&status=Banned&limit=500',
+        ),
+        { headers: h },
+      ),
       fetch(apiUrl('/api/admin/ban-appeals?status=Pending'), { headers: h }),
       fetch(apiUrl('/api/admin/review-queue?limit=40'), { headers: h }),
     ]);
@@ -116,7 +136,46 @@ export function BannedPage({ token, lang }: Props) {
     }
   };
 
+  // Ko'rib chiqish navbati ilgari faqat ma'lumot ko'rsatardi: adashib
+  // bloklangan o'qituvchini shu yerdan chiqarib bo'lmasdi. Endi har qatorda
+  // ikkita amal bor - blokdan chiqarish va qayta topshirishga ruxsat.
+  const queueAction = async (seId: number, action: 'unblock' | 'retake') => {
+    if (!seId) return;
+    // "Qayta imkon berish" TOPSHIRILGAN NATIJANI BUTUNLAY O'CHIRADI: javoblar,
+    // ball, tugatilgan vaqt — hammasi tozalanadi va qaytarib bo'lmaydi.
+    // Tugma "Blokdan chiqarish" yonida turgani uchun adashib bosilgan va bir
+    // o'qituvchining tayyor natijasi yo'qolgan edi. Endi tasdiq so'raladi.
+    if (action === 'retake') {
+      const warn = lang === 'ru'
+        ? 'Внимание! Уже сданный результат (ответы и балл) будет УДАЛЁН безвозвратно, человеку придётся сдавать заново. Продолжить?'
+        : lang === 'en'
+          ? 'Warning! The submitted result (answers and score) will be PERMANENTLY DELETED and the person must take the exam again. Continue?'
+          : "Diqqat! Topshirilgan natija (javoblar va ball) BUTUNLAY o'chadi va bu kishi imtihonni qaytadan topshirishi kerak bo'ladi. Davom etamizmi?";
+      if (!window.confirm(warn)) return;
+    }
+    setQueueBusy((p) => ({ ...p, [seId]: true }));
+    try {
+      const path = action === 'retake'
+        ? `/api/admin/student_exams/${seId}/retake`
+        : `/api/admin/student_exams/${seId}/unblock`;
+      const res = await fetch(apiUrl(path), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...h },
+        body: JSON.stringify(action === 'unblock' ? { can_retake: true } : {}),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      const d = await readJsonSafe<{ error?: string }>(res);
+      if (!res.ok) { setPageMsg({ type: 'err', text: d?.error || t.errorGeneric }); return; }
+      setPageMsg({ type: 'ok', text: lang === 'ru' ? 'Готово' : lang === 'en' ? 'Done' : 'Bajarildi' });
+      setTimeout(() => setPageMsg(null), 3000);
+      load();
+    } finally {
+      setQueueBusy((p) => ({ ...p, [seId]: false }));
+    }
+  };
+
   const filtered = banList.filter((u) => {
+    if (roleFilter && String(u.role || '') !== roleFilter) return false;
     const q = search.toLowerCase();
     return !q || u.name.toLowerCase().includes(q) || u.id.toLowerCase().includes(q);
   });
@@ -133,13 +192,25 @@ export function BannedPage({ token, lang }: Props) {
         count={banList.length}
         borderColor="border-red-200/70"
       >
-        <div className="px-4 sm:px-5 py-3 border-b border-gray-100">
+        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex flex-wrap gap-2">
           <AdminInput
             placeholder={t.searchByNameOrId}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-9 text-[13px] w-full"
+            className="h-9 text-[13px] flex-1 min-w-[200px]"
           />
+          <AdminSelect
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="h-9 text-[13px] w-full sm:w-52"
+          >
+            <option value="">
+              {lang === 'ru' ? 'Vse roli' : lang === 'en' ? 'All roles' : 'Barcha rollar'}
+            </option>
+            {Object.entries(ROLE_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </AdminSelect>
         </div>
         <div className="divide-y divide-gray-100">
           {filtered.length === 0 ? (
@@ -155,7 +226,14 @@ export function BannedPage({ token, lang }: Props) {
                 </div>
                 <div className="flex-1 min-w-[130px] min-w-0 overflow-hidden">
                   <p className="font-semibold text-gray-900 text-[14px] sm:text-[15px] truncate">{u.name}</p>
-                  <p className="text-[12px] sm:text-[13px] text-gray-400 truncate">{u.id} · {groups.find((g) => g.id === u.group_id)?.name || '—'}</p>
+                  <p className="text-[12px] sm:text-[13px] text-gray-400 truncate">
+                    {u.id} · {u.role === 'student'
+                      ? (groups.find((g) => g.id === u.group_id)?.name || '—')
+                      : (u.kafedra_name || '—')}
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-semibold">
+                      {ROLE_LABEL[String(u.role || '')] || u.role}
+                    </span>
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   {deleteConfirmId === u.id ? (
@@ -206,11 +284,30 @@ export function BannedPage({ token, lang }: Props) {
             <div className="space-y-2 max-h-52 overflow-y-auto">
               {reviewQueue.map((q: any, idx: number) => (
                 <div key={`${q.exam_id}-${q.student_id}-${idx}`}
-                  className="text-[13px] px-3 py-2.5 rounded-xl bg-white border border-indigo-100 flex items-center justify-between gap-2">
-                  <span className="truncate text-gray-700">{q.student_name} · {q.exam_title}</span>
+                  className="text-[13px] px-3 py-2.5 rounded-xl bg-white border border-indigo-100 flex items-center justify-between gap-2 flex-wrap">
+                  <span className="truncate text-gray-700 min-w-0 flex-1">{q.student_name} · {q.exam_title}</span>
+                  <span className="text-[12px] text-gray-400 shrink-0">{q.status}</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[12px] font-semibold shrink-0 ${q.sla_bucket === 'urgent' ? 'bg-red-100 text-red-700' : q.sla_bucket === 'high' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                     {q.sla_bucket}
                   </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <AdminBtn
+                      size="sm"
+                      variant="ghost"
+                      loading={!!queueBusy[q.student_exam_id]}
+                      onClick={() => queueAction(Number(q.student_exam_id), 'unblock')}
+                    >
+                      {lang === 'ru' ? 'Разблокировать' : lang === 'en' ? 'Unblock' : 'Blokdan chiqarish'}
+                    </AdminBtn>
+                    <AdminBtn
+                      size="sm"
+                      variant="red-ghost"
+                      loading={!!queueBusy[q.student_exam_id]}
+                      onClick={() => queueAction(Number(q.student_exam_id), 'retake')}
+                    >
+                      {lang === 'ru' ? 'Дать пересдачу' : lang === 'en' ? 'Allow retake' : 'Qayta imkon berish'}
+                    </AdminBtn>
+                  </div>
                 </div>
               ))}
             </div>

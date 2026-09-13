@@ -34,7 +34,10 @@ COPY deploy/docker/nginx.conf /etc/nginx/onlinetest.conf
 COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 COPY scripts/docker-worker-entrypoint.sh /app/docker-worker-entrypoint.sh
 COPY scripts/docker-beat-entrypoint.sh /app/docker-beat-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh /app/docker-worker-entrypoint.sh /app/docker-beat-entrypoint.sh && mkdir -p /data
+# Windows CRLF → LF (aks holda worker: /usr/bin/env: bash\r)
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh /app/docker-worker-entrypoint.sh /app/docker-beat-entrypoint.sh \
+    && chmod +x /app/docker-entrypoint.sh /app/docker-worker-entrypoint.sh /app/docker-beat-entrypoint.sh \
+    && mkdir -p /data
 
 EXPOSE 8080
 VOLUME ["/data"]

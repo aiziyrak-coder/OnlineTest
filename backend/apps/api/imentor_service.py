@@ -11,6 +11,7 @@ from apps.api.imentor_client import (
     imentor_catalog_stats,
     imentor_collect_department_subjects,
     imentor_configured,
+    imentor_generate_mcq,
     imentor_get_test,
     imentor_list_tests,
     imentor_published_test_count,
@@ -1203,3 +1204,128 @@ def validate_imentor_subjects(
     if total_tests < 1:
         return False, "Tanlangan fan/yo'nalish/mavzuda e'lon qilingan test yo'q", 0
     return True, "", total_tests
+
+
+def _transform_faculty_ai_questions(raw_questions: list[dict]) -> list[dict]:
+    """generate-mcq javobi: text/options/correctIndex → OnlineTest MCQ."""
+    out: list[dict] = []
+    for q in raw_questions or []:
+        if not isinstance(q, dict):
+            continue
+        opts = [str(o).strip() for o in (q.get("options") or []) if str(o).strip()]
+        if len(opts) < 2:
+            continue
+        try:
+            idx = int(q.get("correctIndex", q.get("correctOptionIndex", 0)) or 0)
+        except (TypeError, ValueError):
+            idx = 0
+        if idx < 0 or idx >= len(opts):
+            idx = 0
+        text = str(q.get("text") or q.get("question") or "").strip()
+        if not text:
+            continue
+        row: dict[str, Any] = {
+            "id": len(out) + 1,
+            "text": text,
+            "options": opts,
+            "correctAnswer": opts[idx],
+            "source": str(q.get("source") or "imentor_faculty_ai_books"),
+        }
+        expl = str(q.get("explanation") or "").strip()
+        if expl:
+            row["explanation"] = expl
+        out.append(row)
+    return out
+
+
+def fetch_faculty_ai_mcq_questions(
+    *,
+    department_name: str | None = None,
+    department_code: str | None = None,
+    subject: str | None = None,
+    count: int = 20,
+    language: str = "uz",
+) -> tuple[list[dict], dict]:
+    """O'qituvchi imtihoni: kafedra kitoblaridan AI 20 MCQ (fan bo'yicha, USMLE)."""
+    from apps.api.imentor_department_match import pick_best_department
+
+    if not imentor_configured():
+        raise IMentorApiError("iMentor API kaliti sozlanmagan (IMENTOR_API_KEY)", status=403)
+    name = str(department_name or "").strip()
+    code = str(department_code or "").strip()
+    subj = str(subject or "").strip()
+    if not name and not code:
+        raise IMentorApiError("Kafedra belgilanmagan", status=400)
+    n = max(5, min(30, int(count or 20)))
+    lang = str(language or "uz").strip().lower()[:5] or "uz"
+    if lang not in ("uz", "ru", "en"):
+        lang = "uz"
+
+    # OnlineTest kafedra nomi/kodi ≠ iMentor — katalogdan fuzzy resolve.
+    try:
+        cats = imentor_catalog_departments()
+        rows = cats.get("results") if isinstance(cats, dict) else None
+        hit = pick_best_department(
+            name=name or None,
+            code=code or None,
+            catalog_rows=rows if isinstance(rows, list) else [],
+        )
+        if hit:
+            code = str(hit.get("code") or "").strip() or code
+            name = str(hit.get("name") or "").strip() or name
+    except IMentorApiError:
+        pass
+
+    meta: dict[str, Any] = {
+        "source": "generate_mcq",
+        "fallback": False,
+        "subject": subj or None,
+        "resolved_department_code": code or None,
+        "resolved_department_name": name or None,
+    }
+    generate_err: str | None = None
+    try:
+        payload = imentor_generate_mcq(
+            department_name=name or None,
+            department_code=code or None,
+            subject=subj or None,
+            count=n,
+            language=lang,
+        )
+        raw_qs = payload.get("questions") if isinstance(payload, dict) else None
+        questions = _transform_faculty_ai_questions(raw_qs if isinstance(raw_qs, list) else [])
+        if questions:
+            meta["department"] = payload.get("department") if isinstance(payload, dict) else None
+            meta["chunks_used"] = payload.get("chunks_used") if isinstance(payload, dict) else None
+            return questions[:n], meta
+    except IMentorApiError as ex:
+        # 403/503 — sozlama; qolgan 404/400 da sample fallback uriniladi
+        if ex.status in (403, 503):
+            raise
+        generate_err = str(ex)
+        meta["generate_error"] = generate_err
+
+    if not code:
+        raise IMentorApiError(
+            generate_err
+            or "Bu kafedra uchun AI savol yaratib bo'lmadi va iMentor kafedra kodi topilmadi.",
+            status=404,
+        )
+    try:
+        sample = imentor_sample_questions(department_code=code, count=n)
+    except IMentorApiError as ex:
+        raise IMentorApiError(
+            generate_err or str(ex) or "Bu kafedra uchun vektor kitob / nashr test topilmadi.",
+            status=getattr(ex, "status", None) or 404,
+        ) from ex
+    raw_qs = sample.get("questions") if isinstance(sample, dict) else None
+    questions = _transform_imentor_questions(raw_qs if isinstance(raw_qs, list) else [])
+    if not questions:
+        raise IMentorApiError(
+            generate_err or "Bu kafedra uchun vektor kitob / nashr test topilmadi.",
+            status=404,
+        )
+    meta["source"] = "sample_fallback"
+    meta["fallback"] = True
+    meta["department_code"] = code
+    return questions[:n], meta

@@ -40,8 +40,9 @@ class Command(BaseCommand):
         gid = group.id
         h = _hash_pw(raw)
 
-        # Eski demo_teacher (login qila olmaydi) — bo'lsa olib tashlaymiz.
+        # Eski `teacher` roli / demo_teacher (login rad etiladi) — seed paytida tozalaymiz.
         AppUser.objects.filter(id="demo_teacher").delete()
+        AppUser.objects.filter(role="teacher").delete()
 
         rows: list[tuple[str, str, str, str]] = [
             ("demo_admin", "admin", "Demo administrator", ""),

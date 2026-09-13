@@ -49,16 +49,26 @@ services:
       # tushirilsa/deploy qilinsa ham fayllar yo'qolmaydi (docker cp'dan farqli).
       - ./data:/app/data:ro
     environment:
-      DJANGO_DEBUG: "1"
-      IDENTITY_VERIFY_DEBUG_LOG: "1"
-      DATABASE_URL: postgres://onlinetest:${POSTGRES_PASSWORD:-dev-postgres-password}@db:5432/onlinetest
+      # Prod: .env da DJANGO_DEBUG=0. Parolda @ bo'lsa DATABASE_URL ni URL-encode qiling
+      # (masalan @@ → %40%40); aks holda postgres://user:pass@@db/... noto'g'ri parse bo'ladi.
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      IDENTITY_VERIFY_DEBUG_LOG: ${IDENTITY_VERIFY_DEBUG_LOG:-0}
+      DATABASE_URL: ${DATABASE_URL:-postgres://onlinetest:dev-postgres-password@db:5432/onlinetest}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-docker-dev-jwt-secret-min-24-chars}
+      # 100+ parallel imtihon starti: ko'proq ASGI worker
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-8}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-300}
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-120}
+      FACULTY_AI_GENERATE_SLOTS: ${FACULTY_AI_GENERATE_SLOTS:-2}
       # OPENAI_* va IMENTOR_* faqat backend/.env (env_file) dan — environment da
       # qayta yozmang: ${OPENAI_API_KEY:-} bo'sh bo'lib .env dagi haqiqiy kalitni
       # container ichida o'chirib yuboradi (`environment:` `env_file:` dan ustun
       # turadi). Aynan shu xato ilgari IMENTOR_API_KEY bilan topilgan edi —
       # OPENAI_API_KEY ham xuddi shu sababdan bo'sh bo'lib qolgan edi.
+    networks:
+      - default
+      - imentor_net
 
   # Celery worker
   worker:
@@ -76,12 +86,16 @@ services:
     env_file:
       - backend/.env
     environment:
-      DJANGO_DEBUG: "1"
-      DATABASE_URL: postgres://onlinetest:${POSTGRES_PASSWORD:-dev-postgres-password}@db:5432/onlinetest
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      DATABASE_URL: ${DATABASE_URL:-postgres://onlinetest:dev-postgres-password@db:5432/onlinetest}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-docker-dev-jwt-secret-min-24-chars}
       # OPENAI_* faqat backend/.env (env_file) dan — sabab yuqoridagi `app` servisidagi izohda.
-      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-2}
+      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-4}
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-120}
+    networks:
+      - default
+      - imentor_net
 
   # Celery beat — davriy tasklarni (proctor.sweep_stale_sessions) rejalashtiradi.
   # DIQQAT: faqat bitta nusxa ishlashi kerak (replicas: 1 default) — bir nechta
@@ -101,8 +115,8 @@ services:
     env_file:
       - backend/.env
     environment:
-      DJANGO_DEBUG: "1"
-      DATABASE_URL: postgres://onlinetest:${POSTGRES_PASSWORD:-dev-postgres-password}@db:5432/onlinetest
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
+      DATABASE_URL: ${DATABASE_URL:-postgres://onlinetest:dev-postgres-password@db:5432/onlinetest}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-docker-dev-jwt-secret-min-24-chars}
 
@@ -139,3 +153,10 @@ services:
 volumes:
   pg-data:
   redis-data:
+
+networks:
+  imentor_net:
+    # Bir serverdagi iMentor nginx (imentor-nginx-1) — RAG MCQ uchun.
+    # Tarmoq yo'q bo'lsa: docker network create imentor_default
+    external: true
+    name: imentor_default

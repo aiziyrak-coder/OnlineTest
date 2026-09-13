@@ -62,6 +62,27 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
   const [exBusy, setExBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'main' | 'advanced'>('main');
+  /* Imtihon kim uchun: talaba GURUHGA, qolganlari KAFEDRAGA biriktiriladi.
+     Ilgari bu oyna faqat talaba imtihonini bilardi -- o'qituvchi yoki
+     ordinator imtihonini ochsangiz "Guruh tanlang" deb saqlatmasdi va
+     kafedra/fan maydonlari umuman ko'rinmasdi. */
+  const [audience, setAudience] = useState('student');
+  const [kafedraId, setKafedraId] = useState('');
+  const [facultySubject, setFacultySubject] = useState('');
+  const [perStudent, setPerStudent] = useState(0);
+  const [course, setCourse] = useState(0);
+  const [aiCount, setAiCount] = useState(0);
+  const [kafedralar, setKafedralar] = useState<{ id: number; name: string }[]>([]);
+  const isKafedraAudience = audience !== 'student';
+  const AUD_LABEL: Record<string, string> = {
+    student: t.examAudienceStudent,
+    faculty: t.examAudienceFaculty,
+    ordinator: lang === 'ru' ? 'Ordinatory' : lang === 'en' ? 'Residents' : 'Ordinatorlar',
+    magistr: lang === 'ru' ? 'Magistry' : lang === 'en' ? 'Masters' : 'Magistrlar',
+    vacancy: t.examAudienceVacancy,
+    entrant: lang === 'ru' ? 'Osobye postupayushchie' : lang === 'en'
+      ? 'Special entrants' : 'Maxsus kiruvchilar',
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +110,20 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         setBankCount(Number(data.bank_question_count) || 12);
         setExceptions(Array.isArray(data.exceptions) ? data.exceptions : []);
         setRetakeList(Array.isArray(data.retake_windows) ? data.retake_windows : []);
+        setAudience(String(data.audience || 'student'));
+        setKafedraId(data.kafedra_id != null ? String(data.kafedra_id) : '');
+        setFacultySubject(String(data.faculty_subject || ''));
+        setPerStudent(Number(data.bank_question_count) || 0);
+        setCourse(Number(data.course) || 0);
+        setAiCount(Number(data.ai_question_count) || 0);
+        if (String(data.audience || 'student') !== 'student') {
+          const kr = await fetch(apiUrl('/api/admin/kafedralar'), { headers: authHeaders(token, lang) });
+          if (kr.ok && !cancelled) {
+            const raw = await readJsonSafe<any>(kr);
+            const list = Array.isArray(raw) ? raw : (raw && raw.results) || [];
+            setKafedralar(list.map((k: any) => ({ id: Number(k.id), name: String(k.name || '') })));
+          }
+        }
         if (data.exam_mode === 'bank_mixed') {
           const cr = await fetch(apiUrl('/api/admin/test-bank/categories'), { headers: authHeaders(token, lang) });
           if (!checkAdminAuthResponse(cr)) return;
@@ -113,8 +148,13 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
   };
 
   const handleSave = async () => {
-    if (selectedGroups.length === 0) {
+    // Guruh FAQAT talaba imtihonida majburiy.
+    if (!isKafedraAudience && selectedGroups.length === 0) {
       setError(t.examCreateSelectGroup);
+      return;
+    }
+    if (isKafedraAudience && !kafedraId) {
+      setError(t.examFacultyPickKafedra);
       return;
     }
     setSaving(true);
@@ -135,8 +175,19 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         language,
         ambient_audio_enabled: ambientAudioEnabled,
         custom_rules: customRules,
-        group_ids: selectedGroups,
+        group_ids: isKafedraAudience ? [] : selectedGroups,
       };
+      if (isKafedraAudience) {
+        body.kafedra_id = Number(kafedraId);
+        body.faculty_subject = facultySubject.trim();
+      }
+      if (exam?.exam_mode === 'static' && perStudent > 0) {
+        body.bank_question_count = perStudent;
+      }
+      if (audience === 'ordinator' || audience === 'magistr') {
+        body.course = course;
+        body.ai_question_count = aiCount;
+      }
       if (exam?.exam_mode === 'static') {
         try {
           const parsed = JSON.parse(questionsJson);
@@ -400,7 +451,82 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                   </AdminField>
                 </div>
 
-                {/* Groups */}
+                {/* Kim uchun -- faqat ko'rsatiladi, o'zgartirilmaydi:
+                    auditoriya o'zgarsa savol manbasi ham boshqacha bo'ladi. */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-gray-500">{t.examAudienceLabel}:</span>
+                  <span className="text-[12px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                    {AUD_LABEL[audience] || audience}
+                  </span>
+                </div>
+
+                {/* Kafedraga biriktiriladigan auditoriyalar: kafedra + fan */}
+                {isKafedraAudience && (
+                  <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3 space-y-3">
+                    <AdminField label={t.kafedraLabel} required>
+                      <AdminSelect value={kafedraId} onChange={(e) => setKafedraId(e.target.value)}>
+                        <option value="">{t.examFacultyPickKafedra}</option>
+                        {kafedralar.map((k) => (
+                          <option key={k.id} value={String(k.id)}>{k.name}</option>
+                        ))}
+                      </AdminSelect>
+                    </AdminField>
+                    <AdminField label={t.imentorSubjectsLabel}>
+                      <AdminInput value={facultySubject}
+                        onChange={(e) => setFacultySubject(e.target.value)} />
+                    </AdminField>
+                  </div>
+                )}
+
+                {/* Ordinatura kursi — 1-kurs va 2-kurs imtihonlari ajratiladi */}
+                {(audience === 'ordinator' || audience === 'magistr') && (
+                  <AdminField label={lang === 'ru' ? 'Kurs' : lang === 'en' ? 'Year' : 'Kurs'}>
+                    <AdminSelect
+                      value={String(course)}
+                      onChange={(e) => setCourse(Number(e.target.value) || 0)}
+                    >
+                      <option value="0">
+                        {lang === 'ru' ? 'Vse kursy' : lang === 'en' ? 'All years' : 'Barcha kurslar'}
+                      </option>
+                      <option value="1">
+                        {lang === 'ru' ? '1 kurs' : lang === 'en' ? 'Year 1' : '1-kurs'}
+                      </option>
+                      <option value="2">
+                        {lang === 'ru' ? '2 kurs (DAK)' : lang === 'en' ? 'Year 2 (final)' : '2-kurs (DAK)'}
+                      </option>
+                    </AdminSelect>
+                  </AdminField>
+                )}
+
+                {/* Admin yuklagan bankdan har kishiga nechta savol tushishi */}
+                {exam.exam_mode === 'static' && (
+                  <AdminField label={t.examBankQuestionCount}>
+                    <AdminInput type="number" min={0} max={200} value={perStudent}
+                      onChange={(e) => setPerStudent(Number(e.target.value) || 0)}
+                      className="max-w-[140px]" />
+                    {(audience === 'ordinator' || audience === 'magistr') && (
+                      <div className="mt-2">
+                        <label className="text-[13px] font-medium text-gray-600 block mb-1">
+                          {lang === 'ru' ? 'Iz nih sozdayet AI' : lang === 'en'
+                            ? 'Of these, generated by AI' : 'Shundan AI yaratadi'}
+                        </label>
+                        <AdminInput type="number" min={0} max={50} value={aiCount}
+                          onChange={(e) => setAiCount(Number(e.target.value) || 0)}
+                          className="max-w-[140px]" />
+                      </div>
+                    )}
+                    <p className="text-[12px] text-gray-400 mt-1.5">
+                      {lang === 'ru'
+                        ? 'Skolko voprosov iz banka poluchit kazhdyy uchastnik. 0 -- ves bank.'
+                        : lang === 'en'
+                          ? 'How many questions each participant gets from the bank. 0 means the whole bank.'
+                          : 'Bankdan har bir topshiruvchiga nechta savol tushadi. 0 bo\'lsa -- butun bank.'}
+                    </p>
+                  </AdminField>
+                )}
+
+                {/* Groups -- faqat talaba imtihonida */}
+                {!isKafedraAudience && (
                 <div>
                   <label className="text-[13px] font-medium text-gray-600 block mb-2">
                     {t.selectGroups} <span className="text-red-500">*</span>
@@ -429,6 +555,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                     <p className="text-[12px] text-indigo-600 font-semibold mt-1.5">{selectedGroups.length} ta tanlandi</p>
                   )}
                 </div>
+                )}
 
                 {/* Bank mode */}
                 {exam.exam_mode === 'bank_mixed' && (

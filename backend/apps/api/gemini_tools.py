@@ -497,11 +497,31 @@ def _extract_answer_key_map(raw_text: str) -> dict[int, list[str]]:
     m: dict[int, list[str]] = {}
     text = raw_text or ""
 
-    # Oxirgi 30% dan javob kalitini qidirish (ko'pincha oxirida bo'ladi)
-    tail_start = max(0, int(len(text) * 0.7))
-    tail = text[tail_start:]
+    # Hujjatda "Javoblar kaliti" sarlavhasi bo'lsa — FAQAT o'sha joydan
+    # keyingi qismni o'qiymiz.
+    #
+    # NIMA UCHUN: ilgari kalit hujjatning oxirgi 30% idan qidirilardi. Agar
+    # savollar matnida raqam bo'lsa (masalan "B) Noto'g'ri 30" dan keyingi
+    # qatorda "C) ..."), regex buni "30 -> C" deb o'qib olardi va o'sha
+    # savolning to'g'ri javobi ALMASHIB ketardi. 40 ta savollik sinov
+    # bankida 11 tasi noto'g'ri kalit oldi — imtihonda bu tayyorlangan
+    # odamni yiqitadi. Sarlavha bo'lsa, endi shunday xato bo'lmaydi.
+    key_header = None
+    for mt in re.finditer(
+        r"(?i)(javoblar?\s*kalit\w*|javob\s*kalit\w*|to\W?g\W?ri\s*javoblar"
+        r"|answers?\s*key|answer\s*key|key\s*answers?"
+        r"|ключ\s*ответов|правильные\s*ответы|ответы)\s*[:\-]?",
+        text,
+    ):
+        key_header = mt
+    if key_header is not None:
+        regions = [text[key_header.end():]]
+    else:
+        # Sarlavha yo'q — eski xatti-harakat: oxirgi 30%, keyin butun matn.
+        tail_start = max(0, int(len(text) * 0.7))
+        regions = [text[tail_start:], text]
 
-    for region in [tail, text]:
+    for region in regions:
         for qn, ans in re.findall(
             r"(?im)\b(\d{1,4})\s*[-:.)\s]\s*([A-Ja-j](?:\s*[,;/]\s*[A-Ja-j])*|\d{1,2}(?:\s*[,;/]\s*\d{1,2})*)",
             region

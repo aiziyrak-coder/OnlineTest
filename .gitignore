@@ -56,3 +56,8 @@ frontend/public/mediapipe/
 frontend/vendor/
 data/
 present/
+# Qolda yaratilgan backup papkalari va katta dump fayllar (2026-09-13)
+backup_*/
+*_backup*.json
+*.bak-*
+frontend/public/downloads/

@@ -60,7 +60,14 @@ def imentor_configured() -> bool:
     return bool(imentor_api_key())
 
 
-def imentor_request(path: str, *, params: dict[str, Any] | None = None, timeout: int = 30) -> Any:
+def imentor_request(
+    path: str,
+    *,
+    params: dict[str, Any] | None = None,
+    method: str = "GET",
+    json_body: dict[str, Any] | None = None,
+    timeout: int = 30,
+) -> Any:
     key = imentor_api_key()
     if not key:
         raise IMentorApiError("IMENTOR_API_KEY sozlanmagan", status=403)
@@ -72,14 +79,24 @@ def imentor_request(path: str, *, params: dict[str, Any] | None = None, timeout:
         if q:
             url = f"{url}?{q}"
 
+    data = None
+    headers = {
+        "Accept": "application/json",
+        "X-Api-Key": key,
+        "User-Agent": "FJSTI-OnlineTest/1.0",
+    }
+    m = (method or "GET").upper()
+    if json_body is not None:
+        data = json.dumps(json_body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        if m == "GET":
+            m = "POST"
+
     req = urllib.request.Request(
         url,
-        headers={
-            "Accept": "application/json",
-            "X-Api-Key": key,
-            "User-Agent": "FJSTI-OnlineTest/1.0",
-        },
-        method="GET",
+        data=data,
+        headers=headers,
+        method=m,
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -397,4 +414,37 @@ def imentor_sample_questions(
     if count is not None and int(count) > 0:
         params["count"] = int(count)
     data = imentor_request("/v1/external/questions/sample/", params=params)
+    return data if isinstance(data, dict) else {}
+
+
+def imentor_generate_mcq(
+    *,
+    department_name: str | None = None,
+    department_code: str | None = None,
+    subject: str | None = None,
+    count: int = 20,
+    language: str = "uz",
+    timeout: int = 300,
+) -> dict:
+    """Kafedra kitoblaridan AI MCQ: POST /v1/external/education-ai/generate-mcq/."""
+    if not (department_name or department_code):
+        raise IMentorApiError("department_name yoki department_code kerak", status=400)
+    body: dict[str, Any] = {
+        "count": max(5, min(30, int(count or 20))),
+        "language": str(language or "uz").strip().lower()[:5] or "uz",
+    }
+    if department_code:
+        body["department_code"] = str(department_code).strip()
+    if department_name:
+        body["department_name"] = str(department_name).strip()
+    subj = str(subject or "").strip()
+    if subj:
+        body["subject"] = subj
+        body["topic"] = subj
+    data = imentor_request(
+        "/v1/external/education-ai/generate-mcq/",
+        method="POST",
+        json_body=body,
+        timeout=timeout,
+    )
     return data if isinstance(data, dict) else {}

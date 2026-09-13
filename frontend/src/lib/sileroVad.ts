@@ -67,8 +67,8 @@ const CONTEXT = 64;
  * tug'dirsa (soxta signal ko'paysa) avval SHU juftlikka qaytariladi.
  * Batafsil: `docs/VAD_BENCHMARK.md`.
  */
-const SPEECH_START_PROB = 0.25;
-const SPEECH_STOP_PROB = 0.18;
+const SPEECH_START_PROB = 0.55;
+const SPEECH_STOP_PROB = 0.40;
 
 /**
  * SEZGIRLIK KALITI — nutq shuncha kadr UZLUKSIZ davom etsagina tasdiqlanadi
@@ -78,7 +78,7 @@ const SPEECH_STOP_PROB = 0.18;
  * `verify_chain.py` bilan tekshirilgan: maishiy shovqin FP 0% → 3.2% (chip,
  * arzon xato — jazosiz yorliq), rasmiy FP hamon 0%.
  */
-const SPEECH_MIN_FRAMES = 3;
+const SPEECH_MIN_FRAMES = 8;
 
 /**
  * Navbat cho'zilib ketsa (sekin qurilma) eng eski kadrlarni tashlaymiz — real-time

@@ -22,7 +22,7 @@ export function StaffDashboard({ token, lang }: { token: string; lang: Language 
         </span>
       </motion.div>
 
-      <AdminExamsTab token={token} lang={lang} hideExamSettings apiVariant="staff" />
+      <AdminExamsTab token={token} lang={lang} apiVariant="staff" />
     </div>
   );
 }

@@ -7,12 +7,18 @@ import { authHeaders } from '../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../lib/http';
 import { ImtixonTab } from './ImtixonTab';
 import { AdminExamsTab } from './AdminExamsTab';
+import { ExamineesHub } from './admin/ExamineesHub';
 import { OverviewPage } from './admin/OverviewPage';
 import { LevelsPage } from './admin/LevelsPage';
 import { KafedralarPage } from './admin/KafedralarPage';
+import { ReportsPage } from './admin/ReportsPage';
+import { VacancyApplicantsPage } from './admin/VacancyApplicantsPage';
+import { ExamineesPage } from './admin/ExamineesPage';
+import { ReceiptsPage } from './admin/ReceiptsPage';
 import { DirectionsPage } from './admin/DirectionsPage';
 import { GroupsPage } from './admin/GroupsPage';
 import { StudentsPage } from './admin/StudentsPage';
+import { FacultyPage } from './admin/FacultyPage';
 import { BannedPage } from './admin/BannedPage';
 import { StaffPage } from './admin/StaffPage';
 import { AuditPage } from './admin/AuditPage';
@@ -21,16 +27,24 @@ import type { Level, Group } from './admin/types';
 
 type AdminPage =
   | 'overview'
+  | 'examinees'
   | 'levels'
   | 'kafedralar'
   | 'directions'
   | 'groups'
   | 'students'
+  | 'faculty'
   | 'banned'
   | 'staff'
   | 'audit'
   | 'exam_create'
-  | 'exam_list';
+  | 'exam_list'
+  | 'reports'
+  | 'vacancy'
+  | 'ordinators'
+  | 'magistrs'
+  | 'receipts'
+  | 'entrants';
 
 interface NavItem {
   id: AdminPage;
@@ -42,6 +56,11 @@ const IC = {
   overview: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+    </svg>
+  ),
+  examinees: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   ),
   levels: (
@@ -70,6 +89,11 @@ const IC = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
     </svg>
   ),
+  faculty: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  ),
   banned: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -90,6 +114,36 @@ const IC = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  vacancy: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6a3 3 0 116 0 3 3 0 01-6 0zM4 20a8 8 0 1116 0H4z" />
+    </svg>
+  ),
+  reports: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6m4 6V9m4 10V5M4 21h16" />
+    </svg>
+  ),
+  ordinators: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+    </svg>
+  ),
+  magistrs: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+    </svg>
+  ),
+  entrants: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  ),
+  receipts: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+    </svg>
+  ),
   audit: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -99,16 +153,24 @@ const IC = {
 
 const PAGE_PATHS: Record<AdminPage, string> = {
   overview:     '/admin',
+  examinees:    '/admin/test-topshiruvchilar',
   levels:       '/admin/levels',
   kafedralar:   '/admin/kafedralar',
   directions:   '/admin/directions',
   groups:       '/admin/groups',
   students:     '/admin/students',
+  faculty:      '/admin/faculty',
   banned:       '/admin/banned',
   staff:        '/admin/staff',
   audit:        '/admin/audit',
   exam_create:  '/admin/exam/create',
   exam_list:    '/admin/exam/list',
+  reports:      '/admin/reports',
+  vacancy:      '/admin/vakansiya',
+  ordinators:   '/admin/ordinatorlar',
+  magistrs:     '/admin/magistrlar',
+  receipts:     '/admin/kvitansiyalar',
+  entrants:     '/admin/maxsus-kiruvchilar',
 };
 
 function pathToPage(pathname: string): AdminPage {
@@ -173,34 +235,36 @@ export function AdminDashboard({
     navigateTo(p);
   };
 
+  const L2 = (uz: string, ru: string, en: string) => (lang === 'ru' ? ru : lang === 'en' ? en : uz);
   const navGroups: { label: string; items: { id: AdminPage; label: string; color?: string }[] }[] = [
     {
       label: '',
       items: [{ id: 'overview', label: t.navOverview }],
     },
     {
-      label: t.sidebarStudentsSection,
-      items: [
-        { id: 'levels', label: t.sidebarLevelsSub },
-        { id: 'kafedralar', label: t.kontingentKafedralar },
-        { id: 'directions', label: t.kontingentDirections },
-        { id: 'groups', label: t.sidebarGroupsSub },
-        { id: 'students', label: t.sidebarStudentsSub },
-        { id: 'banned', label: t.sidebarBannedSub, color: 'red' },
-      ],
+      label: L2('Hisobotlar', 'Otchety', 'Reports'),
+      items: [{ id: 'reports', label: L2('Hisobotlar', 'Otchety', 'Reports') }],
     },
     {
-      label: t.sidebarStaffAuditSection,
-      items: [
-        { id: 'staff', label: t.sidebarStaffSub },
-        { id: 'audit', label: t.sidebarAuditSub },
-      ],
+      label: L2('Test topshiruvchilar', 'Ekzamenuemye', 'Exam takers'),
+      items: [{ id: 'examinees', label: L2('Test topshiruvchilar', 'Ekzamenuemye', 'Exam takers') }],
     },
     {
-      label: t.sidebarExamSection,
+      label: L2('Imtihonlar', 'Ekzameny', 'Exams'),
       items: [
         { id: 'exam_create', label: t.sidebarExamCreateSub },
         { id: 'exam_list', label: t.sidebarExamListSub },
+      ],
+    },
+    {
+      label: L2('Boshqaruv', 'Upravlenie', 'Management'),
+      items: [
+        { id: 'kafedralar', label: t.kontingentKafedralar },
+        { id: 'directions', label: t.kontingentDirections },
+        { id: 'groups', label: t.sidebarGroupsSub },
+        { id: 'levels', label: t.sidebarLevelsSub },
+        { id: 'staff', label: t.sidebarStaffSub },
+        { id: 'audit', label: t.sidebarAuditSub },
       ],
     },
   ];
@@ -244,7 +308,7 @@ export function AdminDashboard({
                   <span className={`truncate text-[13.5px] leading-snug ${isActive ? 'font-semibold' : 'font-medium'}`}>
                     {item.label}
                   </span>
-                  {item.id === 'banned' && bannedCount > 0 && (
+                  {item.id === 'examinees' && bannedCount > 0 && (
                     <span className="ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-100 text-red-700 text-[11px] font-bold tabular-nums flex items-center justify-center">
                       {bannedCount}
                     </span>
@@ -338,6 +402,9 @@ export function AdminDashboard({
           {page === 'overview' && (
             <OverviewPage token={token} lang={lang} onNavigate={navigateSidebar} />
           )}
+          {page === 'examinees' && (
+            <ExamineesHub token={token} lang={lang} bannedCount={bannedCount} />
+          )}
           {page === 'levels' && (
             <LevelsPage
               token={token}
@@ -368,6 +435,9 @@ export function AdminDashboard({
           {page === 'students' && (
             <StudentsPage token={token} lang={lang} initialGroupId={filterGroupId} />
           )}
+          {page === 'faculty' && (
+            <FacultyPage token={token} lang={lang} />
+          )}
           {page === 'banned' && (
             <BannedPage token={token} lang={lang} />
           )}
@@ -381,7 +451,25 @@ export function AdminDashboard({
             <ImtixonTab token={token} lang={lang} adminUserId={adminUserId} />
           )}
           {page === 'exam_list' && (
-            <AdminExamsTab token={token} lang={lang} hideExamSettings />
+            <AdminExamsTab token={token} lang={lang} />
+          )}
+          {page === 'reports' && (
+            <ReportsPage token={token} lang={lang} />
+          )}
+          {page === 'vacancy' && (
+            <VacancyApplicantsPage token={token} lang={lang} />
+          )}
+          {page === 'ordinators' && (
+            <ExamineesPage token={token} lang={lang} role="ordinator" />
+          )}
+          {page === 'magistrs' && (
+            <ExamineesPage token={token} lang={lang} role="magistr" />
+          )}
+          {page === 'receipts' && (
+            <ReceiptsPage token={token} lang={lang} />
+          )}
+          {page === 'entrants' && (
+            <ExamineesPage token={token} lang={lang} role="entrant" />
           )}
           </>
           )}

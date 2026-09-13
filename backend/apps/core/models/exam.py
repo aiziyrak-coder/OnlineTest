@@ -1,6 +1,6 @@
 from django.db import models
 
-from .user import AppUser, Direction, Group
+from .user import AppUser, Direction, Group, Kafedra
 
 
 class Exam(models.Model):
@@ -16,6 +16,8 @@ class Exam(models.Model):
     pin = models.CharField(max_length=50, blank=True)
     custom_rules = models.TextField(blank=True)
     exam_mode = models.CharField(max_length=20, default="static")
+    # Kimlar uchun: student | faculty | ordinator
+    audience = models.CharField(max_length=20, default="student")
     bank_category_ids = models.TextField(default="[]")
     bank_question_count = models.IntegerField(default=0)
     imentor_subject_codes = models.TextField(default="[]", blank=True)
@@ -26,6 +28,30 @@ class Exam(models.Model):
     direction = models.ForeignKey(
         Direction, null=True, blank=True, on_delete=models.SET_NULL, db_column="direction_id"
     )
+    # O'qituvchi baholash: faqat shu kafedra xodimlari ko'radi / topshiradi.
+    kafedra = models.ForeignKey(
+        Kafedra,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_column="kafedra_id",
+        related_name="exams",
+    )
+    # Fan nomi — AI generate-mcq topic (faculty_ai_books).
+    faculty_subject = models.CharField(max_length=300, blank=True, default="")
+    # Ordinatura/magistratura KURSI: 0 = belgilanmagan (hammaga), 1, 2, ...
+    # 1-kurs va 2-kurs (DAK) imtihonlari aralashib ketmasligi uchun.
+    course = models.PositiveSmallIntegerField(default=0)
+    # Shu imtihondagi savollarning nechtasi AI tomonidan AYNI PAYTDA
+    # yaratilsin. Qolgani admin yuklagan bankdan olinadi. 0 = faqat bank.
+    ai_question_count = models.PositiveSmallIntegerField(default=0)
+    # Shu imtihonning O'Z o'tish chegarasi (%). 0 = umumiy sozlama
+    # (EXAM_PASS_PERCENT) ishlatiladi.
+    pass_percent = models.PositiveSmallIntegerField(default=0)
+    # Ko'p fanli imtihon tarkibi: [{"exam_id": 406, "count": 10}, ...]
+    # Har bir manba imtihonning bankidan shuncha savol olinadi. Bo'sh
+    # bo'lsa — odatdagidek shu imtihonning o'z bankidan olinadi.
+    question_plan = models.TextField(blank=True, default="")
     technical_retakes_allowed = models.PositiveSmallIntegerField(default=3)
     identity_retakes_allowed = models.PositiveSmallIntegerField(default=1)
     proctor_profile = models.CharField(max_length=16, blank=True, default="standard")

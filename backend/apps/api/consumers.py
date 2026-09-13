@@ -25,6 +25,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.conf import settings
 
 from apps.core.models.exam import Exam
+from apps.api.permissions import EXAMINEE_ROLES
 
 
 class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
@@ -103,7 +104,12 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
 
     async def _handle_join_exam(self, content: dict) -> None:
         role = str(content.get("role", ""))
-        if role == "student" and self.role != "student":
+        # Imtihon topshiruvchi kanalga "student" bo'lib ulanadi -- klient
+        # hamma uchun shu nomni yuboradi. Ilgari bu yerda faqat haqiqiy
+        # role="student" o'tkazilardi: o'qituvchi, ordinator, magistr va
+        # vakansiya nomzodi WebSocket ga umuman ulanolmasdi, ya'ni ular
+        # uchun JONLI KUZATUV ishlamasdi (kuzatuvchi ekranida ular yo'q edi).
+        if role == "student" and self.role not in EXAMINEE_ROLES:
             return
         if role == "proctor" and self.role not in ("admin", "staff"):
             return

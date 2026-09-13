@@ -60,6 +60,9 @@ export async function buildGuardedExamHeaders(params: {
   method: string;
   path: string;
   lang?: string;
+  /** Yuboriladigan tananing AYNAN o'zi — imzo shu bo'yicha hisoblanadi.
+   *  Server ham `sha256(body)` ni imzoga qo'shadi; mos kelmasa 403. */
+  body?: string;
 }): Promise<Record<string, string>> {
   const base = examAuthHeaders(params.token);
   // Talabaning UI tili — backend shu orqali qoidabuzarlik sabab matnini
@@ -75,7 +78,10 @@ export async function buildGuardedExamHeaders(params: {
   }
   const ts = Math.floor(Date.now() / 1000);
   const nonce = randomNonce();
-  const msg = `${params.studentExamId}:${params.studentId}:${params.examId}:${ts}:${nonce}:${params.method.toUpperCase()}:${params.path}`;
+  const bodyHash = await sha256Hex(params.body ?? '');
+  const msg =
+    `${params.studentExamId}:${params.studentId}:${params.examId}:${ts}:${nonce}:` +
+    `${params.method.toUpperCase()}:${params.path}:${bodyHash}`;
   const sig = await hmacSha256Hex(params.sessionKey, msg);
   return {
     ...base,

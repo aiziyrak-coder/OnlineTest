@@ -26,6 +26,19 @@ _LOGO_CANDIDATES = [
 # O'tish mezoni: to'g'ri javoblar foizi (ball / jami savollar * 100).
 PASS_PERCENT_THRESHOLD = max(1, min(100, int(os.environ.get("EXAM_PASS_PERCENT", "50"))))
 
+
+def exam_pass_threshold(exam) -> int:
+    """Imtihonning o'tish chegarasi (%).
+
+    Imtihonda o'z qiymati bo'lsa (`pass_percent` > 0) — o'sha, aks holda
+    umumiy sozlama. Maxsus kirish imtihonlarida chegara boshqacha bo'ladi.
+    """
+    try:
+        v = int(getattr(exam, "pass_percent", 0) or 0)
+    except (TypeError, ValueError):
+        v = 0
+    return v if 1 <= v <= 100 else PASS_PERCENT_THRESHOLD
+
 # Dizayn ranglari
 C_NAVY = colors.HexColor("#1e3a5f")
 C_NAVY_LIGHT = colors.HexColor("#eef3f9")

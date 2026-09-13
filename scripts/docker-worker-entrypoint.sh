@@ -40,9 +40,10 @@ EOF
     echo "Worker: Redis tayyor."
 fi
 
-CONCURRENCY="${CELERY_WORKER_CONCURRENCY:-2}"
+CONCURRENCY="${CELERY_WORKER_CONCURRENCY:-4}"
 echo "=== Celery worker (concurrency=${CONCURRENCY}) ==="
 exec celery -A exam_platform worker \
     --loglevel="${CELERY_LOGLEVEL:-info}" \
     --concurrency="${CONCURRENCY}" \
-    --max-tasks-per-child=200
+    --prefetch-multiplier=1 \
+    --max-tasks-per-child=100

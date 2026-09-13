@@ -83,6 +83,8 @@ export type ExamResultPayload = {
   verify_url: string;
   overview: string;
   questions: ResultQuestionRow[];
+  questions_hidden?: boolean;
+  questions_visible_from?: string | null;
   score: number;
   total: number;
   integrity_code: string;
@@ -160,7 +162,7 @@ export function ExamResultSummary({ data, token, lang = 'uz', publicPdfUrl, onBa
   const ringColor = passed ? '#059669' : '#dc2626';
 
   return (
-    <div className="w-full max-w-4xl mx-auto min-h-0 px-2 sm:px-4 py-2 sm:py-4 space-y-4 sm:space-y-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+    <div className="w-full max-w-6xl mx-auto min-h-0 px-2 sm:px-4 py-2 sm:py-4 space-y-4 sm:space-y-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -300,7 +302,23 @@ export function ExamResultSummary({ data, token, lang = 'uz', publicPdfUrl, onBa
       )}
 
       <div className="space-y-3">
-        <h2 className="text-[16px] sm:text-[17px] font-bold text-slate-900 px-1">{t.resultByQuestions}</h2>
+        {data.questions_hidden ? (
+          /* Attestatsiya/tanlov imtihoni: savollar va javoblar muddat tugagach. */
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-5 py-4 text-[14px] leading-relaxed text-indigo-900">
+            {lang === 'ru'
+              ? 'Вопросы и правильные ответы будут показаны после окончания срока экзамена'
+              : lang === 'en'
+                ? 'Questions and correct answers will be shown after the exam period ends'
+                : "Savollar va to'g'ri javoblar imtihon muddati tugagach ko'rsatiladi"}
+            {data.questions_visible_from &&
+            new Date(data.questions_visible_from).getTime() - Date.now() < 30 * 86400000
+              ? ' (' + new Date(data.questions_visible_from).toLocaleString() + ')'
+              : ''}
+            .
+          </div>
+        ) : (
+          <h2 className="text-[16px] sm:text-[17px] font-bold text-slate-900 px-1">{t.resultByQuestions}</h2>
+        )}
         {data.questions.map((q, i) => {
           const src = (q.explanationSource || '').toLowerCase();
           const hasExplain = Boolean(

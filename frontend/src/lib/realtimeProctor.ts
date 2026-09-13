@@ -30,7 +30,10 @@ export type RealtimeViolation =
   | 'MOUTH_MOVEMENT_TALKING'
   | 'FACE_TOO_FAR'
   | 'FACE_TOO_CLOSE'
-  | 'FACE_OFF_CENTER';
+  | 'FACE_OFF_CENTER'
+  | 'GAZE_DOWN_TOTAL'
+  | 'GAZE_SIDE_TOTAL'
+  | 'HAND_NEAR_EAR';
 
 /** Real-time kamera overlay uchun — violation emas, faqat vizual holat. */
 export type FaceStatusLive =
@@ -67,10 +70,26 @@ export type LiveSignalType =
   | 'MULTI_FACE';
 export const LIVE_SIGNAL_CONFIRM_MS = 1500;
 export const LIVE_SIGNAL_ESCALATE_MS = 4000;
+/**
+ * YONGA (chap/o'ng) qarash uchun qisqaroq chegara.
+ *
+ * Nega alohida: umumiy 4 soniya yuz masofasi/markazdan siljish kabi
+ * soxta signalga moyil turlar uchun mo'ljallangan. Yonga qarash esa
+ * boshqacha — kamera monitor tepasida turgani ekranga qarashni "pastga"
+ * ko'rsatadi, "yonga" emas. Uzoq yonga qarash yonidagi odamdan yoki
+ * qog'ozdan o'qishni bildiradi, shuning uchun tezroq javob beramiz.
+ *
+ * INSON OMILI: ekranda kichik ogohlantirish 1.5 soniyada chiqadi.
+ * Chegara 2.5 soniya bo'lganda topshiruvchiga o'zini to'g'rilash uchun
+ * atigi 1 soniya qolardi — odam uchun bu kam. 3.5 soniya 2 soniya
+ * imkon beradi. Bir zum yonga qarash, charchab qimirlash, o'rindiqda
+ * joylashish — hech biri jazolanmaydi; faqat DAVOMLI qarash.
+ */
+export const GAZE_SIDE_ESCALATE_MS = 2000;
 // JIDDIY, aniq qoidabuzarliklar (yuz umuman yo'q = turib ketdi/chiqib ketdi; kadrda
 // ko'p yuz = kimdir keldi) uchun TEZ eskalatsiya — bularni "tuzatishga vaqt berish"
 // mantig'i shart emas, darhol ushlash kerak.
-export const LIVE_SIGNAL_ESCALATE_FAST_MS = 1600;
+export const LIVE_SIGNAL_ESCALATE_FAST_MS = 1200;
 
 // GAPIRISH uchun MAXSUS (tezroq) qoida — README.md "Gapirish uchun maxsus qoida".
 // Mikrofon Silero VAD (ExamRoom):
@@ -140,6 +159,52 @@ const DETECT_INTERVAL_MS = 150; // ~6.5 fps (yuk/tezlik balansi — proctoring u
 // qo'l ko'tarish sekin (3-4s eskalatsiya), shu sabab yetarli; MediaPipe yuki kamayadi.
 const HAND_DETECT_EVERY = 3;
 const PER_TYPE_COOLDOWN_MS = 3500; // bir tur uchun emit oralig'i (server ham dedup qiladi)
+/** Imtihon davomida JAMI pastga qarash (telefon tizzada) — birinchi signal chegarasi.
+ *  Bir martalik pastga qarash jazolanmaydi; faqat yig'indi katta bo'lsa. */
+const GAZE_DOWN_TOTAL_FIRST_MS = 120_000;
+/** Keyingi har bir signal oralig'i (jami vaqt bo'yicha). */
+const GAZE_DOWN_TOTAL_STEP_MS = 90_000;
+/** Jami CHETGA (yon) qarash — birinchi signal chegarasi (yonidagi kishi/qog'ozni o'qish). */
+const GAZE_SIDE_TOTAL_FIRST_MS = 60_000;
+const GAZE_SIDE_TOTAL_STEP_MS = 60_000;
+/** Qo'l quloq yonida uzluksiz shuncha vaqt (telefonda gaplashish / quloqchin). */
+const HAND_EAR_ESCALATE_MS = 4000;
+
+/**
+ * Qo'l barmoqlari quloq sohasidami — SOF funksiya. Yuzning chap/o'ng chekkasidan tashqarida,
+ * ko'z-quloq balandligida. Iyakni qo'lga tirab o'tirish (pastroq) va yuz oldidagi qo'l sanalmaydi.
+ */
+export function handNearEar(
+  face: Array<{ x: number; y: number }>,
+  hands: Array<Array<{ x: number; y: number }>>,
+): boolean {
+  const left = face?.[234];
+  const right = face?.[454];
+  const top = face?.[10];
+  const chin = face?.[152];
+  if (!left || !right || !top || !chin || !hands?.length) return false;
+  const minX = Math.min(left.x, right.x);
+  const maxX = Math.max(left.x, right.x);
+  const faceW = maxX - minX;
+  const faceH = Math.abs(chin.y - top.y);
+  if (faceW < 0.03 || faceH < 0.03) return false;
+  const earY = (left.y + right.y) / 2;
+  const yMin = earY - 0.25 * faceH;
+  const yMax = earY + 0.2 * faceH;
+  const TIPS = [4, 8, 12, 16, 20];
+  for (const hand of hands) {
+    let inZone = 0;
+    for (const i of TIPS) {
+      const p = hand?.[i];
+      if (!p || p.y < yMin || p.y > yMax) continue;
+      const leftZone = p.x >= minX - 0.6 * faceW && p.x <= minX + 0.12 * faceW;
+      const rightZone = p.x >= maxX - 0.12 * faceW && p.x <= maxX + 0.6 * faceW;
+      if (leftZone || rightZone) inZone += 1;
+    }
+    if (inZone >= 2) return true;
+  }
+  return false;
+}
 
 // BARCHA real-time signal turi (yuz yo'q/ko'p yuz, gaze, pozitsiya, qimirlash,
 // qo'l, og'iz) kichik→katta eskalatsiya qoidasiga o'tkazilgan (trackContinuous +
@@ -306,8 +371,15 @@ export class RealtimeProctor {
   // (qo'l ko'tarish sekin harakat — 7fps shart emas). Bu MediaPipe yukini kamaytiradi.
   private frameCount = 0;
   private lastHandsPresent = false;
+  private lastHandLms: Array<Array<{ x: number; y: number }>> = [];
 
   private lastEmit: Record<string, number> = {};
+  private gazeDownTotalMs = 0;
+  private gazeDownLastTs = 0;
+  private gazeDownNextAlertMs = GAZE_DOWN_TOTAL_FIRST_MS;
+  private gazeSideTotalMs = 0;
+  private gazeSideLastTs = 0;
+  private gazeSideNextAlertMs = GAZE_SIDE_TOTAL_FIRST_MS;
   // Davomiy signal (kichik→katta eskalatsiya) uchun — necha vaqtdan beri uzluksiz faol.
   private activeSince: Record<string, number> = {};
   private lastActiveAt: Record<string, number> = {};
@@ -516,6 +588,7 @@ export class RealtimeProctor {
         const hres = this.handLandmarker.detectForVideo(v, ts + 0.001);
         handsPresent = (hres?.landmarks?.length || 0) > 0;
         this.lastHandsPresent = handsPresent;
+        this.lastHandLms = handsPresent ? hres.landmarks : [];
       } catch {
         /* ignore */
       }
@@ -580,7 +653,11 @@ export class RealtimeProctor {
       if (this.liveMs.OFF_CENTER >= LIVE_SIGNAL_ESCALATE_MS) this.emit('FACE_OFF_CENTER');
 
       this.analyzeHeadAndMovement(faces[0], faceBlendshapes, handsPresent, iris);
+
+      const nearEar = handsPresent && handNearEar(faces[0], this.lastHandLms);
+      if (this.trackContinuous('handEar', nearEar, 700) >= HAND_EAR_ESCALATE_MS) this.emit('HAND_NEAR_EAR');
     } else {
+      this.trackContinuous('handEar', false);
       // Yuz yo'q — barcha yuzga bog'liq davomiy signallarni so'ndiramiz. MOVEMENT/HAND
       // ham reset qilinmasa, yuz yo'qolganda eskirgan qiymat kamera panelida noto'g'ri
       // chip ko'rsatishi mumkin edi (masalan "qimirlash" — yuz yo'q bo'lsa ham).
@@ -692,11 +769,29 @@ export class RealtimeProctor {
     const gazeRActive = (headGazeR || irisRight) && absYaw < YAW_HARD;
     const gazeLMs = this.trackContinuous('gazeL', gazeLActive);
     const gazeRMs = this.trackContinuous('gazeR', gazeRActive);
-    if (gazeLMs >= LIVE_SIGNAL_ESCALATE_MS) this.emit('GAZE_AWAY_LEFT');
-    if (gazeRMs >= LIVE_SIGNAL_ESCALATE_MS) this.emit('GAZE_AWAY_RIGHT');
+    if (gazeLMs >= GAZE_SIDE_ESCALATE_MS) this.emit('GAZE_AWAY_LEFT');
+    if (gazeRMs >= GAZE_SIDE_ESCALATE_MS) this.emit('GAZE_AWAY_RIGHT');
+    // Jami yon qarash vaqti (qisqa, ko'p takrorlangan qarashlar ham qo'shiladi).
+    const sideNow = Date.now();
+    const sideDt = this.gazeSideLastTs ? Math.min(1000, Math.max(0, sideNow - this.gazeSideLastTs)) : 0;
+    this.gazeSideLastTs = sideNow;
+    if (gazeLActive || gazeRActive) this.gazeSideTotalMs += sideDt;
+    if (this.gazeSideTotalMs >= this.gazeSideNextAlertMs) {
+      this.gazeSideNextAlertMs = this.gazeSideTotalMs + GAZE_SIDE_TOTAL_STEP_MS;
+      this.emit('GAZE_SIDE_TOTAL');
+    }
 
     const gazeUpMs = this.trackContinuous('gazeUp', noseRelY <= PITCH_UP);
     const gazeDownMs = this.trackContinuous('gazeDown', noseRelY >= PITCH_DOWN || irisDown);
+    // Jami pastga qarash vaqti (kadrlar orasidagi uzilish 1 soniyadan ortiq hisoblanmaydi).
+    const downNow = Date.now();
+    const downDt = this.gazeDownLastTs ? Math.min(1000, Math.max(0, downNow - this.gazeDownLastTs)) : 0;
+    this.gazeDownLastTs = downNow;
+    if (noseRelY >= PITCH_DOWN || irisDown) this.gazeDownTotalMs += downDt;
+    if (this.gazeDownTotalMs >= this.gazeDownNextAlertMs) {
+      this.gazeDownNextAlertMs = this.gazeDownTotalMs + GAZE_DOWN_TOTAL_STEP_MS;
+      this.emit('GAZE_DOWN_TOTAL');
+    }
     if (gazeUpMs >= LIVE_SIGNAL_ESCALATE_MS) this.emit('GAZE_AWAY_UP');
     if (gazeDownMs >= LIVE_SIGNAL_ESCALATE_MS) this.emit('GAZE_AWAY_DOWN');
 

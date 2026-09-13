@@ -233,7 +233,6 @@ export function StaffPage({ token, lang }: Props) {
       body: JSON.stringify({
         id: fd.get('id'), password: fd.get('password'), role: 'admin',
         name: fd.get('name'), group_id: null,
-        profile_image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
       }),
     });
     if (!checkAdminAuthResponse(res)) return;

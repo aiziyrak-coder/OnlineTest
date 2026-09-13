@@ -37,6 +37,11 @@ export type StudentRow = {
   name: string;
   role: string;
   status: string;
+  /* O'qituvchi / ordinator / magistr GURUHGA emas, KAFEDRAGA biriktiriladi. */
+  kafedra_id?: number | null;
+  kafedra_name?: string | null;
+  position?: string;
+  stavka?: string;
   group_id: number | null;
   profile_image?: string | null;
   has_photo?: boolean;
@@ -62,4 +67,8 @@ export type AdminStats = {
   totalLevels: number;
   totalGroups: number;
   totalStudents: number;
+  totalFaculty?: number;
+  totalOrdinators?: number;
+  totalMagistrs?: number;
+  totalVacancy?: number;
 };

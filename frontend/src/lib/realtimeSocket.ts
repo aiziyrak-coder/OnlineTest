@@ -1,3 +1,4 @@
+import { desktopServerOrigin } from './desktop';
 export type RealtimeMessage = Record<string, unknown> & { type: string };
 
 export type RealtimeSocket = {
@@ -79,6 +80,11 @@ export function buildRealtimeUrl(token: string): string {
   const envUrl = (import.meta.env.VITE_REALTIME_URL as string | undefined)?.trim();
   if (envUrl) {
     return `${envUrl}/ws/realtime/?token=${encodeURIComponent(token)}`;
+  }
+  // FerMI Exam ilovasi: interfeys fermi://app dan ochiladi — WebSocket to'g'ridan-to'g'ri serverga.
+  const desktopOrigin = desktopServerOrigin();
+  if (desktopOrigin) {
+    return `${desktopOrigin.replace(/^http/, 'ws')}/ws/realtime/?token=${encodeURIComponent(token)}`;
   }
   if (import.meta.env.DEV) {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';

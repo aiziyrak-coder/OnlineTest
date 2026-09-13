@@ -160,8 +160,24 @@ def _get_engine() -> dict[str, Any] | None:
                 nms_threshold=0.3,
                 top_k=5000,
             )
+            # Pasport surati uchun alohida, yumshoqroq detektor. Umumiy
+            # detektorning chegarasini o'zgartirib bo'lmaydi — u proctoring
+            # kadrlari bilan bir vaqtda ishlaydi.
+            detector_lo = cv2.FaceDetectorYN.create(
+                str(_YUNET),
+                "",
+                (320, 320),
+                score_threshold=0.2,
+                nms_threshold=0.3,
+                top_k=5000,
+            )
             recognizer = cv2.FaceRecognizerSF.create(str(_SFACE), "")
-            _ENGINE = {"detector": detector, "recognizer": recognizer, "cv2": cv2}
+            _ENGINE = {
+                "detector": detector,
+                "detector_lo": detector_lo,
+                "recognizer": recognizer,
+                "cv2": cv2,
+            }
             return _ENGINE
         except Exception as exc:
             _logger.warning("face engine init failed: %s", exc)
@@ -183,9 +199,103 @@ def _largest_face(faces):
     return max(faces, key=lambda f: float(f[2]) * float(f[3]))
 
 
+def _face_variants(img, cv2) -> list:
+    """Yuzni topish uchun rasm variantlari.
+
+    Odamlar pasportning YOYILGAN suratini yuklaydi: kadr keng, undagi yuz esa
+    butun rasmning kichik bir bo'lagi bo'ladi. Bitta o'lchamda qidirilganda
+    detektor uni ko'rmasdi va hammaga "Yuz aniqlanmadi" chiqardi. Endi bir
+    necha o'lchamda va pasport yoyilgan bo'lsa har bir betida alohida qidiramiz.
+    """
+    out = []
+    h, w = img.shape[:2]
+    long_side = max(h, w)
+
+    def _scaled(src, target=1600):
+        sh, sw = src.shape[:2]
+        longest = max(sh, sw)
+        if longest == 0:
+            return None
+        k = target / float(longest)
+        if 0.95 < k < 1.05:
+            return src
+        interp = cv2.INTER_AREA if k < 1 else cv2.INTER_CUBIC
+        return cv2.resize(src, (max(1, int(sw * k)), max(1, int(sh * k))), interpolation=interp)
+
+    out.append(img)
+    scaled = _scaled(img)
+    if scaled is not None and scaled is not img:
+        out.append(scaled)
+    if long_side < 900:
+        big = _scaled(img, 2400)
+        if big is not None:
+            out.append(big)
+
+    # Yoyilgan pasport: yuz odatda bitta betda bo'ladi.
+    if w > h * 1.15:
+        half = w // 2
+        for part in (img[:, :half], img[:, half:]):
+            piece = _scaled(part)
+            if piece is not None and piece.shape[0] >= 48 and piece.shape[1] >= 48:
+                out.append(piece)
+
+    # Telefonda olingan surat ko'pincha yon tomonga burilgan bo'ladi (EXIF
+    # burilishi rasm ichida yozilgan, cv2 esa uni hisobga olmaydi). Bunday
+    # kadrda yuz 90 daraja yotgan holatda bo'ladi va detektor uni ko'rmaydi.
+    rotations = (cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    base = _scaled(img)
+    if base is None:
+        base = img
+    for code in rotations:
+        try:
+            out.append(cv2.rotate(base, code))
+        except Exception:
+            continue
+    return out
+
+
+def _best_face(img, engine):
+    """Barcha variantlar ichidan eng ishonchli yuzni tanlaydi.
+
+    Birinchi topilganini olish xato edi: yon burilgan kadrda ham yuz
+    "topilardi", lekin undan olingan belgi (embedding) yaroqsiz bo'lib,
+    solishtiruv nolga yaqin natija berardi. Tik turgan yuzni detektor ancha
+    yuqori ishonch bilan topadi — shuning uchun eng yuqori ballisini olamiz.
+    """
+    cv2 = engine["cv2"]
+    detectors = [engine["detector"]]
+    lo = engine.get("detector_lo")
+    if lo is not None:
+        detectors.append(lo)
+
+    variants = _face_variants(img, cv2)
+    best = (None, None, -1.0)
+    for detector in detectors:
+        for variant in variants:
+            vh, vw = variant.shape[:2]
+            if vw < 48 or vh < 48:
+                continue
+            try:
+                detector.setInputSize((vw, vh))
+                _, faces = detector.detect(variant)
+            except Exception:
+                continue
+            face = _largest_face(faces)
+            if face is None:
+                continue
+            try:
+                score = float(face[-1])
+            except Exception:
+                score = 0.0
+            if score > best[2]:
+                best = (variant, face, score)
+        # Qat'iy detektor ishonchli yuz topgan bo'lsa, yumshog'i kerak emas.
+        if best[2] >= 0.9:
+            break
+    return best[0], best[1]
+
 def _extract_feature(image_bytes: bytes, engine: dict[str, Any]) -> tuple[Any | None, str | None]:
     cv2 = engine["cv2"]
-    detector = engine["detector"]
     recognizer = engine["recognizer"]
 
     img = _bytes_to_bgr(image_bytes)
@@ -196,16 +306,56 @@ def _extract_feature(image_bytes: bytes, engine: dict[str, Any]) -> tuple[Any | 
     if w < 48 or h < 48:
         return None, "IMAGE_TOO_SMALL"
 
-    detector.setInputSize((w, h))
-    _, faces = detector.detect(img)
-    face = _largest_face(faces)
+    variant, face = _best_face(img, engine)
     if face is None:
         return None, "FACE_NOT_DETECTED"
+    try:
+        aligned = recognizer.alignCrop(variant, face)
+        return recognizer.feature(aligned), None
+    except Exception:
+        return None, "FACE_NOT_DETECTED"
 
-    aligned = recognizer.alignCrop(img, face)
-    feature = recognizer.feature(aligned)
-    return feature, None
+def crop_face_b64(image_b64: str, max_side: int = 512, margin: float = 0.55) -> str | None:
+    """Rasmdan yuzni kesib, TIK holatda JPEG base64 qaytaradi.
 
+    Profil rasmi sifatida butun pasport sahifasi saqlanardi: yuz kadrning
+    kichik, yon burilgan va yaltiragan bo'lagi bo'lib qolardi va imtihon
+    oldidagi solishtiruv deyarli nol natija berardi.
+    """
+    engine = _get_engine()
+    if engine is None:
+        return None
+    raw = _decode_b64_image(image_b64)
+    if not raw:
+        return None
+    cv2 = engine["cv2"]
+    img = _bytes_to_bgr(raw)
+    if img is None or img.size == 0:
+        return None
+
+    variant, face = _best_face(img, engine)
+    if face is None:
+        return None
+    vh, vw = variant.shape[:2]
+    x, y, fw, fh = float(face[0]), float(face[1]), float(face[2]), float(face[3])
+    mx, my = fw * margin, fh * margin
+    x0, y0 = max(0, int(x - mx)), max(0, int(y - my))
+    x1, y1 = min(vw, int(x + fw + mx)), min(vh, int(y + fh + my))
+    if x1 - x0 < 32 or y1 - y0 < 32:
+        return None
+    crop = variant[y0:y1, x0:x1]
+    ch, cw = crop.shape[:2]
+    longest = max(ch, cw)
+    if longest and longest != max_side:
+        k2 = max_side / float(longest)
+        interp = cv2.INTER_AREA if k2 < 1 else cv2.INTER_CUBIC
+        crop = cv2.resize(crop, (max(1, int(cw * k2)), max(1, int(ch * k2))), interpolation=interp)
+    ok, buf = cv2.imencode(".jpg", crop, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+    if not ok:
+        return None
+    import base64 as _b64
+
+    return _b64.b64encode(buf.tobytes()).decode("ascii")
 
 @lru_cache(maxsize=1)
 def face_engine_ready() -> bool:

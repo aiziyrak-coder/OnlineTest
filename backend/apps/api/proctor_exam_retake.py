@@ -6,6 +6,43 @@ from apps.core.models import Exam, StudentExam
 
 IDENTITY_VIOLATION_TYPE = "IDENTITY_SUBSTITUTION"
 
+#: ATAYLAB chiterlik — bularga qayta topshirish BERILMAYDI, to'g'ridan-to'g'ri ban.
+#:
+#: Nega kerak: ilgari har qanday qoidabuzarlikda ban o'rniga yangi urinish
+#: berilardi (imtihonda standart 3 ta). Ya'ni telefon bilan tutilgan nomzod
+#: jazo o'rniga toza sahifa olardi va yana 3 marta urinib ko'rardi. Auditda
+#: 141 ta qoidabuzarlikka qarshi 0 ta ban chiqqanining asosiy sababi shu.
+#:
+#: Texnik nosozlik turlari (kamera ochilmadi, tasvir uzildi) bu ro'yxatda
+#: YO'Q — ular ilgarigidek qayta topshirish oladi, chunki ular talabaning
+#: aybi emas.
+DELIBERATE_CHEAT_VIOLATIONS = frozenset(
+    {
+        "IDENTITY_SUBSTITUTION",
+        "FORBIDDEN_OBJECT_CELL_PHONE",
+        "FORBIDDEN_OBJECT_LAPTOP",
+        "FORBIDDEN_OBJECT_BOOK",
+        "REMOTE_CONTROL_SUSPECTED",
+        "VIRTUAL_WEBCAM_SUSPECTED",
+        "DEVTOOLS_OPEN",
+        "CLIPBOARD_ATTEMPT",
+        "PRINT_SCREEN",
+        "MULTI_MONITOR_DETECTED",
+    }
+)
+
+
+def retake_allowed_for_violation(vtype: str) -> bool:
+    """Shu tur uchun ban o'rniga qayta topshirish berish mumkinmi."""
+    import os
+
+    raw = os.environ.get("PROCTOR_NO_RETAKE_VIOLATIONS")
+    if raw is None:
+        blocked = DELIBERATE_CHEAT_VIOLATIONS
+    else:
+        blocked = {x.strip().upper() for x in raw.split(",") if x.strip()}
+    return str(vtype or "").strip().upper() not in blocked
+
 
 #: Maydon umuman bo'lmasa ishlatiladigan qiymatlar (model default'lari).
 DEFAULT_VIOLATION_RETAKES = 3
@@ -76,6 +113,7 @@ def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
     se.session_challenge = ""
     se.device_session_token = ""
     se.identity_verified_at = None
+    se.question_lock_json = ""
     update_fields = [
         "status",
         "answers_json",
@@ -95,11 +133,21 @@ def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
         "session_challenge",
         "device_session_token",
         "identity_verified_at",
+        "question_lock_json",
     ]
     exam = getattr(se, "exam", None)
     if exam is None:
         exam = Exam.objects.filter(pk=se.exam_id).first()
-    if exam and exam.exam_mode in ("bank_mixed", "imentor_mixed"):
+    # vacancy_ai: nomzodga qayta imkon berilsa, savollar YANGIDAN yaratilishi
+    # kerak. Aks holda u xuddi o'sha 20 ta savolni qayta ko'rardi va qayta
+    # topshirish ma'nosini yo'qotardi.
+    if exam and exam.exam_mode in (
+        "bank_mixed",
+        "imentor_mixed",
+        "vacancy_ai",
+        "static",
+        "",
+    ):
         se.session_questions_json = None
         update_fields.append("session_questions_json")
     return update_fields
@@ -168,6 +216,9 @@ def try_apply_exam_retake(
 ) -> dict | None:
     """Ban o'rniga qayta topshirish. Imkon yo'q bo'lsa None (keyin ban)."""
     vtype = str(violation_type or "").strip()
+    if not retake_allowed_for_violation(vtype):
+        # Ataylab chiterlik — ikkinchi imkoniyat yo'q. Chaqiruvchi ban qiladi.
+        return None
     if vtype == IDENTITY_VIOLATION_TYPE:
         if identity_retakes_remaining(se, exam) <= 0:
             return None

@@ -8,11 +8,11 @@ Holat belgilari: `[ ]` boshlanmagan · `[~]` jarayonda · `[x]` tayyor
 (Reja tuzilgandan keyin, amaliy ehtiyojdan kelib chiqib qo'shildi — batafsili: PLAN.md §6)
 - [x] `data/talablar kotingenti/*.xlsx` fayllar tahlil qilindi (fieldlar, guruh nomlash qoidasi, rasm holati)
 - [x] `Group.intake_year` maydoni qo'shildi (`backend/apps/core/models/user.py`)
-- [x] Migration yaratildi (`0028_add_group_intake_year.py`) — **serverda hali ishga tushirilmagan (`migrate` kerak)**
+- [x] Migration yaratildi (`0028_add_group_intake_year.py`) — production migrate qo‘llangan
 - [x] `admin_groups` / `admin_group_detail` API'ga `intake_year` qo'shildi (GET/POST/PATCH)
-- [x] `Group.is_active` maydoni qo'shildi (migration `0029_add_group_is_active.py`) — **serverda hali ishga tushirilmagan**
+- [x] `Group.is_active` maydoni qo'shildi (migration `0029_add_group_is_active.py`) — production migrate qo‘llangan
 - [x] `promote_groups` management command yozildi (`apps/core/management/commands/promote_groups.py`) — dry-run default, `--apply` bilan yozadi, `AuditLog`ga yozadi
-- [ ] `promote_groups` real bazada sinovdan o'tkazildi (dry-run) — DB ulanishi yo'qligi sababli hali tekshirilmagan
+- [ ] `promote_groups` real bazada dry-run / cron (har 1-sentyabr) — ops vazifa
 - [x] `import_students` management command yozildi (`apps/core/management/commands/import_students.py`) — `openpyxl` qo'shildi (`requirements/base.txt`)
 - [x] 10 ta talaba bilan sinov o'tkazildi (lokal Docker Postgres): `TPI-925` guruh yaratildi, HTTP login (ID=parol) tasdiqlandi, test yozuvlari tozalab tashlandi
 - [x] `GROUP_RE` tuzatildi — endi faqat katta harfli kod (TPI, DI, MD...) qabul qilinadi, ordinatura/magistratura nomlari (masalan "Kardiologiya-25") avtomatik chetlab o'tiladi
@@ -20,7 +20,7 @@ Holat belgilari: `[ ]` boshlanmagan · `[~]` jarayonda · `[x]` tayyor
 - [x] To'liq dry-run sinovi o'tkazildi (lokal Postgres): 1-kurs=1609, 2-kurs=1367, 4-kurs=764, 5-kurs=483 talaba — jami ~4223 ta, hech narsa yozilmadi (0 xato holida)
 - [x] Frontend UI (`GroupsPage.tsx`, `types.ts`, `i18n.ts`) `intake_year` va `is_active` (bitirgan) ko'rsatish/kiritishni qo'llab-quvvatlaydigan qilindi
 - [ ] **3-kurs.xlsx hali import qilinmagan** — "Talabalar" sheet'da "Guruh" ustuni umuman yo'q, qo'lda hal qilish kerak (pastga qarang)
-- [x] Butun kontingent (4 fayl) **serverning haqiqiy bazasida** `--apply` bilan import qilindi (`kontingent.py`, konteyner ichida) — natija: **4226 talaba, 303 guruh, 15 yo'nalish** (`TPI, FT, BM, OHI, DI, ЛД, MD, SSBJSS, RTT, TBATM, P, S, F, PI, XT`). Haqiqiy HTTP login (`/api/auth/login`, ID=parol) muvaffaqiyatli tasdiqlandi.
+- [x] Butun kontingent (4 fayl) **serverning haqiqiy bazasida** `--apply` bilan import qilindi (`kontingent.py`, konteyner ichida) — natija: **4226 talaba, 303 guruh, 15 yo'nalish** (`TPI, FT, BM, OHI, DI, ЛД, MD, SSBJSS, RTT, TBATM, P, S, F, PI, XT`). Haqiqiy HTTP login (`/api/auth/login`, ID=parol) muvaffaqiyatli tasdiqlandi. (2026-08 audit: DB da ~5299 student.)
 - [ ] `promote_groups` uchun yillik avtomatik ishga tushirish (cron/scheduled task, har 1-sentyabr)
 
 **Hal qilinmagan muammolar (import oldidan yoki keyin ko'rib chiqiladi):**
@@ -56,9 +56,10 @@ bog'lanishi maxsus XML zanjiri orqali tiklanadi: `xl/worksheets/sheet1.xml`
   qilingandan keyin xuddi o'sha faylning rasmlarini ham biriktiradi
   (`python kontingent.py --apply --photos`). Dry-run rejimida barcha 4 fayl uchun
   tezlik tekshirildi (~2-3 daqiqa, muammosiz).
-- [ ] Butun kontingentga (production) rasmlar `--apply --photos` bilan o'rnatildi —
-  hali bajarilmagan, keyingi qadam.
-- [ ] 3-kurs.xlsx uchun rasmlar (guruh muammosi hal bo'lgandan keyin, alohida)
+- [x] Butun kontingentga (production) rasmlar `seed_student_photos --apply` bilan o'rnatildi —
+  2026-08-27: Excel cohort (`allaqachon_bor` 1–5 kurs). Qolgan ~1098 talaba
+  Excel'da yo‘q / 3-kursda rich-rasm yo‘q — admin orqali yuklash kerak.
+- [ ] 3-kurs.xlsx guruh ustuni + rich-rasm manbasi — alohida
 
 ## Bosqich 1 — OnlineTest: Kafedra modeli
 - [x] `Kafedra` modeli qo'shildi (`backend/apps/core/models/user.py`) — `name` (unique),
@@ -122,7 +123,7 @@ bog'lanishi maxsus XML zanjiri orqali tiklanadi: `xl/worksheets/sheet1.xml`
   masalan "Kardiologiya-25 (Magistratura) rus" → "Kardiologiya"). Idempotent
   (`get_or_create`), dry-run default. Lokal Postgres'da sinovdan o'tkazildi:
   birinchi ishga tushirishda 46 yangi, ikkinchisida 0 yangi/46 mavjud — to'g'ri.
-- [ ] Serverda `--apply` bilan ishga tushirilmagan — keyingi qadam.
+- [x] Serverda `--apply` bilan ishga tushirilgan (production deploy 2026-08-02; audit 2026-08-27: kafedralar jadvali mavjud).
 
 **⚠️ Ochiq kontseptual savol — Kafedra↔Direction bog'lanishi**: mavjud 15 ta
 `Direction` (`TPI, DI, MD, PI, S, F, OHI, FT, BM, XT, RTT, SSBJSS, TBATM, P, ЛД`)
@@ -151,8 +152,7 @@ faqat foydalanuvchi/dekanatga ma'lum).
   hamkor kaliti ishlashi tasdiqlandi), test ma'lumoti bilan daraxt tuzilishi
   (kafedra→direction→group, `student_count`, kafedrasiz yo'nalish `unassigned_directions`da)
   to'g'ri chiqdi. Test ma'lumotlari tozalab tashlandi.
-- [ ] Serverda `ONLINE_TEST_PUBLIC_API_KEYS` sozlanmagan va endpoint hali serverga
-  chiqarilmagan — keyingi qadam (deploy + iMentor tomonidagi haqiqiy kalitni kelishish)
+- [x] Serverda `ONLINE_TEST_PUBLIC_API_KEYS` sozlangan (production deploy yakunlangan).
 - Production manzil (iMentor tomonidan chaqiriladigan): `https://online-imtixon.uz/api/public/academic-catalog/`
 
 ## Bosqich 5 — iMentor: klient funksiyasi

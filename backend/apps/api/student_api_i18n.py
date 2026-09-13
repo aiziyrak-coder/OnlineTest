@@ -10,14 +10,19 @@ def _tri(uz: str, ru: str, en: str) -> dict[str, str]:
 
 _MSG: dict[str, dict[str, str]] = {
     "desktop_only": _tri(
-        "Faqat kompyuter (desktop/laptop) orqali imtihon topshirish ruxsat etiladi.",
-        "Сдавать экзамен можно только с компьютера (desktop/laptop).",
-        "Exams can only be taken on a desktop or laptop computer.",
+        "Iltimos, kompyuter (desktop/laptop) orqali kiring. Telefon va planshetda imtihon topshirish mumkin emas.",
+        "Пожалуйста, войдите с компьютера (desktop/laptop). Сдать экзамен с телефона или планшета нельзя.",
+        "Please use a computer (desktop/laptop). Exams cannot be taken on a phone or tablet.",
     ),
     "profile_photo_required": _tri(
         "Profil rasmsiz imtihon boshlash mumkin emas. Administratorga murojaat qiling.",
         "Без фото профиля начать экзамен нельзя. Обратитесь к администратору.",
         "You cannot start the exam without a profile photo. Contact the administrator.",
+    ),
+    "vac_consent_required": _tri(
+        "Imtihon nazorati qoidalarini o'qib, roziligingizni bildiring.",
+        "Ознакомьтесь с правилами контроля экзамена и подтвердите согласие.",
+        "Read the exam proctoring rules and give your consent.",
     ),
     "identity_required": _tri(
         "Yuz tekshiruvi talab qilinadi. Pre-exam bosqichini yakunlang.",
@@ -128,6 +133,16 @@ _MSG: dict[str, dict[str, str]] = {
         "Ban report mavjud emas",
         "Отчёт о блокировке отсутствует",
         "Ban report is not available",
+    ),
+    "faculty_assessment_one_exam_only": _tri(
+        "Siz allaqachon boshqa fan bo'yicha baholash imtihonini boshlagan yoki topshirgansiz. Faqat bitta fan tanlanadi.",
+        "Вы уже начали или сдали оценочный экзамен по другому предмету. Можно выбрать только один предмет.",
+        "You already started or completed an assessment exam for another subject. Only one subject is allowed.",
+    ),
+    "faculty_questions_not_ready": _tri(
+        "Bu fan uchun savollar hali tayyorlanmoqda. Birozdan keyin qayta urinib ko'ring.",
+        "Вопросы по этому предмету ещё готовятся. Попробуйте позже.",
+        "Questions for this subject are still being prepared. Please try again shortly.",
     ),
 }
 

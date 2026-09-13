@@ -24,6 +24,13 @@ import {
   PlusIcon,
 } from './admin/ui';
 
+type FacultyAssessmentDept = {
+  kafedra_id: number;
+  name: string;
+  date: string;
+  subjects: string[];
+};
+
 type StudentRow = { id: string; name: string; group_id: number | null };
 type StaffRow = { id: string; name: string; role: string };
 type ImentorDepartment = {
@@ -74,6 +81,13 @@ export function ImtixonTab({
   const [imentorConfigured, setImentorConfigured] = useState(true);
   const [imentorApiError, setImentorApiError] = useState('');
   const [staffUsers, setStaffUsers] = useState<StaffRow[]>([]);
+  const [facultySchedule, setFacultySchedule] = useState<FacultyAssessmentDept[]>([]);
+  /* O'qituvchi baholash jadvalida atigi 25 ta kafedra bor (DOCX dan), bazada
+     esa 96 ta. Ordinator, magistr va vakansiya imtihonini istalgan kafedraga
+     yaratish kerak -- shuning uchun ular uchun to'liq ro'yxat olinadi. */
+  const [allKafedralar, setAllKafedralar] = useState<{ id: number; name: string }[]>([]);
+  const [selFacultyKafedraId, setSelFacultyKafedraId] = useState('');
+  const [facultySubject, setFacultySubject] = useState('');
 
   const [title, setTitle] = useState('');
   const [startLocal, setStartLocal] = useState(defaultExamStartLocal);
@@ -96,6 +110,22 @@ export function ImtixonTab({
   const [subjectsLoading, setSubjectsLoading] = useState(false);
 
   const [selGroups, setSelGroups] = useState<number[]>([]);
+  // 'vacancy' — ishga kiruvchilar. Kafedra + fan bo'yicha, o'qituvchi
+  // imtihoni bilan bir xil oqim; farqi faqat kimga mo'ljallanganida.
+  const [audience, setAudience] = useState<
+    'student' | 'faculty' | 'vacancy' | 'ordinator' | 'magistr' | 'entrant'
+  >('student');
+  // Ordinator/magistr: savollarni AI emas, ADMIN yuklaydi. Imtihon avval
+  // bo'sh bank bilan yaratiladi, savollar "Ordinatorlar"/"Magistrlar"
+  // sahifasidagi "Savollarni yuklash" oynasidan qo'yiladi.
+  const [ordQuestionCount, setOrdQuestionCount] = useState(20);
+  /* Ordinatura kursi: 1-kurs va 2-kurs (DAK) imtihonlari aralashmasin. */
+  const [ordCourse, setOrdCourse] = useState('2');
+  /* Savollarning nechtasini AI ayni paytda yaratsin — bank tarqalib
+     ketgan bo'lsa ham har kimga yangi savollar tushishi uchun. */
+  const [ordAiCount, setOrdAiCount] = useState(10);
+  const isUploadAudience =
+    audience === 'ordinator' || audience === 'magistr' || audience === 'entrant';
 
   // Guruh ro'yxatida allaqachon direction_id/direction_name bor (admin/groups
   // javobidan) — Kafedra→Yo'nalish→Guruh integratsiyasi uchun qo'shimcha API
@@ -123,12 +153,13 @@ export function ImtixonTab({
   const [msg, setMsg] = useState({ type: '', text: '' });
 
   const loadMeta = useCallback(async () => {
-    const [gr, st, im] = await Promise.all([
+    const [gr, st, im, fs] = await Promise.all([
       fetch(apiUrl('/api/admin/groups'), { headers: h }),
       fetch(apiUrl('/api/admin/users?role=staff'), { headers: h }),
       fetch(apiUrl('/api/admin/imentor/departments'), { headers: h }),
+      fetch(apiUrl('/api/admin/faculty-assessment/schedule'), { headers: h }),
     ]);
-    if (!checkAdminAuthResponse(gr) || !checkAdminAuthResponse(st) || !checkAdminAuthResponse(im)) return;
+    if (!checkAdminAuthResponse(gr) || !checkAdminAuthResponse(st) || !checkAdminAuthResponse(im) || !checkAdminAuthResponse(fs)) return;
     const gj = gr.ok ? await readJsonSafe<any[]>(gr) : null;
     const sj = st.ok ? await readJsonSafe<unknown>(st) : null;
     const ij = im.ok
@@ -140,8 +171,12 @@ export function ImtixonTab({
           question_limit_bounds?: { min?: number; max?: number };
         }>(im)
       : null;
+    const fj = fs.ok
+      ? await readJsonSafe<{ departments?: FacultyAssessmentDept[] }>(fs)
+      : null;
     setGroups(Array.isArray(gj) ? gj : []);
     setStaffUsers(parseAdminUsersList<StaffRow>(sj));
+    setFacultySchedule(Array.isArray(fj?.departments) ? fj!.departments! : []);
     setImentorConfigured(ij?.configured !== false);
     setImentorApiError(String(ij?.error || '').trim());
     setImentorDepartments(Array.isArray(ij?.departments) ? ij!.departments! : []);
@@ -179,6 +214,44 @@ export function ImtixonTab({
     },
     [token],
   );
+
+  /* Kafedra ro'yxati auditoriyaga qarab tanlanadi. */
+  const kafedraOptions = useMemo(
+    () =>
+      isUploadAudience || audience === 'vacancy'
+        ? allKafedralar.map((k) => ({ kafedra_id: k.id, name: k.name }))
+        : facultySchedule.map((k) => ({ kafedra_id: k.kafedra_id, name: k.name })),
+    [isUploadAudience, audience, allKafedralar, facultySchedule],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(apiUrl('/api/admin/kafedralar'), { headers: h });
+        if (!r.ok) return;
+        const raw = await readJsonSafe<any>(r);
+        const list = Array.isArray(raw) ? raw : (raw && raw.results) || [];
+        if (!cancelled) {
+          setAllKafedralar(
+            list
+              .filter((k: any) => k.is_active !== false)
+              .map((k: any) => ({ id: Number(k.id), name: String(k.name || '') })),
+          );
+        }
+      } catch { /* ro'yxat bo'sh qolsa jadvaldagilar ishlatiladi */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedFacultyDept = useMemo(
+    () => facultySchedule.find((d) => String(d.kafedra_id) === selFacultyKafedraId) ?? null,
+    [facultySchedule, selFacultyKafedraId],
+  );
+
+  useEffect(() => {
+    setFacultySubject('');
+  }, [selFacultyKafedraId]);
 
   useEffect(() => {
     loadMeta();
@@ -286,7 +359,7 @@ export function ImtixonTab({
 
   const validate = (): string | null => {
     if (!title.trim()) return t.title + ' ' + t.examManualEmptyQuestion.toLowerCase();
-    if (selGroups.length === 0) return t.examCreateSelectGroup;
+    if (audience === 'student' && selGroups.length === 0) return t.examCreateSelectGroup;
     if (!isValidDatetimeLocal(startLocal) || !isValidDatetimeLocal(endLocal)) return t.examDateTimeRequired;
     const startIso = toIsoOrNull(startLocal);
     const endIso = toIsoOrNull(endLocal);
@@ -298,6 +371,11 @@ export function ImtixonTab({
       return t.examDurationExceedsWindow
         .replace('{dur}', String(duration))
         .replace('{window}', String(windowMin));
+    if (audience !== 'student') {
+      if (!selFacultyKafedraId) return t.examFacultyPickKafedra;
+      if (!facultySubject.trim()) return t.examFacultyPickSubject;
+      return null;
+    }
     if (!imentorConfigured) return t.imentorNotConfigured;
     if (!selDepartment) return t.imentorPickDepartment;
     if (!selSubject) return t.imentorPickSubject;
@@ -331,15 +409,32 @@ export function ImtixonTab({
         language,
         ambient_audio_enabled: ambientAudioEnabled,
         custom_rules: customRules,
-        group_ids: selGroups,
-        exam_exceptions: exceptionsPayload,
-        exam_mode: 'imentor_mixed',
-        imentor_subject_codes: selSubject ? [selSubject] : [],
-        bank_question_count: Math.max(0, imentorMaxQ),
+        group_ids: audience !== 'student' ? [] : selGroups,
+        exam_exceptions: audience !== 'student' ? [] : exceptionsPayload,
+        audience,
+        exam_mode: isUploadAudience
+          ? 'static'
+          : audience !== 'student'
+            ? 'faculty_ai_books'
+            : 'imentor_mixed',
+        course: isUploadAudience ? Number(ordCourse) || 0 : 0,
+        ai_question_count: isUploadAudience ? ordAiCount : 0,
+        bank_question_count: isUploadAudience
+          ? ordQuestionCount
+          : audience !== 'student'
+            ? 20
+            : Math.max(0, imentorMaxQ),
         technical_retakes_allowed: Math.max(0, Math.min(20, technicalRetakesAllowed)),
       };
-      if (selVariant) body.imentor_variant_label = selVariant;
-      if (selTopic) body.imentor_topic_code = selTopic;
+      if (audience === 'student') {
+        body.imentor_subject_codes = selSubject ? [selSubject] : [];
+        if (selVariant) body.imentor_variant_label = selVariant;
+        if (selTopic) body.imentor_topic_code = selTopic;
+      }
+      if (audience !== 'student') {
+        body.kafedra_id = Number(selFacultyKafedraId);
+        body.faculty_subject = facultySubject.trim();
+      }
       if (responsibleStaffId.trim()) body.teacher_id = responsibleStaffId.trim();
 
       // iMentor rejimida savollar shu so'rov ICHIDA olib, AI orqali 3 tilga
@@ -347,6 +442,7 @@ export function ImtixonTab({
       // mumkin. Ilgari bu yerda aniq timeout YO'Q edi va `catch` ham yo'q edi —
       // haqiqiy tarmoq xatosi bo'lsa foydalanuvchiga HECH NARSA ko'rsatilmasdi
       // (jim "osilib qolgan" tugma). Endi ikkalasi ham tuzatildi.
+      // faculty_ai_books: savollar start paytida — create tez.
       const res = await fetchWithTimeout(
         apiUrl('/api/admin/exams'),
         {
@@ -354,7 +450,7 @@ export function ImtixonTab({
           headers: { 'Content-Type': 'application/json', ...h },
           body: JSON.stringify(body),
         },
-        480_000,
+        audience !== 'student' ? 60_000 : 480_000,
       );
 
       if (!checkAdminAuthResponse(res)) return;
@@ -373,6 +469,8 @@ export function ImtixonTab({
       setSelVariant('');
       setSelTopic('');
       setSelGroups([]);
+      setSelFacultyKafedraId('');
+      setFacultySubject('');
       setExMap({});
       setStartLocal(defaultExamStartLocal());
       setEndLocal(defaultExamEndLocal(duration));
@@ -434,6 +532,165 @@ export function ImtixonTab({
               </AdminField>
             </div>
 
+            <AdminField label={t.examAudienceLabel} required>
+              <AdminSelect
+                value={audience}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setAudience(
+                    v === 'faculty' || v === 'vacancy' || v === 'ordinator'
+                      || v === 'magistr' || v === 'entrant'
+                      ? v
+                      : 'student',
+                  );
+                }}
+              >
+                <option value="student">{t.examAudienceStudent}</option>
+                <option value="faculty">{t.examAudienceFaculty}</option>
+                <option value="ordinator">
+                  {lang === 'ru' ? 'Ordinator' : lang === 'en' ? 'Resident' : 'Ordinator'}
+                </option>
+                <option value="magistr">
+                  {lang === 'ru' ? 'Magistr' : lang === 'en' ? 'Master student' : 'Magistr'}
+                </option>
+                <option value="entrant">
+                  {lang === 'ru' ? 'Osobyy postupayushchiy' : lang === 'en'
+                    ? 'Special entrant' : 'Maxsus kiruvchi'}
+                </option>
+                <option value="vacancy">{t.examAudienceVacancy}</option>
+              </AdminSelect>
+            </AdminField>
+            {audience !== 'student' && (
+              <>
+                <p className="text-[13px] text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+                  {isUploadAudience
+                    ? lang === 'ru'
+                      ? 'Voprosy zagruzhayet administrator (PDF/DOCX) na stranitse Ordinatory/Magistry. Kazhdomu vydayetsya sluchaynyy nabor, pri kazhdoy popytke — drugiye voprosy.'
+                      : lang === 'en'
+                        ? 'The administrator uploads the questions (PDF/DOCX) on the Residents / Masters page. Each person gets a random subset, and every attempt draws different questions.'
+                        : "Savollarni AI emas, ADMIN yuklaydi (PDF/DOCX) — \"Ordinatorlar\" yoki \"Magistrlar\" sahifasidan. Har bir topshiruvchiga bankdan tasodifiy savollar tushadi, har urinishda boshqasi."
+                    : t.examFacultyAiHint}
+                </p>
+                <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-4 sm:p-5 space-y-4">
+                  <AdminField label={t.kafedraLabel} required>
+                    <AdminSelect
+                      value={selFacultyKafedraId}
+                      onChange={(e) => setSelFacultyKafedraId(e.target.value)}
+                    >
+                      <option value="">{t.examFacultyPickKafedra}</option>
+                      {kafedraOptions.map((kf) => (
+                        <option key={kf.kafedra_id} value={String(kf.kafedra_id)}>
+                          {kf.name}
+                        </option>
+                      ))}
+                    </AdminSelect>
+                    {kafedraOptions.length === 0 && (
+                      <p className="text-[12px] text-amber-700 mt-1.5">{t.emptyKafedralar}</p>
+                    )}
+                  </AdminField>
+                  {isUploadAudience ? (
+                    <>
+                      <AdminField label={t.imentorSubjectsLabel} required>
+                        <AdminInput
+                          value={facultySubject}
+                          onChange={(e) => setFacultySubject(e.target.value)}
+                          placeholder={
+                            lang === 'ru'
+                              ? 'Naprimer: DAK ordinatury 2 kurs'
+                              : lang === 'en'
+                                ? 'e.g. Residency final exam, year 2'
+                                : "Masalan: 2-kurs ordinatura DAK"
+                          }
+                        />
+                      </AdminField>
+                      <AdminField
+                        label={lang === 'ru' ? 'Kurs' : lang === 'en' ? 'Year' : 'Kurs'}
+                        required
+                      >
+                        <AdminSelect
+                          value={ordCourse}
+                          onChange={(e) => setOrdCourse(e.target.value)}
+                        >
+                          <option value="1">
+                            {lang === 'ru' ? '1 kurs' : lang === 'en' ? 'Year 1' : '1-kurs'}
+                          </option>
+                          <option value="2">
+                            {lang === 'ru' ? '2 kurs (DAK)' : lang === 'en' ? 'Year 2 (final)' : '2-kurs (DAK)'}
+                          </option>
+                          <option value="0">
+                            {lang === 'ru' ? 'Vse kursy' : lang === 'en' ? 'All years' : 'Barcha kurslar'}
+                          </option>
+                        </AdminSelect>
+                      </AdminField>
+                      <AdminField
+                        label={
+                          lang === 'ru'
+                            ? 'Voprosov na cheloveka'
+                            : lang === 'en'
+                              ? 'Questions per person'
+                              : 'Har bir kishiga savollar soni'
+                        }
+                        required
+                      >
+                        <AdminInput
+                          type="number"
+                          min={1}
+                          max={200}
+                          value={String(ordQuestionCount)}
+                          onChange={(e) =>
+                            setOrdQuestionCount(Math.max(1, Math.min(200, Number(e.target.value) || 20)))
+                          }
+                        />
+                      </AdminField>
+                      <AdminField
+                        label={
+                          lang === 'ru'
+                            ? 'Iz nih sozdayet AI'
+                            : lang === 'en'
+                              ? 'Of these, generated by AI'
+                              : 'Shundan AI yaratadi'
+                        }
+                      >
+                        <AdminInput
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={String(ordAiCount)}
+                          onChange={(e) =>
+                            setOrdAiCount(Math.max(0, Math.min(50, Number(e.target.value) || 0)))
+                          }
+                        />
+                        <p className="text-[12px] text-gray-400 mt-1.5">
+                          {lang === 'ru'
+                            ? 'Ostalnye berutsya iz zagruzhennogo banka.'
+                            : lang === 'en'
+                              ? 'The rest come from the uploaded bank.'
+                              : 'Qolgani yuklangan bankdan olinadi. Bank tarqalib ketgan bo\u2018lsa ham har bir topshiruvchiga yangi savollar tushadi.'}
+                        </p>
+                      </AdminField>
+                    </>
+                  ) : (
+                  <AdminField label={t.imentorSubjectsLabel} required>
+                    <AdminSelect
+                      value={facultySubject}
+                      onChange={(e) => setFacultySubject(e.target.value)}
+                      disabled={!selectedFacultyDept}
+                    >
+                      <option value="">{t.examFacultyPickSubject}</option>
+                      {(selectedFacultyDept?.subjects ?? []).map((subj) => (
+                        <option key={subj} value={subj}>
+                          {subj}
+                        </option>
+                      ))}
+                    </AdminSelect>
+                    <p className="text-[12px] text-gray-400 mt-1.5">{t.examFacultySubjectHint}</p>
+                  </AdminField>
+                  )}
+                </div>
+              </>
+            )}
+
+            {audience === 'student' && (
             <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 sm:p-5 space-y-4">
               <div className="flex flex-wrap items-center gap-2 text-[12px] font-medium">
                 {[
@@ -597,6 +854,7 @@ export function ImtixonTab({
                 </p>
               </AdminField>
             </div>
+            )}
 
             <AdminField label={t.examResponsibleLabel}>
               <AdminSelect value={responsibleStaffId} onChange={(e) => setResponsibleStaffId(e.target.value)}>
@@ -714,6 +972,7 @@ export function ImtixonTab({
               </AdminField>
             </div>
 
+            {audience === 'student' && (
             <div>
               <AdminLabel required>{t.selectGroups}</AdminLabel>
               {groupDirectionOptions.length > 0 && (
@@ -751,6 +1010,7 @@ export function ImtixonTab({
                 {exceptionsPayload.length > 0 ? ` (${exceptionsPayload.length})` : ''}
               </AdminBtn>
             </div>
+            )}
 
             <div className="pt-1">
               <AdminBtn

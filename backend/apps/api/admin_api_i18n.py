@@ -89,6 +89,16 @@ _MSG: dict[str, dict[str, str]] = {
         "Кафедра не найдена",
         "Department not found",
     ),
+    "kafedra_required": _tri(
+        "Kafedra tanlanishi shart",
+        "Необходимо выбрать кафедру",
+        "Department selection is required",
+    ),
+    "faculty_subject_required": _tri(
+        "Fan (kitob) nomi kiritilishi shart",
+        "Необходимо указать название предмета (книги)",
+        "Subject (book) name is required",
+    ),
     "kafedra_has_directions": _tri(
         "Bu kafedrada {n} ta yo'nalish bor. Avval yo'nalishlarni boshqa kafedraga o'tkazing yoki bog'lanishni bekor qiling.",
         "У этой кафедры {n} направлений(я). Сначала перенесите направления или отвяжите их.",

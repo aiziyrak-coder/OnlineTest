@@ -10,14 +10,16 @@ _bind = os.environ.get("GUNICORN_BIND", "").strip()
 # Bo'sh bo'lsa modulda `bind` yo'q qolmasin (Linuxda systemd/env xatosi).
 bind = _bind or "127.0.0.1:8000"
 
-workers = int(os.environ.get("WEB_CONCURRENCY", str(min(multiprocessing.cpu_count() * 2 + 1, 9))))
-workers = max(2, workers)
+workers = int(os.environ.get("WEB_CONCURRENCY", str(min(multiprocessing.cpu_count() * 2 + 1, 12))))
+workers = max(4, workers)
 worker_class = "uvicorn.workers.UvicornWorker"
-timeout = int(os.environ.get("GUNICORN_TIMEOUT", "900"))
+timeout = int(os.environ.get("GUNICORN_TIMEOUT", "300"))
 graceful_timeout = int(os.environ.get("GUNICORN_GRACEFUL_TIMEOUT", "30"))
+keepalive = int(os.environ.get("GUNICORN_KEEPALIVE", "5"))
 max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "2000"))
 max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "200"))
 preload_app = os.environ.get("GUNICORN_PRELOAD_APP", "0").strip() in ("1", "true", "yes")
+worker_connections = int(os.environ.get("GUNICORN_WORKER_CONNECTIONS", "1000"))
 accesslog = "-"
 errorlog = "-"
 capture_output = True
