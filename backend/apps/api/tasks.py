@@ -308,7 +308,7 @@ def run_finalize_ended_exams() -> dict:
     from django.utils import timezone as dj_tz
 
     from apps.api.services import finalize_in_progress_locked
-    from apps.core.models import AppUser, Exam, ExamGroup, StudentExam
+    from apps.core.models import AppUser, Exam, ExamGroup, ExamStudentException, StudentExam
 
     # Avval: muddati tugagan HAR QANDAY sessiyani yopamiz (guruhga
     # bog'liq emas). Vakansiya/ordinator/maxsus kiruvchi imtihonlari
@@ -335,6 +335,14 @@ def run_finalize_ended_exams() -> dict:
                 "id", flat=True
             )
         )
+        # Istisno ro'yxatidagilar bu imtihonga tegishli emas: ularga "kelmadi"
+        # (Failed) yozilsa, kabinetida yiqilgan natija va hisobotda soxta
+        # "kelmaganlar" paydo bo'lardi (26.09: Nevrologiya №562 da 14 kishi).
+        _excluded = set(
+            ExamStudentException.objects.filter(exam_id=exam.id).values_list("student_id", flat=True)
+        )
+        if _excluded:
+            student_ids = [s for s in student_ids if s not in _excluded]
         if not student_ids:
             continue
         ses_by_student = {

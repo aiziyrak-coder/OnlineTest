@@ -350,6 +350,16 @@ def student_exams_list(request):
         assigned_ids = list(exams_qs.values_list("id", flat=True))
         if not assigned_ids:
             return Response([])
+    # Istisno ro'yxatidagi imtihon kabinetda ko'rinmaydi: ilgari guruhdoshlar
+    # (masalan harbiylar uchun ochilgan imtihonda 41 kishi) uni ko'rib, bosganda
+    # "ruxsat yo'q" xatosini olardi.
+    _blocked_ids = set(
+        ExamStudentException.objects.filter(student_id=u.id, exam_id__in=assigned_ids)
+        .values_list("exam_id", flat=True)
+    )
+    if _blocked_ids:
+        assigned_ids = [i for i in assigned_ids if i not in _blocked_ids]
+        exams_qs = exams_qs.exclude(id__in=_blocked_ids)
     ses_by_exam = {
         se.exam_id: se
         for se in StudentExam.objects.filter(student_id=u.id, exam_id__in=assigned_ids)
@@ -561,13 +571,36 @@ def student_exam_test_center(request, pk: int):
         return Response(
             {"error": "Test markazi PIN sozlamasi mavjud emas. Nazoratchiga murojaat qiling.", "code": "TEST_CENTER_PIN_UNAVAILABLE"}, status=503
         )
+    from apps.api.proctor_exam_retake import exam_is_remote
+
+    # Uydan topshiriladigan imtihonda markaz rejimi (mikrofon/shaxs nazorati
+    # o'chiq) yoqilishi nazoratni chetlab o'tish yo'li bo'lardi.
+    if exam_is_remote(exam):
+        return Response(
+            {"error": "Bu imtihon uydan topshiriladi — test markazi rejimi yoqilmaydi.",
+             "code": "REMOTE_EXAM"},
+            status=409,
+        )
     key = "tcpin:%s:%s" % (u.id, pk)
-    # Staffed centre: a mistyped PIN must not lock a candidate out for 15 minutes.
-    # Authentication and the endpoint's normal request throttles still apply.
-    cache.delete(key)
+    # Nazoratchi bor markazda bitta xato PIN odamni bloklamasin, lekin PIN
+    # 4 xonali (10 000 variant) — uydan taxmin qilib topish ham mumkin bo'lmasin:
+    # 15 daqiqada belgilangan sondan ko'p xato bo'lsa vaqtincha to'xtatiladi.
+    try:
+        _max_wrong = max(3, int(os.environ.get("TEST_CENTER_PIN_MAX_WRONG", "8")))
+    except (TypeError, ValueError):
+        _max_wrong = 8
+    _wrong = int(cache.get(key) or 0)
+    if _wrong >= _max_wrong:
+        return Response(
+            {"error": "PIN ko'p marta noto'g'ri kiritildi. 15 daqiqadan keyin qayta urining "
+                      "yoki nazoratchiga murojaat qiling.",
+             "code": "PIN_LOCKED"},
+            status=429,
+        )
     pin = "".join(ch for ch in str((request.data or {}).get("pin") or "") if ch.isdigit())
     if not hmac.compare_digest(pin.encode("utf-8"), expected.encode("utf-8")):
-        logger.warning("[TEST-CENTER] noto'g'ri PIN user=%s exam=%s", u.id, pk)
+        cache.set(key, _wrong + 1, 15 * 60)
+        logger.warning("[TEST-CENTER] noto'g'ri PIN user=%s exam=%s urinish=%s", u.id, pk, _wrong + 1)
         return Response(
             {"error": "PIN noto'g'ri.", "code": "WRONG_PIN"},
             status=403,
@@ -2442,7 +2475,10 @@ def student_exam_save_progress(request, pk: int):
     if sig_err is not None:
         return sig_err
     deadline = submission_deadline(exam, se, student_id=str(u.id))
-    if deadline and dj_tz.now() > deadline:
+    # Yakunlash (submit) 120 soniya kechikishni qabul qiladi, avtosaqlash esa
+    # muddat tugagan lahzada 403 berardi: sekin internetda oxirgi javoblar
+    # saqlanmay, avto-yakunlash eski qoralama bilan ball qo'yardi.
+    if deadline and dj_tz.now() > deadline + timedelta(seconds=30):
         return Response(
             {"error": student_api_msg("exam_time_expired_short", resolve_ui_language(request))},
             status=403,

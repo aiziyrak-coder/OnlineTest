@@ -86,3 +86,6 @@ yoqubov_*.json
 yulchiyev_*.json
 se26*.json
 se25*.json
+
+# Electron ilova: build va reliz fayllari (1+ GB) git ga tushmasin
+desktop/

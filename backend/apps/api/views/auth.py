@@ -34,12 +34,26 @@ def auth_login(request):
             status=403,
         )
     role_out = (user.role or "").strip().lower().replace("\ufeff", "").strip()
+    _remember_login(request, user)
     return Response(
         {
             "token": issue_token(user),
             "user": _auth_user_payload(user, role_out),
         }
     )
+
+
+def _remember_login(request, user) -> None:
+    """Oxirgi kirish vaqti va IP — tekshiruvlarda "qachon, qayerdan kirgan"."""
+    ip = str(
+        request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
+        or request.META.get("REMOTE_ADDR", "")
+    )[:64]
+    try:
+        AppUser.objects.filter(pk=user.pk).update(last_login_at=dj_tz.now(), last_login_ip=ip)
+    except Exception:  # noqa: BLE001 — kirishni to'xtatmasin
+        logger.warning("[AUTH] oxirgi kirish yozilmadi user=%s", user.pk, exc_info=True)
+    logger.info("[AUTH] kirdi user=%s role=%s ip=%s", user.pk, user.role, ip)
 
 
 def _auth_user_payload(user, role_out: str | None = None) -> dict:
@@ -174,6 +188,7 @@ def auth_face_login(request):
         except Exception:  # noqa: BLE001 — rasm saqlanmasa ham kirish davom etadi
             logger.warning("[FACE-LOGIN] profil rasmini saqlab bo'lmadi user=%s", user.pk, exc_info=True)
     logger.info("[FACE-LOGIN] kirdi user=%s sim=%.3f", user.pk, d.similarity)
+    _remember_login(request, user)
     return Response(
         {
             "token": issue_token(user),

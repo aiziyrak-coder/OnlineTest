@@ -99,8 +99,49 @@ def identity_retakes_remaining(se: StudentExam, exam: Exam) -> int:
 REGENERATE_QUESTION_MODES = ("bank_mixed", "imentor_mixed", "faculty_ai_books", "vacancy_ai", "static", "")
 
 
-def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
-    """Sessiyani tozalab Pending holatiga qaytaradi."""
+def archive_attempt(se: StudentExam, reason: str = "") -> None:
+    """Urinishni tozalashdan OLDIN arxivga yozadi.
+
+    Iz qoldirmagan (boshlanmagan) sessiya arxivlanmaydi. Arxivga yozib
+    bo'lmasa — tozalash ham bajarilmaydi: natija jimgina yo'qolgandan ko'ra
+    admin xato ko'rgani yaxshi.
+    """
+    if not getattr(se, "pk", None):
+        return
+    has_trace = bool(
+        se.started_at or se.completed_at or se.score is not None
+        or (se.answers_json or "").strip() or se.vac_consent_at
+    )
+    if not has_trace:
+        return
+    import json as _json
+
+    from apps.core.models import StudentExamAttempt
+
+    snap = {f.attname: getattr(se, f.attname) for f in type(se)._meta.concrete_fields}
+    StudentExamAttempt.objects.create(
+        student_exam_id=int(se.pk),
+        student_id=str(se.student_id),
+        exam_id=int(se.exam_id),
+        status=str(se.status or "")[:20],
+        score=se.score,
+        started_at=se.started_at,
+        completed_at=se.completed_at,
+        result_public_id=str(se.result_public_id or "")[:100],
+        snapshot=_json.dumps(snap, default=str, ensure_ascii=False),
+        reason=str(reason or "")[:200],
+    )
+
+
+def reset_fields_for_exam_retake(se: StudentExam, reason: str = "") -> list[str]:
+    """Sessiyani tozalab Pending holatiga qaytaradi (avval arxivlaydi)."""
+    archive_attempt(se, reason)
+    # Yangi urinish o'z roziligini oladi: qoidalar matni o'zgargan bo'lishi
+    # mumkin, eski rozilik esa yangi urinishni "tasdiqlangan" qilib qo'yardi.
+    se.vac_consent_at = None
+    se.vac_consent_version = ""
+    se.vac_consent_ip = ""
+    se.mic_level_at_start = None
     se.status = "Pending"
     se.answers_json = ""
     se.score = None
@@ -169,6 +210,10 @@ def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
         "question_lock_json",
         "test_center_mode",
         "test_center_at",
+        "vac_consent_at",
+        "vac_consent_version",
+        "vac_consent_ip",
+        "mic_level_at_start",
     ]
     exam = getattr(se, "exam", None)
     if exam is None:

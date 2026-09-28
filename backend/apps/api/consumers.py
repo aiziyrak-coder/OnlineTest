@@ -32,7 +32,10 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self) -> None:
         token = self._parse_token()
-        user = self._verify_jwt(token)
+        claims = self._verify_jwt(token)
+        # Rol TOKENDAN emas, bazadan olinadi: roli o'zgartirilgan yoki bloklangan
+        # foydalanuvchi eski token bilan 24 soatgacha kuzatuvchi bo'lib qolardi.
+        user = await self._load_user(claims) if claims else None
         if user is None:
             await self.close(code=4001)
             return
@@ -87,12 +90,34 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
             user_id = payload.get("id") or payload.get("sub")
             if not user_id:
                 return None
-            return {
-                "id": str(user_id),
-                "role": str(payload.get("role", "")).strip().lower(),
-            }
+            return {"id": str(user_id), "pv": payload.get("pv")}
         except pyjwt.PyJWTError:
             return None
+
+    @database_sync_to_async
+    def _load_user(self, claims: dict) -> dict | None:
+        from apps.api.authentication import password_fingerprint
+        from apps.core.models import AppUser
+
+        u = AppUser.objects.filter(pk=claims["id"]).only("id", "role", "status", "password").first()
+        if u is None or (u.status or "") == "Banned":
+            return None
+        pv = claims.get("pv")
+        if pv and pv != password_fingerprint(u.password):
+            return None
+        role = (u.role or "").strip().lower().replace("\ufeff", "").strip()
+        return {"id": str(u.id), "role": role}
+
+    @database_sync_to_async
+    def _examinee_may_join_exam(self, exam_id: int) -> bool:
+        """Topshiruvchi faqat o'ziga tegishli imtihon kanaliga ulanadi."""
+        from apps.api.views._helpers import _student_assigned_to_exam
+        from apps.core.models import AppUser, StudentExam
+
+        if StudentExam.objects.filter(student_id=self.user_id, exam_id=exam_id).exists():
+            return True
+        u = AppUser.objects.filter(pk=self.user_id).first()
+        return bool(u and _student_assigned_to_exam(u, exam_id))
 
     @database_sync_to_async
     def _proctor_may_join_exam(self, exam_id: int) -> bool:
@@ -121,6 +146,8 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
             return
 
         if role == "proctor" and not await self._proctor_may_join_exam(eid):
+            return
+        if role == "student" and not await self._examinee_may_join_exam(eid):
             return
 
         if self.exam_id is not None:
@@ -189,9 +216,19 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
             "candidate": event["candidate"],
         })
 
+    def _may_see_student_event(self, event: dict) -> bool:
+        """Boshqa talabaning chetlatilishi/qayta imkoni haqidagi xabar faqat
+        kuzatuvchilarga va talabaning o'ziga ketadi (ism va sabab tengdoshlarga
+        ko'rinmasin)."""
+        if self.role in ("admin", "staff"):
+            return True
+        return str(event.get("student_id") or "") == str(self.user_id)
+
     async def exam_student_banned(self, event: dict) -> None:
         """Talaba ban bo'lganda barcha proktor/admin va talabaning o'ziga xabar."""
         if event.get("exam_id") != self.exam_id:
+            return
+        if not self._may_see_student_event(event):
             return
         await self.send_json({
             "type": "student_banned",
@@ -207,6 +244,8 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
         """Admin/staff unblock qilganda talabaga va proktorlarga xabar."""
         if event.get("exam_id") != self.exam_id:
             return
+        if not self._may_see_student_event(event):
+            return
         await self.send_json({
             "type": "student_unblocked",
             "student_id": event["student_id"],
@@ -216,6 +255,8 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
 
     async def exam_exam_retake(self, event: dict) -> None:
         if event.get("exam_id") != self.exam_id:
+            return
+        if not self._may_see_student_event(event):
             return
         await self.send_json({
             "type": "exam_retake",

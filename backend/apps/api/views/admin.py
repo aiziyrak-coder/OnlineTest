@@ -208,6 +208,17 @@ def admin_user_detail(request, user_id: str):
             return Response({"error": "User not found"}, status=404)
         if row.role == "admin" and AppUser.objects.filter(role="admin").count() <= 1:
             return Response({"error": "Cannot delete the last admin"}, status=400)
+        # Foydalanuvchi o'chsa, u yaratgan imtihonlar (teacher_id, CASCADE) va ularning
+        # barcha natijalari ham o'chadi — masalan "123" hisobi bilan 215 ta imtihon.
+        _owned = Exam.objects.filter(teacher_id=row.id).count()
+        _results = StudentExam.objects.filter(student_id=row.id).exclude(status="Pending").count()
+        if _owned or _results:
+            return Response(
+                {"error": "Bu hisobga %d ta imtihon va %d ta natija bog'langan — o'chirilsa ular ham "
+                          "yo'qoladi. Hisobni bloklang (status: Banned)." % (_owned, _results),
+                 "code": "USER_HAS_DATA", "exams": _owned, "results": _results},
+                status=409,
+            )
         audit(request, "delete_user", "user", row.id, row.name, f"role={row.role}")
         row.delete()
         return Response({"success": True})
@@ -1023,6 +1034,17 @@ def admin_kafedra_detail(request, pk: int):
         audit(request, "update_kafedra", "kafedra", kf.id, kf.name, "changed: " + ", ".join(uf))
         return Response({"id": kf.id, "name": kf.name, "code": kf.code})
     if request.method == "DELETE":
+        # Kafedra o'chsa, unga biriktirilgan o'qituvchi/ordinator/nomzodlar kafedrasiz
+        # qolib, imtihonlarini umuman ko'rmay qolardi.
+        _users = AppUser.objects.filter(kafedra_id=kf.id).count()
+        _exams = Exam.objects.filter(kafedra_id=kf.id).count()
+        if _users or _exams:
+            return Response(
+                {"error": "Kafedraga %d ta foydalanuvchi va %d ta imtihon biriktirilgan — "
+                          "avval ularni boshqa kafedraga o'tkazing." % (_users, _exams),
+                 "code": "KAFEDRA_IN_USE"},
+                status=400,
+            )
         direction_count = _kafedra_direction_count(kf)
         if direction_count > 0:
             return Response(
@@ -1308,8 +1330,11 @@ def admin_audit_log(request):
     import datetime, csv
     from django.http import HttpResponse
 
-    limit = min(int(request.query_params.get("limit", 100)), 500)
-    offset = int(request.query_params.get("offset", 0))
+    try:
+        limit = max(1, min(int(request.query_params.get("limit", 100)), 500))
+        offset = max(0, int(request.query_params.get("offset", 0)))
+    except (TypeError, ValueError):
+        limit, offset = 100, 0
     actor = request.query_params.get("actor", "")
     action = request.query_params.get("action", "")
     period = request.query_params.get("period", "")   # today/week/month/year
@@ -1690,6 +1715,26 @@ def admin_test_bank_categories_delete(request, pk: int):
         return Response({"error": "Forbidden"}, status=403)
     cat = TestBankCategory.objects.filter(pk=pk).first()
     cat_name = cat.name if cat else str(pk)
+    # Bo'lim o'chsa savollari ham (CASCADE) o'chadi; undan savol oladigan hali
+    # tugamagan imtihon boshlanganda savolsiz qolardi.
+    _using = []
+    for _eid, _raw in (
+        Exam.objects.filter(end_time__gte=dj_tz.now())
+        .exclude(bank_category_ids__in=["", "[]"])
+        .values_list("id", "bank_category_ids")
+    ):
+        try:
+            if int(pk) in [int(x) for x in (safe_json_loads(_raw, []) or [])]:
+                _using.append(_eid)
+        except (TypeError, ValueError):
+            continue
+    if _using:
+        return Response(
+            {"error": "Bu bo'limdan %d ta ochiq imtihon savol oladi (%s) — avval imtihonlardan olib tashlang."
+                      % (len(_using), ", ".join("#%d" % x for x in _using[:10])),
+             "code": "CATEGORY_IN_USE"},
+            status=409,
+        )
     TestBankCategory.objects.filter(pk=pk).delete()
     audit(request, "delete_category", "category", pk, cat_name)
     return Response({"success": True})
@@ -1957,6 +2002,15 @@ def admin_exam_detail(request, pk: int):
         e = Exam.objects.filter(pk=pk).first()
         if not e:
             return Response({"error": "Exam not found"}, status=404)
+        # Imtihon o'chsa, unga bog'liq BARCHA natijalar ham (kaskad) o'chadi.
+        _results = StudentExam.objects.filter(exam_id=pk).exclude(status="Pending").count()
+        if _results:
+            return Response(
+                {"error": "Bu imtihonda %d ta natija/urinish bor — o'chirib bo'lmaydi. "
+                          "Imtihonni yopish uchun tugash vaqtini o'zgartiring." % _results,
+                 "code": "EXAM_HAS_RESULTS", "results": _results},
+                status=409,
+            )
         audit(request, "delete_exam", "exam", pk, e.title)
         e.delete()
         return Response({"success": True})
@@ -2071,7 +2125,10 @@ def admin_exam_detail(request, pk: int):
     title = d.get("title", e.title)
     st = parse_iso_datetime(d.get("start_time", e.start_time))
     et = parse_iso_datetime(d.get("end_time", e.end_time))
-    dur = int(d.get("duration_minutes", e.duration_minutes))
+    try:
+        dur = int(d.get("duration_minutes", e.duration_minutes))
+    except (TypeError, ValueError):
+        return Response({"error": "duration_minutes butun son bo'lishi kerak"}, status=400)
     rules = d.get("custom_rules", e.custom_rules or "")
     if not title or not st or not et or not dur:
         return Response({"error": "Missing required exam fields"}, status=400)

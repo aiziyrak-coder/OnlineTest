@@ -120,6 +120,10 @@ class AppUser(models.Model):
     # Kabinetda faqat shu kursning imtihonlari ko'rinadi.
     course = models.PositiveSmallIntegerField(default=0)
     profile_image = models.TextField(blank=True)
+    # Oxirgi muvaffaqiyatli kirish. Konteyner loglari qayta yaratilganda
+    # o'chadi — "u kirganmi, qachon, qayerdan" degan savolga javob bo'lsin.
+    last_login_at = models.DateTimeField(null=True, blank=True)
+    last_login_ip = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         app_label = "core"

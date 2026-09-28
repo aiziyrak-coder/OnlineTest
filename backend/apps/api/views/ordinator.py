@@ -63,6 +63,20 @@ class OneAttemptUsed(Exception):
     """Bir martalik imtihonda urinish allaqachon boshlangan yoki ishlatilgan."""
 
 
+class SessionInProgress(OneAttemptUsed):
+    """Kishi hozir imtihon topshirmoqda — ruxsatni qayta berish uni tozalab yuborardi."""
+
+    msg = "Hozir imtihon topshirmoqda — tugaguncha ruxsatni qayta berib bo'lmaydi."
+    code = "SESSION_IN_PROGRESS"
+
+
+def attempt_error_payload(ex: Exception) -> dict:
+    return {
+        "error": getattr(ex, "msg", None) or ONE_ATTEMPT_USED_MSG,
+        "code": getattr(ex, "code", None) or "ONE_ATTEMPT_USED",
+    }
+
+
 ONE_ATTEMPT_USED_MSG = (
     "Bu imtihon bir martalik: urinish allaqachon boshlangan yoki ishlatilgan. "
     "Qayta topshirishga faqat administrator 'Qayta imkon berish' orqali ruxsat beradi."
@@ -346,7 +360,10 @@ def admin_payment_receipt_resolve(request, pk: int):
 
     opened = None
     if decision == "approve":
-        opened = grant_paid_attempt(str(r.student_id), r.exam_id)
+        try:
+            opened = grant_paid_attempt(str(r.student_id), r.exam_id)
+        except OneAttemptUsed as ex:
+            return Response(attempt_error_payload(ex), status=409)
     audit(
         request,
         "payment_receipt_" + decision,
@@ -365,7 +382,14 @@ def grant_paid_attempt(student_id: str, exam_id: int | None) -> dict | None:
     qs = StudentExam.objects.filter(student_id=student_id)
     if exam_id:
         qs = qs.filter(exam_id=exam_id)
+    else:
+        # Imtihon ko'rsatilmagan (masalan imtihonsiz kvitansiya): eng oxirgi
+        # sessiyani ko'r-ko'rona tozalash BOSHQA imtihonning tayyor natijasini
+        # o'chirib yuborardi. Faqat hali boshlanmagan sessiya ochiladi.
+        qs = qs.filter(status="Pending")
     se = qs.select_related("exam").order_by("-id").first()
+    if se is not None and str(se.status or "").strip() == "In Progress":
+        raise SessionInProgress()
 
     # Bir martalik imtihon: boshlangan/tugagan sessiyani "ruxsat" tugmasi
     # tozalab yubormasin (natija o'chib, ikkinchi urinish ochilib qolardi).
@@ -385,7 +409,7 @@ def grant_paid_attempt(student_id: str, exam_id: int | None) -> dict | None:
         )
         fields = []
     else:
-        fields = reset_fields_for_exam_retake(se)
+        fields = reset_fields_for_exam_retake(se, reason="ruxsat berildi (to'lov/ro'yxat)")
 
     se.access_granted = True
     se.access_hold_reason = ""
@@ -410,8 +434,8 @@ def admin_grant_exam_access(request, pk: int):
         return Response({"error": "Not found"}, status=404)
     try:
         opened = grant_paid_attempt(str(se.student_id), se.exam_id)
-    except OneAttemptUsed:
-        return Response({"error": ONE_ATTEMPT_USED_MSG, "code": "ONE_ATTEMPT_USED"}, status=409)
+    except OneAttemptUsed as ex:
+        return Response(attempt_error_payload(ex), status=409)
     audit(
         request,
         "grant_exam_access",

@@ -31,6 +31,10 @@ from apps.core.models import AppUser
 
 MAX_B64 = 14 * 1024 * 1024
 MIN_B64 = 80
+#: Shundan katta profil rasmi yuzni solishtirishga yaroqli hisoblanadi (HEMIS
+#: rasmlari ~6-20 KB). HR bazasidagi 47x60 piksellik kadrlar bundan kichik —
+#: aynan ular uchun o'zi yangilash imkoni qoldiriladi.
+PROFILE_TRUST_MIN_B64 = 6000
 # Profilga saqlanadigan rasm o'lchami: yuz aniq ko'rinishi uchun yetarli,
 # lekin bazani shishirmaydigan darajada.
 STORE_MAX_SIDE = 600
@@ -117,8 +121,37 @@ def student_profile_photo_update(request):
     row = AppUser.objects.filter(pk=u.id).first()
     if not row:
         return Response({"error": "User not found"}, status=404)
+    from apps.core.models import AuditLog, StudentExam
+
+    # Imtihon davomida shaxsni tekshirish rasmi almashtirilmaydi.
+    if StudentExam.objects.filter(student_id=row.pk, status="In Progress").exists():
+        return Response(
+            {"ok": False, "code": "EXAM_IN_PROGRESS",
+             "error": "Imtihon davomida profil rasmini almashtirib bo'lmaydi."},
+            status=409,
+        )
+    # Ilgari pasport rasmi faqat SELFI bilan solishtirilardi — ya'ni login-parolni
+    # bilgan BOSHQA odam o'z pasporti va o'z yuzini qo'yib, imtihondagi shaxs
+    # tekshiruvidan o'tib ketardi. Endi sifatli eski rasm bo'lsa, jonli yuz UNGA
+    # ham mos kelishi shart; aks holda rasmni faqat administrator almashtiradi.
+    old = (row.profile_image or "").strip()
+    if len(old) >= PROFILE_TRUST_MIN_B64:
+        owner = compare_faces(old, live)
+        if owner.get("success") and not owner.get("match"):
+            log_identity("profile_photo_owner_mismatch", user_id=row.pk, score=owner.get("score"))
+            return Response(
+                {"ok": False, "code": "OWNER_MISMATCH",
+                 "error": "Jonli yuz hozirgi profil rasmingizga mos kelmadi. Rasmni almashtirish "
+                          "uchun administratorga murojaat qiling."},
+                status=409,
+            )
     row.profile_image = stored
     row.save(update_fields=["profile_image"])
+    AuditLog.objects.create(
+        actor_id=str(row.pk), actor_name=str(row.name or ""), action="profile_photo_self_update",
+        target_type="user", target_id=str(row.pk), target_name=str(row.name or ""),
+        detail="pasport-selfi o'xshashligi=%s; eski rasm %d belgi" % (result.get("score"), len(old)),
+    )
 
     # Saqlangan rasmni javobda ham qaytaramiz. Klient uni brauzerdagi
     # keshlangan `user` obyektiga yozadi — busiz odam rasmni yangilagandan

@@ -179,6 +179,9 @@ def admin_bulk_access_grant(request):
     now = dj_tz.localtime()
     start = now.replace(second=0, microsecond=0) - _timedelta(minutes=2)
     end = now.replace(hour=18, minute=0, second=0, microsecond=0)
+    # Kech soatda "bugunga ochish" tugash vaqtini boshlanishdan OLDIN qo'yardi.
+    if end < now + _timedelta(hours=2):
+        end = now.replace(second=0, microsecond=0) + _timedelta(hours=3)
     for it in items[:300]:
         uid = str((it or {}).get("user_id") or "").strip()
         try:
@@ -189,6 +192,22 @@ def admin_bulk_access_grant(request):
         exam = Exam.objects.filter(pk=eid).first()
         if not u or not exam:
             out.append({"user_id": uid, "ok": False, "error": "Topilmadi"})
+            continue
+        # Imtihon shu odamga mos kelmasa, ruxsat berilsa ham u imtihonni ko'rmaydi
+        # ("test ko'rinmayapti" shikoyatlari) — oldindan aytamiz.
+        _urole = str(u.role or "").strip().lower()
+        _eaud = str(exam.audience or "student").strip().lower()
+        _mismatch = ""
+        if _urole != _eaud:
+            _mismatch = "imtihon boshqa toifa uchun (%s), bu kishi — %s" % (_eaud, _urole)
+        elif _urole != "student" and exam.kafedra_id and u.kafedra_id and exam.kafedra_id != u.kafedra_id:
+            _mismatch = "imtihon boshqa kafedraga tegishli"
+        elif (int(getattr(exam, "course", 0) or 0) and int(getattr(u, "course", 0) or 0)
+              and int(exam.course) != int(u.course)):
+            _mismatch = "imtihon %s-kurs uchun, bu kishi %s-kurs" % (exam.course, u.course)
+        if _mismatch:
+            out.append({"user_id": uid, "name": u.name, "ok": False,
+                        "error": "Mos emas: %s — kishi imtihonni ko'rmaydi" % _mismatch})
             continue
         se = StudentExam.objects.filter(student_id=u.pk, exam_id=exam.id).first()
         if se and (se.status or "") in ("Completed", "Banned"):

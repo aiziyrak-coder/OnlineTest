@@ -24,7 +24,7 @@ from apps.api.authentication import issue_token
 from apps.api.face_embedding import crop_face_b64
 from apps.api.gemini_tools import compare_faces
 from apps.api.identity_log import log_identity
-from apps.api.throttles import FaceVerifyThrottle
+from apps.api.throttles import FaceVerifyThrottle, PublicVerifyThrottle
 from apps.api.views._helpers import (
     IsAuthenticated,
     _hash_pw,
@@ -576,18 +576,25 @@ def vacancy_register(request):
     if not stored:
         return Response({"error": "FACE_NOT_DETECTED"}, status=400)
 
-    user = AppUser.objects.create(
-        id=passport,
-        password=_hash_pw(password),
-        role="vacancy",
-        name=name,
-        status="Active",
-        kafedra_id=kafedra_id,
-        position=phone,  # telefon raqami — HR bog'lanishi uchun
-        vacancy_subject=subject_name[:200],
-        vacancy_subject_code=subject_code[:120],
-        profile_image=stored,
-    )
+    from django.db import IntegrityError, transaction as _tx
+
+    try:
+        with _tx.atomic():
+            user = AppUser.objects.create(
+                id=passport,
+                password=_hash_pw(password),
+                role="vacancy",
+                name=name,
+                status="Active",
+                kafedra_id=kafedra_id,
+                position=phone,  # telefon raqami — HR bog'lanishi uchun
+                vacancy_subject=subject_name[:200],
+                vacancy_subject_code=subject_code[:120],
+                profile_image=stored,
+            )
+    except IntegrityError:
+        # Bir vaqtda ikki marta yuborilgan forma — ikkinchisi 500 bilan yiqilardi.
+        return Response({"error": "ALREADY_REGISTERED"}, status=409)
     # Nomzod kabinetida test darrov ko'rinsin — kerak bo'lsa imtihon
     # avtomatik ochiladi (admin qo'lda yaratishi shart emas).
     ensure_vacancy_exam(kafedra_id, subject_name)
@@ -620,6 +627,7 @@ def vacancy_register(request):
 @api_view(["GET"])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@throttle_classes([PublicVerifyThrottle])
 def vacancy_check_passport(request):
     """Pasport raqami allaqachon ro'yxatdan o'tganmi — forma to'ldirilayotganda."""
     passport = _norm_passport(request.query_params.get("passport"))

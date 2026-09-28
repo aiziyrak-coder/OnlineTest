@@ -357,7 +357,9 @@ def student_ban_report_pdf(request):
     if not sid:
         return Response({"error": "Invalid token payload"}, status=401)
     u = AppUser.objects.filter(pk=sid).first()
-    if not u or (u.role or "").strip().lower() != "student":
+    from apps.api.permissions import EXAMINEE_ROLES
+
+    if not u or (u.role or "").strip().lower() not in EXAMINEE_ROLES:
         return Response({"error": "Forbidden"}, status=403)
     exam_id = request.query_params.get("exam_id")
     se = None

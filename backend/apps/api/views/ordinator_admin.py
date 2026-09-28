@@ -252,6 +252,14 @@ def admin_examinee_detail(request, user_id: str):
 
     if request.method == "DELETE":
         name = u.name
+        _results = StudentExam.objects.filter(student_id=u.pk).exclude(status="Pending").count()
+        if _results:
+            return Response(
+                {"error": "Bu kishining %d ta imtihon natijasi bor — o'chirilsa natijalar ham "
+                          "yo'qoladi. Hisobni bloklang." % _results,
+                 "code": "USER_HAS_RESULTS"},
+                status=409,
+            )
         u.delete()
         audit(request, "delete_examinee", "user", user_id, name, "")
         return Response({"ok": True})
@@ -541,8 +549,10 @@ def admin_examinee_grant_access(request, user_id: str):
         return Response({"error": "Imtihon tanlanmadi"}, status=400)
     try:
         opened = grant_paid_attempt(str(u.id), exam_id)
-    except OneAttemptUsed:
-        return Response({"error": ONE_ATTEMPT_USED_MSG, "code": "ONE_ATTEMPT_USED"}, status=409)
+    except OneAttemptUsed as ex:
+        from apps.api.views.ordinator import attempt_error_payload
+
+        return Response(attempt_error_payload(ex), status=409)
     if not opened:
         return Response({"error": "Urinish ochilmadi"}, status=400)
     audit(request, "grant_exam_access", "user", str(u.id), u.name, f"exam={exam_id}")

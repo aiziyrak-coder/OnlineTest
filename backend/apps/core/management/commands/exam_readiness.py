@@ -68,8 +68,8 @@ class Command(BaseCommand):
             total_people += len(ses)
             self.stdout.write("\n[%s] %s" % (e.id, e.title[:70]))
             self.stdout.write("   oyna: %s - %s | davomiyligi %s daq | savol %s (bank %s, AI %s) | o'tish %s%%"
-                              % (tz.localtime(e.start_time).strftime("%d.%m %H:%M") if e.start_time else "-",
-                                 tz.localtime(e.end_time).strftime("%d.%m %H:%M") if e.end_time else "-",
+                              % (tz.localtime(e.start_time).strftime("%d.%m.%Y %H:%M") if e.start_time else "-",
+                                 tz.localtime(e.end_time).strftime("%d.%m.%Y %H:%M") if e.end_time else "-",
                                  e.duration_minutes, need, bank, ai, e.pass_percent))
             self.stdout.write("   PIN: %s | uydan: %s | avto qayta urinish: %s+%s%s | ruxsat: %d kishi (kutilmoqda %d)"
                               % (e.test_center_pin or "yo'q", "ha" if exam_is_remote(e) else "yo'q",

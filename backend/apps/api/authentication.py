@@ -20,6 +20,13 @@ class JWTUser:
         self.is_authenticated = True
 
 
+def password_fingerprint(pw_hash: str) -> str:
+    """Parol xeshidan qisqa barmoq izi — parol o'zgarsa eski tokenlar yaroqsiz bo'ladi."""
+    import hashlib
+
+    return hashlib.sha256(("pv:" + str(pw_hash or "")).encode("utf-8")).hexdigest()[:16]
+
+
 class JWTAuthentication(BaseAuthentication):
     keyword = b"Bearer"
 
@@ -46,6 +53,11 @@ class JWTAuthentication(BaseAuthentication):
         user = AppUser.objects.filter(pk=uid).first()
         if not user:
             raise AuthenticationFailed("User not found")
+        # Parol almashtirilgan (yoki admin tiklagan) — eski token endi ishlamaydi.
+        # "pv" siz eski tokenlar muddati tugaguncha (<=24 soat) qabul qilinadi.
+        _pv = payload.get("pv")
+        if _pv and _pv != password_fingerprint(user.password):
+            raise AuthenticationFailed("Session expired")
         if user.status == "Banned":
             path = request.path or ""
             allowed_when_banned = (
@@ -79,6 +91,7 @@ def issue_token(user: AppUser) -> str:
         "group_id": user.group_id,
         "iat": now,
         "exp": exp,
+        "pv": password_fingerprint(user.password),
     }
     raw = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
     return raw if isinstance(raw, str) else raw.decode("ascii")

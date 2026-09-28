@@ -189,19 +189,23 @@ def _student_assigned_to_exam(user, exam_id: int) -> bool:
     student_exams_start dagi kafedra tekshiruvi bilan bir xil.
     """
     role = _request_user_role_norm(user)
+    if ExamStudentException.objects.filter(exam_id=exam_id, student_id=getattr(user, "id", None)).exists():
+        return False
     if role in ("faculty", "ordinator", "magistr", "vacancy", "entrant"):
         ex = Exam.objects.filter(pk=exam_id).values("audience", "kafedra_id").first()
         if not ex:
             return False
         if str(ex.get("audience") or "student").strip().lower() != role:
             return False
-        # Ordinator va magistr ham KAFEDRA orqali biriktiriladi - DAK va
-        # bitiruv imtihonlari mutaxassislik kafedrasiga tegishli.
-        if not getattr(user, "kafedra_id", None) and role == "ordinator":
-            return True
+        # Kafedra BAZADAN olinadi: JWT foydalanuvchisida kafedra maydoni yo'q,
+        # shuning uchun ilgari har bir ordinator istalgan kafedraning ordinator
+        # imtihoniga "biriktirilgan" hisoblanardi.
         user_kaf = getattr(user, "kafedra_id", None)
         if user_kaf is None:
             user_kaf = AppUser.objects.filter(pk=user.id).values_list("kafedra_id", flat=True).first()
+        # Kafedrasi umuman belgilanmagan ordinator (eski hisoblar) — avvalgidek.
+        if not user_kaf and role == "ordinator":
+            return True
         exam_kaf = ex.get("kafedra_id")
         if not user_kaf or not exam_kaf:
             return False

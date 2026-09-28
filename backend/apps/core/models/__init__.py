@@ -28,3 +28,4 @@ __all__ = [
 from apps.core.models.payment import PaymentReceipt  # noqa: F401
 from apps.core.models.screen_snapshot import ScreenSnapshot  # noqa: F401,E402
 from apps.core.models.face_template import FaceLoginTemplate  # noqa: F401,E402
+from apps.core.models.attempt_archive import StudentExamAttempt  # noqa: F401,E402
