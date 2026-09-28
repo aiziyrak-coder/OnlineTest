@@ -47,9 +47,20 @@ def _report_audience(row: dict) -> tuple[str, str]:
         return aud, ""
     over = str(rules.get("report_audience") or "").strip().lower()
     note = str(rules.get("report_note") or "").strip()
+    style = str(rules.get("report_style") or "").strip().lower()
+    if style:
+        note = (note + " | uslub:" + style) if note else ("uslub:" + style)
     if over and over in AUDIENCE_LABELS:
         return over, note
     return aud, note
+
+
+def season_report_style(season: dict | None) -> str:
+    """Mavsum uchun tanlangan hisobot ko'rinishi ("ordinator" yoki bo'sh)."""
+    note = str((season or {}).get("report_note") or "")
+    if "uslub:" in note:
+        return note.split("uslub:", 1)[1].strip().split()[0]
+    return ""
 
 
 def list_seasons() -> list[dict]:
@@ -104,7 +115,9 @@ def _make_season(aud: str, items: list, course: int = 0, note: str = "") -> dict
         base = "Ordinatorlar"
     # Izoh mavsum kalitiga ham kiradi: bir xil auditoriyadagi turli
     # to'plamlar (masalan harbiylar) bir-biriga qo'shilib ketmasin.
-    note_label = (" — " + note) if note else ""
+    # "uslub:..." faqat ichki belgi — mavsum nomida ko'rinmaydi.
+    note_visible = note.split("|")[0].strip() if "uslub:" in note else note
+    note_label = (" — " + note_visible) if note_visible else ""
     note_key = (":" + note.replace(":", " ")) if note else ""
     return {
         "key": "%s:%d:%s:%s%s" % (aud, int(course or 0), d1.isoformat(), d2.isoformat(), note_key),

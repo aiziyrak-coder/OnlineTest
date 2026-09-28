@@ -35,7 +35,8 @@ const TX = {
     search: 'Qidirish: familiya, ism yoki login',
     role: 'Toifa', course: 'Kurs', kafedra: 'Kafedra', state: 'Holat',
     all: 'Hammasi', ordinator: 'Ordinator', magistr: 'Magistr', vacancy: 'Ishga kiruvchi',
-    entrant: 'Abituriyent', faculty: 'O‘qituvchi',
+    entrant: 'Abituriyent', faculty: 'O‘qituvchi', student: 'Talaba (harbiy va b.)',
+    needQuery: 'Talabani topish uchun familiya, ism yoki login yozing.',
     none: 'Ruxsati yo‘q', has_access: 'Ruxsati bor', done: 'Topshirgan / chetlatilgan',
     person: 'Kim', exam: 'Imtihon', st: 'Holat', selectAll: 'Barchasini belgilash',
     grant: 'Ruxsat berish', granting: 'Berilmoqda…', selected: 'tanlandi',
@@ -53,7 +54,8 @@ const TX = {
     search: 'Поиск: фамилия, имя или логин',
     role: 'Категория', course: 'Курс', kafedra: 'Кафедра', state: 'Статус',
     all: 'Все', ordinator: 'Ординатор', magistr: 'Магистр', vacancy: 'Соискатель',
-    entrant: 'Абитуриент', faculty: 'Преподаватель',
+    entrant: 'Абитуриент', faculty: 'Преподаватель', student: 'Студент (военные и др.)',
+    needQuery: 'Введите фамилию, имя или логин, чтобы найти студента.',
     none: 'Без доступа', has_access: 'Доступ есть', done: 'Сдал / отстранён',
     person: 'Кто', exam: 'Экзамен', st: 'Статус', selectAll: 'Отметить всех',
     grant: 'Выдать доступ', granting: 'Выдаётся…', selected: 'выбрано',
@@ -71,7 +73,8 @@ const TX = {
     search: 'Search: surname, name or login',
     role: 'Category', course: 'Course', kafedra: 'Department', state: 'Status',
     all: 'All', ordinator: 'Resident', magistr: 'Master', vacancy: 'Job applicant',
-    entrant: 'Entrant', faculty: 'Teacher',
+    entrant: 'Entrant', faculty: 'Teacher', student: 'Student (military etc.)',
+    needQuery: 'Type a surname, name or login to find a student.',
     none: 'No access', has_access: 'Has access', done: 'Completed / banned',
     person: 'Person', exam: 'Exam', st: 'Status', selectAll: 'Select all',
     grant: 'Grant access', granting: 'Granting…', selected: 'selected',
@@ -85,7 +88,7 @@ const TX = {
   },
 } as const;
 
-const ROLES = ['ordinator', 'magistr', 'vacancy', 'entrant', 'faculty'] as const;
+const ROLES = ['ordinator', 'magistr', 'vacancy', 'entrant', 'faculty', 'student'] as const;
 
 export function BulkAccessPage({ token, lang }: { token: string; lang: Language }) {
   const t = TX[lang] || TX.uz;

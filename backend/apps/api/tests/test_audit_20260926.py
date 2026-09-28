@@ -270,3 +270,93 @@ class BankCategoryGuardTests(TestCase):
         force_authenticate(req, user=admin)
         self.assertEqual(admin_test_bank_categories_delete(req, pk=cat.id).status_code, 409)
         self.assertTrue(TestBankCategory.objects.filter(pk=cat.id).exists())
+
+
+class StudentBulkAccessTests(TestCase):
+    """Harbiy kursantlar oddiy talaba hisobida — admin ularga ham ruxsat bera olsin."""
+
+    def setUp(self):
+        from apps.core.models import ExamGroup, Group, Level
+
+        self.admin = _admin("bulk-admin")
+        lvl = Level.objects.create(name="Kurs")
+        self.group = Group.objects.create(name="Harbiy guruh", level=lvl)
+        self.student = AppUser.objects.create(id="344211100122", role="student",
+                                              name="ABDULLAYEV SHERZOD", group=self.group)
+        self.exam = _exam(self.admin, title="Xirurgiya — qayta topshirish", audience="student")
+        ExamGroup.objects.create(exam=self.exam, group=self.group)
+        self.other = _exam(self.admin, title="Boshqa guruh imtihoni", audience="student")
+
+    def _people(self, **params):
+        from apps.api.views.bulk_access import admin_bulk_access_people
+
+        req = APIRequestFactory().get("/x", params)
+        force_authenticate(req, user=self.admin)
+        return admin_bulk_access_people(req)
+
+    def test_student_needs_a_search_query(self):
+        res = self._people(role="student")
+        self.assertTrue(res.data["need_query"])
+        self.assertEqual(res.data["rows"], [])
+
+    def test_search_finds_student_with_own_exam_only(self):
+        res = self._people(role="student", q="ABDULLAYEV")
+        rows = res.data["rows"]
+        self.assertEqual(len(rows), 1, rows)
+        titles = [e["title"] for e in rows[0]["exams"]]
+        self.assertIn("Xirurgiya — qayta topshirish", titles)
+        self.assertNotIn("Boshqa guruh imtihoni", titles)
+
+    def test_excluded_exam_is_not_offered(self):
+        ExamStudentException.objects.create(exam=self.exam, student=self.student, reason="x")
+        rows = self._people(role="student", q="ABDULLAYEV").data["rows"]
+        self.assertEqual(rows[0]["exams"], [])
+
+    def test_grant_reopens_absent_session(self):
+        from apps.api.views.bulk_access import admin_bulk_access_grant
+
+        StudentExam.objects.create(student=self.student, exam=self.exam, status="Failed",
+                                   access_granted=False)
+        req = APIRequestFactory().post(
+            "/x", {"items": [{"user_id": self.student.pk, "exam_id": self.exam.id}]}, format="json")
+        force_authenticate(req, user=self.admin)
+        res = admin_bulk_access_grant(req)
+        self.assertEqual(res.data["granted"], 1, res.data["results"])
+        se = StudentExam.objects.get(student=self.student, exam=self.exam)
+        self.assertEqual(se.status, "Pending")
+        self.assertTrue(se.access_granted)
+
+    def test_grant_refuses_exam_of_another_group(self):
+        from apps.api.views.bulk_access import admin_bulk_access_grant
+
+        req = APIRequestFactory().post(
+            "/x", {"items": [{"user_id": self.student.pk, "exam_id": self.other.id}]}, format="json")
+        force_authenticate(req, user=self.admin)
+        res = admin_bulk_access_grant(req)
+        self.assertEqual(res.data["granted"], 0)
+        self.assertIn("guruhiga", res.data["results"][0]["error"])
+
+
+class ReportStyleTests(TestCase):
+    """Harbiylar hisoboti ordinatorlar ko'rinishida chiqsin."""
+
+    def test_report_style_switches_the_builder_and_keeps_the_title(self):
+        import json as _json
+
+        from apps.api.views.admin_reports import list_seasons
+        from apps.api.views.audience_reports import build_audience_report
+
+        admin = _admin("style-admin")
+        exam = _exam(admin, audience="student", title="Xirurgiya — qayta topshirish",
+                     custom_rules=_json.dumps({"remote": True, "report_audience": "entrant",
+                                               "report_note": "harbiy xizmat",
+                                               "report_style": "ordinator"}))
+        st = AppUser.objects.create(id="mil-1", role="student", name="Kursant")
+        StudentExam.objects.create(student=st, exam=exam, status="Completed", score=17,
+                                   access_granted=True)
+        season = next(s for s in list_seasons() if s["audience"] == "entrant")
+        self.assertNotIn("uslub:", season["label"])
+        data = build_audience_report(season["key"])
+        self.assertEqual(data["kind"], "ordinator")      # ordinatorlar ko'rinishi
+        self.assertIn("harbiy xizmat", data["title"])    # sarlavha o'ziniki
+        self.assertTrue(data["groups"])

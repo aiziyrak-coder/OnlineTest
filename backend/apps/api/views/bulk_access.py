@@ -14,9 +14,14 @@ import re
 import unicodedata
 
 from apps.api.views._helpers import *  # noqa: F401,F403
+from apps.core.models import ExamGroup, ExamStudentException  # noqa: F401
 
 #: Ro'yxatga tushadigan rollar (pullik: ruxsat talab qiladi).
-BULK_ROLES = ("ordinator", "magistr", "vacancy", "entrant", "faculty")
+BULK_ROLES = ("ordinator", "magistr", "vacancy", "entrant", "faculty", "student")
+
+#: Guruh orqali biriktiriladigan toifa — imtihonlari kafedra bo'yicha emas,
+#: ExamGroup orqali topiladi (harbiy xizmatga chaqiriluvchilar shu toifada).
+GROUP_ROLES = ("student",)
 
 
 def _norm_name(value: str) -> list[str]:
@@ -74,9 +79,36 @@ def _match(tokens: list[str], people: list[tuple]) -> list[tuple]:
     return out
 
 
+def _student_exam_options(u, exams: list) -> list[dict]:
+    """Talaba imtihonlari: guruhi biriktirilgan va istisnoda bo'lmaganlari."""
+    gid = getattr(u, "group_id", None)
+    if not gid:
+        return []
+    ids = set(ExamGroup.objects.filter(group_id=gid).values_list("exam_id", flat=True))
+    if not ids:
+        return []
+    blocked = set(
+        ExamStudentException.objects.filter(student_id=u.pk, exam_id__in=ids)
+        .values_list("exam_id", flat=True)
+    )
+    mine = [e for e in exams if e.id in ids and e.id not in blocked]
+    now = dj_tz.now()
+    mine.sort(key=lambda e: (0 if (e.end_time and e.end_time >= now) else 1, -e.id))
+    return [
+        {
+            "id": e.id,
+            "title": e.title,
+            "open": bool(e.start_time and e.end_time and e.start_time <= now <= e.end_time),
+        }
+        for e in mine[:12]
+    ]
+
+
 def _exam_options(u, exams: list) -> list[dict]:
     """Shu kishiga mos imtihonlar — kafedra va kurs bo'yicha, yangisi birinchi."""
     role = str(getattr(u, "role", "") or "").lower()
+    if role in GROUP_ROLES:
+        return _student_exam_options(u, exams)
     course = int(getattr(u, "course", 0) or 0)
     same_kaf = [e for e in exams if e.audience == role and e.kafedra_id == u.kafedra_id]
     if course:
@@ -198,7 +230,12 @@ def admin_bulk_access_grant(request):
         _urole = str(u.role or "").strip().lower()
         _eaud = str(exam.audience or "student").strip().lower()
         _mismatch = ""
-        if _urole != _eaud:
+        if _urole in GROUP_ROLES and _eaud in ("student", "", None):
+            if not ExamGroup.objects.filter(exam_id=exam.id, group_id=u.group_id).exists():
+                _mismatch = "imtihon bu talabaning guruhiga biriktirilmagan"
+            elif ExamStudentException.objects.filter(exam_id=exam.id, student_id=u.pk).exists():
+                _mismatch = "talaba bu imtihonning istisno ro'yxatida"
+        elif _urole != _eaud:
             _mismatch = "imtihon boshqa toifa uchun (%s), bu kishi — %s" % (_eaud, _urole)
         elif _urole != "student" and exam.kafedra_id and u.kafedra_id and exam.kafedra_id != u.kafedra_id:
             _mismatch = "imtihon boshqa kafedraga tegishli"
@@ -257,6 +294,13 @@ def admin_bulk_access_people(request):
     state = str(request.query_params.get("state") or "").strip()
 
     users = AppUser.objects.filter(role=role).select_related("kafedra")
+    if role in GROUP_ROLES and not q:
+        # Talabalar minglab — qidiruvsiz ro'yxat ma'nosiz bo'lardi.
+        return Response({
+            "rows": [], "count": 0, "kafedras": [], "courses": [],
+            "need_query": True,
+            "hint": "Talabani topish uchun familiya, ism yoki login yozing.",
+        })
     if course:
         users = users.filter(course=course)
     if kaf:

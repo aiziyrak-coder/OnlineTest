@@ -672,10 +672,18 @@ def build_audience_report(season_key: str | None) -> dict:
     ids, season = _season_exam_ids(season_key)
     if not season:
         return {"kind": "empty"}
-    builder = _BUILDERS.get(str(season.get("audience") or ""))
+    from apps.api.views.admin_reports import season_report_style
+
+    # Imtihonda "report_style" ko'rsatilgan bo'lsa — o'sha ko'rinish. Harbiylar
+    # hisoboti shu yo'l bilan ordinatorlarnikidek chiqadi (fan kesimida
+    # guruhlangan, belgilar va "hali topshirmaganlar" ro'yxati bilan).
+    style = season_report_style(season)
+    builder = _BUILDERS.get(style) or _BUILDERS.get(str(season.get("audience") or ""))
     if builder is None:
         return {"kind": "generic", "season": season}
     data = builder(list(ids or []), season)
+    if style and season.get("audience_label"):
+        data["title"] = str(season["audience_label"])
     now = dj_tz.now()
     data.update({"season": season, "generated_at": now.isoformat(), "generated_label": _fmt(now)})
     return data
