@@ -62,6 +62,11 @@ class Exam(models.Model):
     #: o'zi gapirishi (og'iz harakati + nutq) HAR DOIM aniqlanadi va bu
     #: sozlama unga ta'sir qilmaydi.
     ambient_audio_enabled = models.BooleanField(default=True)
+    #: Test markazi PIN'i (4 raqam). Bo'sh bo'lsa — test markazi rejimi yo'q.
+    #: Tekshiruvchi test markazidagi kompyuterda kiritadi: shu sessiyada
+    #: mikrofonga oid nazorat o'chadi (xonada ovoz ko'p, mikrofon yo'q),
+    #: kamera nazorati to'liq qoladi. Uydan topshiruvchi PIN'ni bilmaydi.
+    test_center_pin = models.CharField(max_length=8, blank=True, default="")
 
     class Meta:
         app_label = "core"

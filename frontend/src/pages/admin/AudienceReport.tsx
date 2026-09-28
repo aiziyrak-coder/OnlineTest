@@ -5,6 +5,7 @@ import { apiUrl } from '../../lib/apiUrl';
 import { authHeaders } from '../../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../../lib/http';
 import { AdminBtn, AdminEmpty, AdminInput, AdminSelect } from './ui';
+import { PeopleDrillModal, type DrillPerson, type DrillState } from './PeopleDrill';
 
 /* Ordinator / nomzod (vakansiya) / maxsus kiruvchi hisobotlari.
 
@@ -109,6 +110,8 @@ interface Props {
   seasons: SeasonLite[];
   seasonKey: string;
   onSeason: (k: string) => void;
+  /** Hisobotlar sahifasining umumiy filtr paneli ichida: mavsum/toifa tanlovi yashiriladi. */
+  embedded?: boolean;
 }
 
 const TX: Record<string, Record<string, string>> = {
@@ -132,6 +135,9 @@ const TX: Record<string, Record<string, string>> = {
     finished: 'Yakunlangan', spent: 'Sarflangan vaqt', answered: 'Javob berilgan', identity: "Shaxs tasdig'i",
     consent: 'Qoidalarga rozilik', mic: 'Mikrofon darajasi', warnings: 'Rasmiy ogohlantirishlar',
     resultId: 'Natija raqami', cert: 'Sertifikat (PDF)', timeline: 'Nazorat qaydlari xronologiyasi',
+    retake: 'Qayta ruxsat berish', retakeDone: 'Qayta ruxsat berildi', action: 'Amal',
+    retakeConfirm: '{name} — qayta topshirishga ruxsat berilsinmi? Joriy natija bekor qilinadi, u imtihonni boshidan topshiradi.',
+    retakeErr: "Ruxsat berib bo'lmadi",
     technical: 'texnik', control: 'nazorat', matched: 'mos keldi', notMatched: 'MOS KELMADI', notGiven: 'berilmagan',
     of: 'dan', min: 'daq.', approx: "Fanlar bo'yicha taqsimot javoblardan qayta hisoblangan; rasmiy natija — umumiy ball.",
     empty: "Ma'lumot yo'q.", positions: 'lavozim', winner: "G'olib",
@@ -163,6 +169,9 @@ const TX: Record<string, Record<string, string>> = {
     finished: 'Zavershenie', spent: 'Zatracheno', answered: 'Otvecheno', identity: 'Podtverzhdenie lichnosti',
     consent: 'Soglasie s pravilami', mic: 'Uroven mikrofona', warnings: 'Ofitsialnye preduprezhdeniya',
     resultId: 'Nomer rezultata', cert: 'Sertifikat (PDF)', timeline: 'Khronologiya narusheniy',
+    retake: 'Разрешить пересдачу', retakeDone: 'Пересдача разрешена', action: 'Действие',
+    retakeConfirm: '{name} — разрешить пересдачу? Текущий результат будет аннулирован, экзамен сдаётся заново.',
+    retakeErr: 'Не удалось разрешить',
     technical: 'tekhnich.', control: 'kontrol', matched: 'sovpalo', notMatched: 'NE SOVPALO', notGiven: 'ne dano',
     of: 'iz', min: 'min', approx: 'Raspredelenie po predmetam pereschitano po otvetam; ofitsialnyy — obshchiy ball.',
     empty: 'Net dannykh.', positions: 'dolzhnostey', winner: 'Pobeditel',
@@ -194,6 +203,9 @@ const TX: Record<string, Record<string, string>> = {
     finished: 'Finished', spent: 'Time spent', answered: 'Answered', identity: 'Identity check',
     consent: 'Rules consent', mic: 'Microphone level', warnings: 'Official warnings',
     resultId: 'Result ID', cert: 'Certificate (PDF)', timeline: 'Proctoring timeline',
+    retake: 'Allow retake', retakeDone: 'Retake allowed', action: 'Action',
+    retakeConfirm: 'Allow {name} to retake? The current result is cancelled and the exam starts over.',
+    retakeErr: 'Could not allow retake',
     technical: 'technical', control: 'proctoring', matched: 'matched', notMatched: 'NOT MATCHED', notGiven: 'not given',
     of: 'of', min: 'min', approx: 'Per-subject split recomputed from answers; the official result is the total score.',
     empty: 'No data.', positions: 'positions', winner: 'Winner',
@@ -259,12 +271,22 @@ function Badge({ cls, children }: { cls: string; children: React.ReactNode }) {
   return <span className={'inline-block text-[11.5px] px-2 py-0.5 rounded-full whitespace-nowrap ' + cls}>{children}</span>;
 }
 
-function Stat({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
-  return (
-    <div className="bg-gray-50 rounded-xl px-4 py-3">
+function Stat({ label, value, tone, onClick }: { label: string; value: React.ReactNode; tone?: string; onClick?: () => void }) {
+  const body = (
+    <>
       <div className="text-[12px] text-gray-500 leading-tight">{label}</div>
       <div className={'text-2xl font-bold mt-1 ' + (tone || 'text-gray-900')}>{value}</div>
-    </div>
+    </>
+  );
+  if (!onClick) return <div className="bg-gray-50 rounded-xl px-4 py-3">{body}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="bg-gray-50 rounded-xl px-4 py-3 text-left border border-transparent transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/20"
+    >
+      {body}
+    </button>
   );
 }
 
@@ -278,6 +300,180 @@ function ViolCell({ v, T }: { v: Viol; T: Record<string, string> }) {
   );
 }
 
+
+/** Nazorat qaydlari (dalillar) — hisobotlarning barcha joyidan ochiladi. */
+export interface EvidenceData {
+  name: string;
+  exam_title: string;
+  items: {
+    at: string; type: string; label: string; technical: boolean; image: string;
+    note?: string; detail?: string; outcome?: string; elapsed?: string;
+  }[];
+  summary?: {
+    state_label?: string; ban_reason?: string; ban_reason_label?: string; official_warnings?: number;
+    warning_limit?: number; records?: number; counted?: number; started?: string;
+  };
+  screens?: { at: string; image: string; kind?: string }[];
+}
+
+function evidenceOutcome(o: string | undefined, T: Record<string, string>) {
+  const v = String(o || '');
+  if (!v || v === 'logged') return null;
+  let text = '';
+  let cls = 'bg-gray-100 text-gray-600';
+  if (v.startsWith('warning:')) {
+    text = T.outWarn.replace('{n}', v.slice(8));
+    cls = 'bg-amber-100 text-amber-900';
+  } else if (v === 'ban') {
+    text = T.outBan;
+    cls = 'bg-rose-600 text-white';
+  } else if (v === 'retake') {
+    text = T.outRetake;
+    cls = 'bg-indigo-100 text-indigo-800';
+  } else if (v === 'merged') {
+    text = T.outMerged;
+  } else if (v === 'technical') {
+    text = T.outTech;
+  } else if (v === 'review') {
+    text = T.outReview;
+    cls = 'bg-sky-100 text-sky-800';
+  } else {
+    return null;
+  }
+  return <span className={'rounded px-1.5 py-0.5 font-semibold ' + cls}>{text}</span>;
+}
+
+function EvidenceDialog({ ev, T, onClose }: { ev: EvidenceData; T: Record<string, string>; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div className="w-full max-w-3xl rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div>
+            <div className="text-[15px] font-bold text-gray-900">{T.evidenceTitle}</div>
+            <div className="text-[12.5px] text-gray-500">{ev.name} · {ev.exam_title}</div>
+          </div>
+          <AdminBtn variant="ghost" size="sm" onClick={onClose}>{T.close}</AdminBtn>
+        </div>
+        {ev.summary ? (
+          <div className="flex flex-wrap gap-2 border-b border-gray-100 px-5 py-3 text-[12px]">
+            <span className="rounded-md bg-gray-100 px-2 py-1 text-gray-700">{T.sumStatus}: <b>{ev.summary.state_label}</b></span>
+            <span className={'rounded-md px-2 py-1 ' + ((ev.summary.official_warnings || 0) > 0 ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-700')}>
+              {T.sumWarnings}: <b>{Math.min(ev.summary.official_warnings || 0, ev.summary.warning_limit || 3)} / {ev.summary.warning_limit || 3}</b>
+            </span>
+            <span className="rounded-md bg-gray-100 px-2 py-1 text-gray-700">{T.sumRecords}: <b>{ev.summary.records}</b></span>
+            {ev.summary.started ? <span className="rounded-md bg-gray-100 px-2 py-1 text-gray-700">{T.sumStarted}: <b>{ev.summary.started}</b></span> : null}
+            {ev.summary.ban_reason ? (
+              <span className="rounded-md bg-rose-100 px-2 py-1 text-rose-800">{T.sumBan}: <b>{ev.summary.ban_reason_label || ev.summary.ban_reason}</b></span>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+          {ev.items.length ? ev.items.map((it, i) => (
+            <div key={i} className={'rounded-lg border p-2 ' + (it.technical ? 'border-gray-200' : 'border-amber-200 bg-amber-50/40')}>
+              <div className="mb-1 flex justify-between gap-2 text-[12px]">
+                <span className="font-semibold text-gray-800">{it.label}</span>
+                <span className="whitespace-nowrap text-gray-500">{it.at}</span>
+              </div>
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                {evidenceOutcome(it.outcome, T)}
+                {it.elapsed ? <span className="text-gray-500">{it.elapsed} {T.sinceStart}</span> : null}
+              </div>
+              {it.detail || it.note ? (
+                <div className="mb-1.5 rounded-md bg-rose-50 px-2 py-1.5 text-[12px] break-words text-rose-800">
+                  <b>{T.factLabel}:</b> {it.detail || it.note}
+                </div>
+              ) : null}
+              {it.image ? (
+                <img src={it.image} alt={it.label} className="w-full rounded-md border border-gray-100" />
+              ) : it.detail || it.note ? null : (
+                <div className="rounded-md bg-gray-50 py-6 text-center text-[12px] text-gray-400">{T.noImage}</div>
+              )}
+            </div>
+          )) : <div className="text-sm text-gray-500">{T.evidenceEmpty}</div>}
+        </div>
+        {ev.screens && ev.screens.length > 0 ? (
+          <div className="border-t border-gray-100 p-5 space-y-5">
+            {([
+              ['room', T.roomShots],
+              ['webcam', T.webcamShots],
+              ['screen', T.screens],
+            ] as Array<[string, string]>).map(([kind, title]) => {
+              const list = (ev.screens || []).filter((sc) => (sc.kind || 'screen') === kind);
+              if (!list.length) return null;
+              return (
+                <div key={kind}>
+                  <div className="mb-3 text-[13px] font-semibold text-gray-800">{title} ({list.length})</div>
+                  <div className={`grid gap-3 ${kind === 'screen' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
+                    {list.map((sc, i) => (
+                      <div key={`${kind}-${i}`} className="rounded-lg border border-gray-200 p-2">
+                        <div className="mb-1.5 text-right text-[11px] text-gray-500">{sc.at}</div>
+                        <img src={sc.image} alt={sc.at} loading="lazy" className="w-full rounded-md border border-gray-100" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Talaba sessiyasi dalillarini yuklab, oynada ko'rsatadi (ReportsPage va boshqalar uchun). */
+export function EvidenceModal({
+  token,
+  lang,
+  seId,
+  onClose,
+}: {
+  token: string;
+  lang: Language;
+  seId: number | null;
+  onClose: () => void;
+}) {
+  const T = TX[lang] || TX.uz;
+  const [ev, setEv] = useState<EvidenceData | null>(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    setEv(null);
+    setErr('');
+    if (!seId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(apiUrl('/api/admin/student_exams/' + seId + '/evidence'), { headers: authHeaders(token, lang) });
+        if (!checkAdminAuthResponse(res)) return;
+        const j = await readJsonSafe<any>(res);
+        if (cancelled) return;
+        if (res.ok && j && Array.isArray(j.items)) setEv(j);
+        else setErr(T.failed);
+      } catch {
+        if (!cancelled) setErr(T.failed);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seId, token, lang]);
+  if (!seId) return null;
+  if (ev) return <EvidenceDialog ev={ev} T={T} onClose={onClose} />;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 px-4" onClick={onClose}>
+      <div className="rounded-xl bg-white px-6 py-5 text-[13.5px] text-gray-700 shadow-2xl">
+        {err || '…'}
+      </div>
+    </div>
+  );
+}
+
 export function AudienceReport(props: Props) {
   const { token, lang, audience, audienceOptions, onAudience, seasons, seasonKey, onSeason } = props;
   const T = TX[lang] || TX.uz;
@@ -285,10 +481,18 @@ export function AudienceReport(props: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [scoreBusy, setScoreBusy] = useState<number | null>(null);
+  const scoreText = lang === 'ru'
+    ? { edit: 'Изменить балл', prompt: 'Количество правильных ответов', invalid: 'Введите целое число от 0 до', confirm: 'Сохранить новый балл? Ответы сохраняются, изменение записывается в журнал.', failed: 'Не удалось сохранить балл' }
+    : lang === 'en'
+    ? { edit: 'Edit score', prompt: 'Number of correct answers', invalid: 'Enter an integer from 0 to', confirm: 'Save the new score? Answers are preserved and the change is audited.', failed: 'Could not save score' }
+    : { edit: 'Ballni tahrirlash', prompt: "To‘g‘ri javoblar soni", invalid: '0 dan shu songacha butun son kiriting:', confirm: 'Yangi ball saqlansinmi? Asl javoblar saqlanadi, o‘zgarish jurnalga yoziladi.', failed: 'Ballni saqlab bo‘lmadi' };
   const [q, setQ] = useState('');
   const [tab, setTab] = useState('main');
   const [kafF, setKafF] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  /** Kartochka raqami bosilganda ochiladigan odamlar ro'yxati. */
+  const [drill, setDrill] = useState<DrillState | null>(null);
   const [ev, setEv] = useState<null | {
     name: string;
     exam_title: string;
@@ -303,32 +507,6 @@ export function AudienceReport(props: Props) {
     screens?: { at: string; image: string; kind?: string }[];
   }>(null);
   const [evBusy, setEvBusy] = useState(false);
-  const outcomeBadge = (o?: string) => {
-    const v = String(o || '');
-    if (!v || v === 'logged') return null;
-    let text = '';
-    let cls = 'bg-gray-100 text-gray-600';
-    if (v.startsWith('warning:')) {
-      text = T.outWarn.replace('{n}', v.slice(8));
-      cls = 'bg-amber-100 text-amber-900';
-    } else if (v === 'ban') {
-      text = T.outBan;
-      cls = 'bg-rose-600 text-white';
-    } else if (v === 'retake') {
-      text = T.outRetake;
-      cls = 'bg-indigo-100 text-indigo-800';
-    } else if (v === 'merged') {
-      text = T.outMerged;
-    } else if (v === 'technical') {
-      text = T.outTech;
-    } else if (v === 'review') {
-      text = T.outReview;
-      cls = 'bg-sky-100 text-sky-800';
-    } else {
-      return null;
-    }
-    return <span className={'rounded px-1.5 py-0.5 font-semibold ' + cls}>{text}</span>;
-  };
   const openEvidence = async (seId: number | null) => {
     if (!seId) return;
     setEvBusy(true);
@@ -342,6 +520,43 @@ export function AudienceReport(props: Props) {
     } finally {
       setEvBusy(false);
     }
+  };
+
+  /** O'ta olmagan / tugatmagan nomzodga qayta topshirish ruxsati (admin). */
+  const [retaken, setRetaken] = useState<Record<number, boolean>>({});
+  const [retakeBusy, setRetakeBusy] = useState<number | null>(null);
+  const canRetake = (p: Person) =>
+    !!p.student_exam_id && ((p.state === 'completed' && !p.passed) || p.state === 'unfinished' || p.state === 'banned');
+  const grantRetake = async (p: Person) => {
+    const seId = p.student_exam_id;
+    if (!seId || !window.confirm(T.retakeConfirm.replace('{name}', p.name || p.student_id))) return;
+    setRetakeBusy(seId);
+    try {
+      const res = await fetch(apiUrl('/api/admin/student_exams/' + seId + '/retake'), {
+        method: 'POST',
+        headers: authHeaders(token, lang),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      if (!res.ok) {
+        const j = await readJsonSafe<any>(res);
+        window.alert((j && j.error) || T.retakeErr);
+        return;
+      }
+      setRetaken((m) => ({ ...m, [seId]: true }));
+    } finally {
+      setRetakeBusy(null);
+    }
+  };
+  const retakeCell = (p: Person) => {
+    if (p.student_exam_id && retaken[p.student_exam_id]) {
+      return <Badge cls="bg-indigo-100 text-indigo-800">{T.retakeDone}</Badge>;
+    }
+    if (!canRetake(p)) return null;
+    return (
+      <AdminBtn variant="ghost" size="sm" loading={retakeBusy === p.student_exam_id} disabled={retakeBusy != null} onClick={() => void grantRetake(p)}>
+        {T.retake}
+      </AdminBtn>
+    );
   };
 
   const load = useCallback(async () => {
@@ -362,6 +577,30 @@ export function AudienceReport(props: Props) {
       setLoading(false);
     }
   }, [seasonKey, token, lang, T.failed]);
+
+  const editScore = async (p: Person) => {
+    if (!p.student_exam_id || p.state !== 'completed' || scoreBusy !== null) return;
+    const raw = window.prompt(`${p.name}\n${scoreText.prompt} (0–${p.total})`, String(p.score ?? 0));
+    if (raw === null) return;
+    const score = Number(raw);
+    if (!raw.trim() || !Number.isInteger(score) || score < 0 || score > p.total) {
+      window.alert(`${scoreText.invalid} ${p.total}`); return;
+    }
+    if (score === p.score || !window.confirm(`${p.name}: ${p.score}/${p.total} → ${score}/${p.total}\n${scoreText.confirm}`)) return;
+    setScoreBusy(p.student_exam_id);
+    try {
+      const res = await fetch(apiUrl(`/api/admin/student_exams/${p.student_exam_id}/score`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(token, lang) },
+        body: JSON.stringify({ score }),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      const result = await readJsonSafe<{ error?: string }>(res);
+      if (!res.ok) { window.alert(result?.error || scoreText.failed); return; }
+      setDrill(null);
+      await load();
+    } catch { window.alert(scoreText.failed); }
+    finally { setScoreBusy(null); }
+  };
 
   useEffect(() => { setTab('main'); setQ(''); setKafF(''); setOpen({}); }, [audience, seasonKey]);
   useEffect(() => { load(); }, [load]);
@@ -438,8 +677,44 @@ export function AudienceReport(props: Props) {
 
   const totals = data?.totals || {};
 
+  const NOT_TAKEN = ['not_started', 'no_session', 'absent', 'unfinished'];
+  const toDrill = (p: Person, group?: string): DrillPerson => {
+    const done = p.state === 'completed';
+    return {
+      key: String(p.student_exam_id ?? 'u') + ':' + p.student_id + ':' + (group || ''),
+      name: p.name,
+      login: p.student_id,
+      group: group ?? (p.direction || p.kafedra_name || p.subject || ''),
+      status: done ? (p.passed ? T.passed : T.failed_) : (p.verdict_label || p.state_label),
+      statusTone: done ? (p.passed ? 'good' : 'bad') : p.state === 'banned' ? 'bad' : 'warn',
+      value: p.percent != null && p.score != null ? `${p.score}/${p.total} · ${p.percent}%` : '',
+    };
+  };
+  const uniqueByLogin = (list: DrillPerson[]) => {
+    const seen = new Set<string>();
+    return list.filter((x) => (seen.has(x.login) ? false : (seen.add(x.login), true)));
+  };
+  const drillOrdinator = (label: string, pick: (p: Person) => boolean, debtors = false) => {
+    const list = debtors
+      ? (data?.debtors || []).map((p) => toDrill(p, p.direction || ''))
+      : (data?.groups || []).flatMap((g) => g.people.filter(pick).map((p) => toDrill(p, g.direction)));
+    setDrill({ title: label, people: list });
+  };
+  const drillVacancy = (label: string, pick: (p: Person) => boolean, unique = false) => {
+    const list = (data?.competitions || []).flatMap((c) =>
+      c.people.filter(pick).map((p) => toDrill(p, c.kafedra_name + (c.subject ? ' — ' + c.subject : ''))),
+    );
+    const extra = (data?.not_taken || []).filter(pick).map((p) => toDrill(p));
+    const all = [...list, ...extra];
+    setDrill({ title: label, people: unique ? uniqueByLogin(all) : uniqueByLogin(all) });
+  };
+  const drillEntrant = (label: string, pick: (p: Person) => boolean) =>
+    setDrill({ title: label, people: (data?.people || []).filter(pick).map((p) => toDrill(p)) });
+  const isDone = (p: Person) => p.state === 'completed';
+  const drillModal = <PeopleDrillModal lang={lang} drill={drill} onClose={() => setDrill(null)} token={token} />;
+
   const header = (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-[0_1px_2px_rgba(13,27,42,0.04),0_8px_24px_-16px_rgba(13,27,42,0.10)]">
       <div className="flex flex-wrap items-end gap-3">
         <div className="grow min-w-[220px]">
           <div className="text-lg font-semibold text-gray-900">{data?.title || audienceOptions.find((o) => o.value === audience)?.label}</div>
@@ -447,18 +722,22 @@ export function AudienceReport(props: Props) {
             <div className="text-[12px] text-gray-500 mt-0.5">{data.season?.label} · {data.generated_label}</div>
           ) : null}
         </div>
-        <div>
-          <div className="text-[12px] text-gray-500 mb-1">{T.season}</div>
-          <AdminSelect value={seasonKey} onChange={(e: any) => onSeason(e.target.value)}>
-            {seasons.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </AdminSelect>
-        </div>
-        <div>
-          <div className="text-[12px] text-gray-500 mb-1">{T.audience}</div>
-          <AdminSelect value={audience} onChange={(e: any) => onAudience(e.target.value)}>
-            {audienceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </AdminSelect>
-        </div>
+        {!props.embedded ? (
+          <>
+            <div>
+              <div className="text-[12px] text-gray-500 mb-1">{T.season}</div>
+              <AdminSelect value={seasonKey} onChange={(e: any) => onSeason(e.target.value)}>
+                {seasons.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </AdminSelect>
+            </div>
+            <div>
+              <div className="text-[12px] text-gray-500 mb-1">{T.audience}</div>
+              <AdminSelect value={audience} onChange={(e: any) => onAudience(e.target.value)}>
+                {audienceOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </AdminSelect>
+            </div>
+          </>
+        ) : null}
         <AdminBtn variant="ghost" size="sm" onClick={() => load()}>{T.refresh}</AdminBtn>
         <AdminBtn variant="blue" size="sm" onClick={downloadPdf} loading={pdfBusy} disabled={!data || !seasonKey}>{T.pdf}</AdminBtn>
         <AdminBtn variant="violet" size="sm" onClick={exportCsv} disabled={!data}>{T.excel}</AdminBtn>
@@ -473,7 +752,7 @@ export function AudienceReport(props: Props) {
           key={k}
           type="button"
           onClick={() => setTab(k)}
-          className={'px-3 py-2 text-sm font-medium -mb-px border-b-2 ' + (tab === k ? 'border-violet-500 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-700')}
+          className={'px-3 py-2 text-sm font-medium -mb-px border-b-2 ' + (tab === k ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700')}
         >
           {label}
         </button>
@@ -509,6 +788,7 @@ export function AudienceReport(props: Props) {
               <th className="py-2 pr-2">{T.result}</th>
               <th className="py-2 pr-2">{T.minutes}</th>
               <th className="py-2 pr-2">{T.viol}</th>
+              <th className="py-2 pr-2">{T.action}</th>
             </tr>
           </thead>
           <tbody>
@@ -545,6 +825,12 @@ export function AudienceReport(props: Props) {
                 <td className="py-1.5 pr-2">{resultCell(p)}</td>
                 <td className="py-1.5 pr-2 text-gray-600">{fmtMin(p.minutes)}</td>
                 <td className="py-1.5 pr-2"><ViolCell v={p.violations} T={T} /></td>
+                <td className="py-1.5 pr-2 whitespace-nowrap">
+                  {p.state === 'completed' && p.student_exam_id ? (
+                    <AdminBtn variant="ghost" size="sm" loading={scoreBusy === p.student_exam_id} disabled={scoreBusy !== null} onClick={() => void editScore(p)}>{scoreText.edit}</AdminBtn>
+                  ) : null}
+                  {retakeCell(p)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -555,12 +841,13 @@ export function AudienceReport(props: Props) {
       <div className="space-y-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            <Stat label={T.allowed} value={totals.allowed ?? 0} />
-            <Stat label={T.completed} value={totals.completed ?? 0} />
-            <Stat label={T.passed} value={totals.passed ?? 0} tone="text-emerald-700" />
-            <Stat label={T.failed_} value={totals.failed ?? 0} tone="text-red-600" />
-            <Stat label={T.remaining} value={totals.remaining ?? 0} tone="text-amber-700" />
-            <Stat label={T.debt} value={totals.debt ?? 0} tone="text-rose-700" />
+            {drillModal}
+            <Stat label={T.allowed} value={totals.allowed ?? 0} onClick={() => drillOrdinator(T.allowed, (p) => p.access_granted)} />
+            <Stat label={T.completed} value={totals.completed ?? 0} onClick={() => drillOrdinator(T.completed, isDone)} />
+            <Stat label={T.passed} value={totals.passed ?? 0} tone="text-emerald-700" onClick={() => drillOrdinator(T.passed, (p) => isDone(p) && p.passed)} />
+            <Stat label={T.failed_} value={totals.failed ?? 0} tone="text-red-600" onClick={() => drillOrdinator(T.failed_, (p) => isDone(p) && !p.passed)} />
+            <Stat label={T.remaining} value={totals.remaining ?? 0} tone="text-amber-700" onClick={() => drillOrdinator(T.remaining, (p) => p.state === 'not_started' || p.state === 'in_progress' || p.state === 'no_session')} />
+            <Stat label={T.debt} value={totals.debt ?? 0} tone="text-rose-700" onClick={() => drillOrdinator(T.debt, () => true, true)} />
             <Stat label={T.passPct} value={(totals.pass_percent ?? 0) + '%'} />
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-gray-500">
@@ -644,13 +931,14 @@ export function AudienceReport(props: Props) {
       <div className="space-y-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            <Stat label={T.registered} value={totals.registered ?? 0} />
-            <Stat label={T.completed} value={totals.completed ?? 0} />
-            <Stat label={T.passed} value={totals.passed ?? 0} tone="text-emerald-700" />
-            <Stat label={T.failed_} value={totals.failed ?? 0} tone="text-red-600" />
-            <Stat label={T.notTaken} value={(totals.not_started ?? 0) + (totals.absent ?? 0)} tone="text-amber-700" />
-            <Stat label={T.banned} value={totals.banned ?? 0} tone="text-rose-700" />
-            <Stat label={T.recommended} value={(totals.recommended ?? 0) + ' / ' + (totals.competitions ?? 0)} tone="text-emerald-700" />
+            {drillModal}
+            <Stat label={T.registered} value={totals.registered ?? 0} onClick={() => drillVacancy(T.registered, () => true, true)} />
+            <Stat label={T.completed} value={totals.completed ?? 0} onClick={() => drillVacancy(T.completed, isDone)} />
+            <Stat label={T.passed} value={totals.passed ?? 0} tone="text-emerald-700" onClick={() => drillVacancy(T.passed, (p) => isDone(p) && p.passed)} />
+            <Stat label={T.failed_} value={totals.failed ?? 0} tone="text-red-600" onClick={() => drillVacancy(T.failed_, (p) => isDone(p) && !p.passed)} />
+            <Stat label={T.notTaken} value={(totals.not_started ?? 0) + (totals.absent ?? 0)} tone="text-amber-700" onClick={() => drillVacancy(T.notTaken, (p) => NOT_TAKEN.includes(p.state))} />
+            <Stat label={T.banned} value={totals.banned ?? 0} tone="text-rose-700" onClick={() => drillVacancy(T.banned, (p) => p.state === 'banned')} />
+            <Stat label={T.recommended} value={(totals.recommended ?? 0) + ' / ' + (totals.competitions ?? 0)} tone="text-emerald-700" onClick={() => drillVacancy(T.recommended, (p) => p.verdict === 'recommended')} />
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-gray-500">
             <span>{T.rankNote}</span>
@@ -710,6 +998,7 @@ export function AudienceReport(props: Props) {
                               <th className="py-2 pr-2">{T.minutes}</th>
                               <th className="py-2 pr-2">{T.viol}</th>
                               <th className="py-2 pr-2">{T.verdict}</th>
+                              <th className="py-2 pr-2">{T.action}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -728,6 +1017,7 @@ export function AudienceReport(props: Props) {
                                 <td className="py-1.5 pr-2 text-gray-600">{fmtMin(p.minutes)}</td>
                                 <td className="py-1.5 pr-2"><ViolCell v={p.violations} T={T} /></td>
                                 <td className="py-1.5 pr-2"><Badge cls={VERDICT_CLS[p.verdict || 'absent']}>{p.verdict_label || p.state_label}</Badge></td>
+                                <td className="py-1.5 pr-2 whitespace-nowrap">{retakeCell(p)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -817,10 +1107,11 @@ export function AudienceReport(props: Props) {
       <div className="space-y-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Stat label={T.people} value={totals.people ?? 0} />
-            <Stat label={T.completed} value={totals.completed ?? 0} />
-            <Stat label={T.passed} value={totals.passed ?? 0} tone="text-emerald-700" />
-            <Stat label={T.failed_} value={totals.failed ?? 0} tone="text-red-600" />
+            {drillModal}
+            <Stat label={T.people} value={totals.people ?? 0} onClick={() => drillEntrant(T.people, () => true)} />
+            <Stat label={T.completed} value={totals.completed ?? 0} onClick={() => drillEntrant(T.completed, isDone)} />
+            <Stat label={T.passed} value={totals.passed ?? 0} tone="text-emerald-700" onClick={() => drillEntrant(T.passed, (p) => isDone(p) && p.passed)} />
+            <Stat label={T.failed_} value={totals.failed ?? 0} tone="text-red-600" onClick={() => drillEntrant(T.failed_, (p) => isDone(p) && !p.passed)} />
             <Stat label={T.avg} value={(totals.avg_percent ?? 0) + '%'} />
           </div>
           {(d.people || []).length > 3 ? <div className="mt-3">{searchBox}</div> : null}
@@ -849,6 +1140,7 @@ export function AudienceReport(props: Props) {
                     </div>
                   ) : null}
                 </div>
+                {retakeCell(p)}
                 {p.certificate && p.student_exam_id ? (
                   <AdminBtn
                     variant="emerald"
@@ -935,86 +1227,7 @@ export function AudienceReport(props: Props) {
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       {header}
       {body}
-      {ev ? (
-        <div
-          className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setEv(null)}
-        >
-          <div className="w-full max-w-3xl rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
-              <div>
-                <div className="text-[15px] font-bold text-gray-900">{T.evidenceTitle}</div>
-                <div className="text-[12.5px] text-gray-500">{ev.name} · {ev.exam_title}</div>
-              </div>
-              <AdminBtn variant="ghost" size="sm" onClick={() => setEv(null)}>{T.close}</AdminBtn>
-            </div>
-            {ev.summary ? (
-              <div className="flex flex-wrap gap-2 border-b border-gray-100 px-5 py-3 text-[12px]">
-                <span className="rounded-md bg-gray-100 px-2 py-1 text-gray-700">{T.sumStatus}: <b>{ev.summary.state_label}</b></span>
-                <span className={'rounded-md px-2 py-1 ' + ((ev.summary.official_warnings || 0) > 0 ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-700')}>
-                  {T.sumWarnings}: <b>{Math.min(ev.summary.official_warnings || 0, ev.summary.warning_limit || 3)} / {ev.summary.warning_limit || 3}</b>
-                </span>
-                <span className="rounded-md bg-gray-100 px-2 py-1 text-gray-700">{T.sumRecords}: <b>{ev.summary.records}</b></span>
-                {ev.summary.started ? <span className="rounded-md bg-gray-100 px-2 py-1 text-gray-700">{T.sumStarted}: <b>{ev.summary.started}</b></span> : null}
-                {ev.summary.ban_reason ? (
-                  <span className="rounded-md bg-rose-100 px-2 py-1 text-rose-800">{T.sumBan}: <b>{ev.summary.ban_reason_label || ev.summary.ban_reason}</b></span>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
-              {ev.items.length ? ev.items.map((it, i) => (
-                <div key={i} className={'rounded-lg border p-2 ' + (it.technical ? 'border-gray-200' : 'border-amber-200 bg-amber-50/40')}>
-                  <div className="mb-1 flex justify-between gap-2 text-[12px]">
-                    <span className="font-semibold text-gray-800">{it.label}</span>
-                    <span className="whitespace-nowrap text-gray-500">{it.at}</span>
-                  </div>
-                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-                    {outcomeBadge(it.outcome)}
-                    {it.elapsed ? <span className="text-gray-500">{it.elapsed} {T.sinceStart}</span> : null}
-                  </div>
-                  {it.detail || it.note ? (
-                    <div className="mb-1.5 rounded-md bg-rose-50 px-2 py-1.5 text-[12px] break-words text-rose-800">
-                      <b>{T.factLabel}:</b> {it.detail || it.note}
-                    </div>
-                  ) : null}
-                  {it.image ? (
-                    <img src={it.image} alt={it.label} className="w-full rounded-md border border-gray-100" />
-                  ) : it.detail || it.note ? null : (
-                    <div className="rounded-md bg-gray-50 py-6 text-center text-[12px] text-gray-400">{T.noImage}</div>
-                  )}
-                </div>
-              )) : <div className="text-sm text-gray-500">{T.evidenceEmpty}</div>}
-            </div>
-            {ev.screens && ev.screens.length > 0 ? (
-              <div className="border-t border-gray-100 p-5 space-y-5">
-                {([
-                  ['room', T.roomShots],
-                  ['webcam', T.webcamShots],
-                  ['screen', T.screens],
-                ] as Array<[string, string]>).map(([kind, title]) => {
-                  const list = (ev.screens || []).filter((sc) => (sc.kind || 'screen') === kind);
-                  if (!list.length) return null;
-                  return (
-                    <div key={kind}>
-                      <div className="mb-3 text-[13px] font-semibold text-gray-800">{title} ({list.length})</div>
-                      <div className={`grid gap-3 ${kind === 'screen' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
-                        {list.map((sc, i) => (
-                          <div key={`${kind}-${i}`} className="rounded-lg border border-gray-200 p-2">
-                            <div className="mb-1.5 text-right text-[11px] text-gray-500">{sc.at}</div>
-                            <img src={sc.image} alt={sc.at} loading="lazy" className="w-full rounded-md border border-gray-100" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {ev ? <EvidenceDialog ev={ev} T={T} onClose={() => setEv(null)} /> : null}
     </motion.div>
   );
 }

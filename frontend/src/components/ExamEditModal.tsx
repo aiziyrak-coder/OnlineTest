@@ -46,6 +46,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
   const [language, setLanguage] = useState('uz');
   /** Tashqi shovqin nazorati (talabaning o'z nutqiga ta'sir qilmaydi). */
   const [ambientAudioEnabled, setAmbientAudioEnabled] = useState(true);
+  const [testCenterPin, setTestCenterPin] = useState('');
   const [customRules, setCustomRules] = useState('');
   const [selectedGroups, setSelectedGroups] = useState<number[]>([]);
   const [questionsJson, setQuestionsJson] = useState('');
@@ -103,6 +104,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         setDuration(Number(data.duration_minutes) || 60);
         setLanguage(data.language || 'uz');
         setAmbientAudioEnabled(data.ambient_audio_enabled !== false);
+        setTestCenterPin(String(data.test_center_pin || ''));
         setCustomRules(data.custom_rules || '');
         setSelectedGroups(Array.isArray(data.group_ids) ? data.group_ids : []);
         setQuestionsJson(JSON.stringify(data.questions || [], null, 2));
@@ -174,6 +176,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         duration_minutes: duration,
         language,
         ambient_audio_enabled: ambientAudioEnabled,
+        test_center_pin: testCenterPin,
         custom_rules: customRules,
         group_ids: isKafedraAudience ? [] : selectedGroups,
       };
@@ -448,6 +451,23 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                         </span>
                       </span>
                     </label>
+                  </AdminField>
+                  <AdminField label={lang === 'ru' ? 'PIN тестового центра (4 цифры)' : lang === 'en' ? 'Test-centre PIN (4 digits)' : 'Test markazi PIN (4 raqam)'}>
+                    <AdminInput
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={testCenterPin}
+                      onChange={(e) => setTestCenterPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="—"
+                      className="max-w-[140px] tracking-[0.3em]"
+                    />
+                    <p className="text-[12px] text-gray-400 mt-1.5 leading-snug">
+                      {lang === 'ru'
+                        ? 'Проверяющий вводит этот PIN на компьютере в тестовом центре: микрофон не контролируется, камера — полностью. Пусто — режим выключен.'
+                        : lang === 'en'
+                          ? 'The proctor enters this PIN on test-centre computers: the microphone is not monitored, the camera fully is. Empty — mode off.'
+                          : "Tekshiruvchi test markazidagi kompyuterda kiritadi: mikrofon nazorat qilinmaydi, kamera to'liq ishlaydi. Bo'sh — rejim o'chiq."}
+                    </p>
                   </AdminField>
                 </div>
 

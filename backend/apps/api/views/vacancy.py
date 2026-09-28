@@ -280,7 +280,8 @@ def ensure_vacancy_exam(kafedra_id: int, subject: str = "") -> Exam | None:
         title="Ishga qabul testi — %s" % kaf.name,
         start_time=now - timedelta(days=1),
         end_time=now + timedelta(days=3650),
-        duration_minutes=12,
+        # 20 ta savol — 20 daqiqa (boshqa ishga qabul imtihonlari bilan bir xil).
+        duration_minutes=20,
         questions_json="[]",
         language="uz",
         exam_mode="vacancy_ai",
@@ -290,7 +291,8 @@ def ensure_vacancy_exam(kafedra_id: int, subject: str = "") -> Exam | None:
         # Nisbat ataylab AI tomonga og'dirilgan: DAK banki tarqalgan, uni
         # yodlab kelgan nomzod imtihonning atigi choragini biladi.
         ai_question_count=15,
-        pass_percent=60,
+        # Institut bo'yicha yagona o'tish bali.
+        pass_percent=56,
         kafedra_id=kaf.id,
         faculty_subject=str(subject or "")[:300],
     )

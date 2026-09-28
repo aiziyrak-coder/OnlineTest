@@ -10,6 +10,36 @@ from unittest import mock
 from apps.api import face_embedding
 
 
+def _fake_cv2():
+    """cv2 o'rnini bosuvchi mock, lekin rasm o'zgartiruvchi funksiyalari HAQIQIY
+    numpy massiv qaytaradi.
+
+    `_face_variants` rasmni o'lchamlab (cv2.resize) va burib (cv2.rotate) bir
+    nechta variant yaratadi, `_best_face` esa har birining `.shape`ini o'qiydi.
+    Toza MagicMock qaytarsa `.shape[:2]` ochilmaydi (ValueError) — detektor
+    mantiqi umuman sinalmay qolardi.
+    """
+    import numpy as np
+
+    cv2 = mock.MagicMock()
+    cv2.ROTATE_90_CLOCKWISE = 0
+    cv2.ROTATE_180 = 1
+    cv2.ROTATE_90_COUNTERCLOCKWISE = 2
+    cv2.INTER_AREA = 3
+    cv2.INTER_CUBIC = 2
+
+    def _resize(src, dsize, interpolation=None):
+        w, h = dsize
+        return np.zeros((h, w) + tuple(src.shape[2:]), dtype=src.dtype)
+
+    def _rotate(src, code):
+        return np.ascontiguousarray(np.rot90(src, k={0: -1, 1: 2, 2: 1}[code]))
+
+    cv2.resize.side_effect = _resize
+    cv2.rotate.side_effect = _rotate
+    return cv2
+
+
 class FaceEmbeddingTests(unittest.TestCase):
     @mock.patch("apps.api.face_embedding._get_engine", return_value=None)
     def test_engine_unavailable(self, _eng):
@@ -21,7 +51,7 @@ class FaceEmbeddingTests(unittest.TestCase):
     def test_match_above_threshold(self, eng_mock):
         import numpy as np
 
-        cv2 = mock.MagicMock()
+        cv2 = _fake_cv2()
         cv2.FaceRecognizerSF_FR_COSINE = 1
         detector = mock.MagicMock()
         recognizer = mock.MagicMock()
@@ -44,7 +74,7 @@ class FaceEmbeddingTests(unittest.TestCase):
     def test_no_face_detected(self, eng_mock):
         import numpy as np
 
-        cv2 = mock.MagicMock()
+        cv2 = _fake_cv2()
         detector = mock.MagicMock()
         recognizer = mock.MagicMock()
         eng_mock.return_value = {"detector": detector, "recognizer": recognizer, "cv2": cv2}
@@ -57,6 +87,9 @@ class FaceEmbeddingTests(unittest.TestCase):
         self.assertTrue(out.get("success"))
         self.assertFalse(out.get("match"))
         self.assertEqual(out.get("code"), "FACE_NOT_DETECTED")
+        # Barcha variantlar (asl, kattalashtirilgan, 3 burilish) sinab ko'rilgan.
+        self.assertGreater(detector.detect.call_count, 1)
+        recognizer.feature.assert_not_called()
 
 
 class ModelIntegrityTests(unittest.TestCase):

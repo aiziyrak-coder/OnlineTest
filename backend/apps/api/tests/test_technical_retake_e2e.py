@@ -143,11 +143,89 @@ class ExamRetakeE2ETests(TestCase):
         self.assertEqual(se.status, "Pending")
         self.assertEqual(se.technical_retakes_used, 1)
 
+    def _identity_policy(self, *, no_retake=None):
+        """Shaxs almashtirish siyosatini kod standartiga qotiradi.
+
+        PROCTOR_IDENTITY_BAN_MAX_SCORE=0.10 (kod standarti) — faqat yuz mosligi
+        balli shundan past (butunlay boshqa odam) bo'lsa jazo; chegaraviy ball
+        admin ko'rib chiqishiga ketadi. PROCTOR_NO_RETAKE_VIOLATIONS: None —
+        kod standarti (DELIBERATE_CHEAT_VIOLATIONS, identity ham ichida).
+        """
+        p = mock.patch.dict(
+            os.environ,
+            {
+                "PROCTOR_IDENTITY_BAN_MAX_SCORE": "0.10",
+                "PROCTOR_AUTO_BAN_IDENTITY": "1",
+                "VAC_STRICT_MODE": "1",
+            },
+            clear=False,
+        )
+        p.start()
+        self.addCleanup(p.stop)
+        os.environ.pop("PROCTOR_INSTANT_BAN_VIOLATIONS", None)
+        if no_retake is None:
+            os.environ.pop("PROCTOR_NO_RETAKE_VIOLATIONS", None)
+        else:
+            os.environ["PROCTOR_NO_RETAKE_VIOLATIONS"] = no_retake
+
+    def _set_identity_score(self, exam_id: int, score) -> None:
+        StudentExam.objects.filter(student_id=self.student.id, exam_id=exam_id).update(
+            identity_last_score=score
+        )
+
     def test_e2e_identity_retake_once_then_ban(self):
+        """Standart siyosat: aniq shaxs almashtirish (ball < 0.10) — retake'siz DARHOL ban.
+
+        identity_retakes_allowed=1 bo'lsa ham: IDENTITY_SUBSTITUTION ataylab
+        chiterlik (DELIBERATE_CHEAT_VIOLATIONS) — ikkinchi imkoniyat berilmaydi.
+        """
+        self._identity_policy()
         exam = self._create_exam(retakes=3)
         self._start_session(exam.id)
+        self._set_identity_score(exam.id, 0.02)
+        body = self._post_violation(exam.id, "IDENTITY_SUBSTITUTION")
+        self.assertTrue(body.get("banned"), body)
+        self.assertFalse(body.get("examRetake"), body)
+        self.assertEqual(body.get("banReason"), "IDENTITY")
+        se = StudentExam.objects.get(student_id=self.student.id, exam_id=exam.id)
+        self.assertEqual(se.status, "Banned")
+        self.assertEqual(se.ban_reason, "IDENTITY")
+        self.assertEqual(se.identity_retakes_used, 0)
+
+        r_start = self.client.post(f"/api/student/exams/{exam.id}/start", {"pin": ""}, format="json")
+        self.assertEqual(r_start.status_code, 403)
+
+    def test_e2e_identity_borderline_score_is_review_not_ban(self):
+        """Chegaraviy ball (yoki ball yo'q) — ban emas: qayd (outcome=review), sessiya davom etadi."""
+        self._identity_policy()
+        exam = self._create_exam(retakes=3)
+        self._start_session(exam.id)
+        for score in (0.25, None):
+            self._set_identity_score(exam.id, score)
+            body = self._post_violation(exam.id, "IDENTITY_SUBSTITUTION")
+            self.assertFalse(body.get("banned"), (score, body))
+            self.assertTrue(body.get("identityReview"), (score, body))
+            self.assertTrue(body.get("warningSuppressed"), (score, body))
+        se = StudentExam.objects.get(student_id=self.student.id, exam_id=exam.id)
+        self.assertEqual(se.status, "In Progress")
+        self.assertEqual(int(se.proctor_official_warnings or 0), 0)
+        self.assertEqual(se.identity_retakes_used, 0)
+        # 60 soniya ichidagi takror qayd qilinmaydi — bitta review yozuvi.
+        logs = ViolationLog.objects.filter(
+            student_id=self.student.id, exam_id=exam.id, violation_type="IDENTITY_SUBSTITUTION"
+        )
+        self.assertEqual(logs.count(), 1)
+        self.assertEqual(logs.first().outcome, "review")
+
+    def test_e2e_identity_retake_once_then_ban_when_operator_allows_identity_retake(self):
+        """Operator IDENTITY_SUBSTITUTION ni no-retake ro'yxatidan chiqarsa —
+        identity_retakes_allowed=1: birinchi marta retake, ikkinchisida ban."""
+        self._identity_policy(no_retake="FORBIDDEN_OBJECT_CELL_PHONE")
+        exam = self._create_exam(retakes=3)
+        self._start_session(exam.id)
+        self._set_identity_score(exam.id, 0.02)
         body1 = self._post_violation(exam.id, "IDENTITY_SUBSTITUTION")
-        self.assertTrue(body1.get("examRetake"))
+        self.assertTrue(body1.get("examRetake"), body1)
         self.assertTrue(body1.get("identityRetake"))
         self.assertFalse(body1.get("banned"))
         se = StudentExam.objects.get(student_id=self.student.id, exam_id=exam.id)
@@ -155,8 +233,9 @@ class ExamRetakeE2ETests(TestCase):
         self.assertEqual(se.status, "Pending")
 
         self._start_session(exam.id)
+        self._set_identity_score(exam.id, 0.02)
         body2 = self._post_violation(exam.id, "IDENTITY_SUBSTITUTION")
-        self.assertTrue(body2.get("banned"))
+        self.assertTrue(body2.get("banned"), body2)
         self.assertEqual(body2.get("banReason"), "IDENTITY")
         se.refresh_from_db()
         self.assertEqual(se.status, "Banned")

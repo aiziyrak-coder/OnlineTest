@@ -63,7 +63,27 @@ class FinalizeEndedExamsTests(TestCase):
         se.refresh_from_db()
         self.assertEqual(se.status, "Completed")
         self.assertEqual(se.score, 1)
-        self.assertGreaterEqual(out["finalized"], 1)
+        # Sessiya muddati (started_at + 45 daqiqa) ham tugagan, shuning uchun uni
+        # birinchi bosqich — run_finalize_expired_sessions() yopadi (guruhga
+        # bog'liq bo'lmagan umumiy yo'l). Guruh bo'yicha skan unga qayta tegmaydi.
+        self.assertEqual(out["expired_finalized"], 1)
+        self.assertEqual(out["expired_failed"], 0)
+        self.assertEqual(out["finalized"], 0)
+
+    def test_in_progress_within_own_duration_finalized_by_exam_window(self):
+        """Imtihon oynasi yopilgan, lekin sessiyaning O'Z muddati hali tugamagan —
+        guruh bo'yicha skan (finalized hisoblagichi) yakunlaydi."""
+        se = StudentExam.objects.create(
+            student_id=self.st_inprogress.id, exam_id=self.exam.id,
+            status="In Progress", started_at=dj_tz.now() - timedelta(minutes=10),
+            draft_answers_json=json.dumps({"1": "4", "2": "4"}),
+            draft_flagged_json="[]",
+        )
+        out = run_finalize_ended_exams()
+        se.refresh_from_db()
+        self.assertEqual(se.status, "Completed")
+        self.assertEqual(se.score, 2)
+        self.assertEqual(out["expired_finalized"] + out["finalized"], 1)
 
     def test_pending_retake_not_resumed_becomes_failed(self):
         se = StudentExam.objects.create(

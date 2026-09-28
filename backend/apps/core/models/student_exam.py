@@ -79,6 +79,18 @@ class StudentExam(models.Model):
     #: Keyinchalik mikrofon jim bo'lib qolsa, bu qiymat uning boshida
     #: ishlaganini isbotlaydi.
     mic_level_at_start = models.FloatField(null=True, blank=True)
+    #: Test markazida (to'g'ri PIN bilan) topshirilyaptimi — mikrofon nazorati o'chiq.
+    test_center_mode = models.BooleanField(default=False)
+    test_center_at = models.DateTimeField(null=True, blank=True)
+    #: Yuqori natijani test markazida yuzma-yuz tasdiqlash (result_verification.py):
+    #: "" | pending | confirmed | rejected. Kutilganda sertifikat berilmaydi.
+    verify_state = models.CharField(max_length=16, blank=True, default="", db_index=True)
+    verify_reason = models.CharField(max_length=500, blank=True, default="")
+    verify_note = models.TextField(blank=True, default="")
+    verify_by = models.CharField(max_length=64, blank=True, default="")
+    verify_at = models.DateTimeField(null=True, blank=True)
+    #: Rad etilganda asl ball shu yerda saqlanadi (score = 0).
+    verify_original_score = models.IntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "core"

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from apps.api.views._helpers import *  # noqa: F401,F403
+from apps.api.certificate_pdf import exam_pass_threshold as _exam_pass_thr
 
 
 def academic_catalog_api_keys() -> frozenset[str]:
@@ -131,6 +132,13 @@ def public_verify_result(request, result_id: str):
     )
     if not se:
         return Response({"error": "Not found or invalid link"}, status=404)
+    from apps.api.result_verification import certificate_blocked, notice
+
+    if certificate_blocked(se):
+        return Response(
+            {"error": notice(se.verify_state, "uz"), "code": "VERIFICATION_" + se.verify_state.upper()},
+            status=409,
+        )
     if se.session_questions_json:
         questions = safe_json_loads(se.session_questions_json, [])
     else:
@@ -169,6 +177,13 @@ def public_verify_result(request, result_id: str):
     completed_iso = se.completed_at.isoformat() if se.completed_at else ""
     icode = integrity_code(result_id, completed_iso, se.score, total, k)
     per_q = []
+    from apps.api.services import localize_exam_question as _loc, result_display_language as _rdl
+
+    # auto imtihon: talaba javob bergan tilda solishtiramiz — aks holda RU/EN javoblar
+    # "noto'g'ri" ko'rinardi, ball esa to'g'ri edi.
+    _vlang = _rdl(se.exam, answers, questions, (se.exam.language or "uz").lower())
+    if (se.exam.language or "").lower() == "auto":
+        questions = [_loc(q, _vlang) for q in questions]
     for q in questions:
         st = answers.get(str(q["id"]), "")
         ok = st == q.get("correctAnswer")
@@ -208,6 +223,9 @@ def public_verify_result(request, result_id: str):
             "score": se.score,
             "total": total,
             "percentage": round((se.score / total) * 100) if total else 0,
+            # Imtihonning o'z o'tish bali (56%) — sahifa 50% deb taxmin qilmasin.
+            "pass_threshold": _exam_pass_thr(se.exam),
+            "passed": bool(total) and round((se.score / total) * 100) >= _exam_pass_thr(se.exam),
             "completed_at": completed_iso,
             "exam_title": se.exam.title,
             "student_name": se.student.name,
@@ -236,6 +254,10 @@ def public_verify_certificate_pdf(request, result_id: str):
     )
     if not se:
         return HttpResponse("Not found", status=404)
+    from apps.api.result_verification import certificate_blocked as _v_blocked
+
+    if _v_blocked(se):
+        return HttpResponse("Natija tasdiqlanmagan", status=409)
     from apps.api.views.student_results import _upgrade_ai_summary_if_needed
 
     _upgrade_ai_summary_if_needed(se, request)
@@ -283,6 +305,9 @@ def public_verify_certificate_pdf(request, result_id: str):
     from apps.api.services import localize_exam_question
 
     lang = resolve_pdf_language(request, se.exam)
+    from apps.api.services import result_display_language as _rdl
+
+    lang = _rdl(se.exam, answers, questions, lang)
     for q in questions:
         q_loc = localize_exam_question(q, lang)
         st = answers.get(str(q["id"]), "")
@@ -328,7 +353,7 @@ def public_verify_certificate_pdf(request, result_id: str):
         integrity_code=icode,
         overview=ai.get("overview", ""),
         rows=rows,
-        pass_threshold=PASS_PERCENT_THRESHOLD,
+        pass_threshold=_exam_pass_thr(se.exam),
         lang=lang,
     )
     resp = HttpResponse(pdf, content_type="application/pdf")

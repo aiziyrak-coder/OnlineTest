@@ -1,7 +1,10 @@
 """Qoidabuzarlik limitida qayta topshirish."""
+import os
 from datetime import timedelta
+from unittest import mock
 
 from apps.api.proctor_exam_retake import (
+    DELIBERATE_CHEAT_VIOLATIONS,
     exam_identity_retakes_allowed,
     exam_violation_retakes_allowed,
     IDENTITY_VIOLATION_TYPE,
@@ -99,7 +102,49 @@ class ExamRetakeTests(TestCase):
         self.assertEqual(exam_violation_retakes_allowed(self.exam), 5)
         self.assertEqual(violation_retakes_remaining(self.se, self.exam), 5)
 
+    def _no_retake_policy(self, value):
+        """PROCTOR_NO_RETAKE_VIOLATIONS ni aniq belgilaydi (None — kod standarti).
+
+        Konteyner muhitidagi qiymat testga o'tmasin.
+        """
+        p = mock.patch.dict(os.environ, {}, clear=False)
+        p.start()
+        self.addCleanup(p.stop)
+        if value is None:
+            os.environ.pop("PROCTOR_NO_RETAKE_VIOLATIONS", None)
+        else:
+            os.environ["PROCTOR_NO_RETAKE_VIOLATIONS"] = value
+
     def test_identity_retake_once(self):
+        """Standart siyosat: shaxs almashtirish — ATAYLAB chiterlik, retake YO'Q.
+
+        `identity_retakes_allowed=1` bo'lsa ham IDENTITY_SUBSTITUTION
+        DELIBERATE_CHEAT_VIOLATIONS da: `try_apply_exam_retake` None qaytaradi
+        (chaqiruvchi ban qiladi) va sessiyaga, byudjetga tegmaydi.
+        """
+        self._no_retake_policy(None)
+        self.assertIn(IDENTITY_VIOLATION_TYPE, DELIBERATE_CHEAT_VIOLATIONS)
+        self.assertEqual(identity_retakes_remaining(self.se, self.exam), 1)
+
+        payload = try_apply_exam_retake(
+            self.se,
+            self.exam,
+            reason_text="Identity",
+            violations_count=1,
+            violation_type=IDENTITY_VIOLATION_TYPE,
+        )
+        self.assertIsNone(payload)
+        self.se.refresh_from_db()
+        self.assertEqual(self.se.status, "In Progress")
+        self.assertEqual(self.se.identity_retakes_used, 0)
+        self.assertEqual(self.se.technical_retakes_used, 0)
+        self.assertEqual(self.se.proctor_official_warnings, 2)
+        self.assertEqual(identity_retakes_remaining(self.se, self.exam), 1)
+
+    def test_identity_retake_once_when_operator_allows_identity_retake(self):
+        """Operator IDENTITY_SUBSTITUTION ni no-retake ro'yxatidan chiqarsa —
+        identity byudjeti (allowed=1) ishlaydi: 1 ta beriladi, 2-chisida None."""
+        self._no_retake_policy("FORBIDDEN_OBJECT_CELL_PHONE")
         payload = try_apply_exam_retake(
             self.se,
             self.exam,

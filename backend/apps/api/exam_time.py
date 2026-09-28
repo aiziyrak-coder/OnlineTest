@@ -41,6 +41,7 @@ def submission_deadline(
     in_general = bool(
         exam.start_time and exam.end_time and exam.start_time <= now <= exam.end_time
     )
+    rw_end = None
     if in_general and exam.end_time:
         ends.append(exam.end_time)
     elif student_id:
@@ -57,7 +58,11 @@ def submission_deadline(
         )
         if rw_end:
             ends.append(rw_end)
-    elif exam.end_time:
+    # Umumiy oyna tugagan va faol retake oynasi yo'q — umumiy tugash vaqti amal qiladi.
+    # Ilgari `elif student_id` shoxi hech narsa qo'shmasa ham bu shartga yetib
+    # kelinmasdi va end_time dan keyin ham `started_at + davomiylik` gacha topshirish
+    # qabul qilinardi.
+    if not ends and exam.end_time and not in_general and rw_end is None:
         ends.append(exam.end_time)
 
     if student_exam.started_at and exam.duration_minutes is not None:

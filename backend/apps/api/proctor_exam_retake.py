@@ -93,6 +93,12 @@ def identity_retakes_remaining(se: StudentExam, exam: Exam) -> int:
     return max(0, identity_retakes_budget(exam) - used)
 
 
+#: Qayta urinishda savollar YANGIDAN yaratiladigan rejimlar. Retake reset ham,
+#: retake oynasidagi /start ham shu bitta ro'yxatdan foydalanadi (ilgari ikki joyda
+#: turlicha edi: biri faculty_ai_books ni, biri vacancy_ai ni tashlab ketardi).
+REGENERATE_QUESTION_MODES = ("bank_mixed", "imentor_mixed", "faculty_ai_books", "vacancy_ai", "static", "")
+
+
 def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
     """Sessiyani tozalab Pending holatiga qaytaradi."""
     se.status = "Pending"
@@ -114,7 +120,34 @@ def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
     se.device_session_token = ""
     se.identity_verified_at = None
     se.question_lock_json = ""
+    se.test_center_mode = False
+    se.test_center_at = None
+    # Oldingi natijaning qoldiqlari yangi urinishga o'tmasin: eski "rad etilgan"
+    # holat yangi natijani abadiy to'sib qo'yardi, "tasdiqlash" esa eski ballni
+    # yangisining ustiga qaytarardi; eski tekshirish havolasi ham ishlab turardi.
+    se.verify_state = ""
+    se.verify_reason = ""
+    se.verify_note = ""
+    se.verify_by = ""
+    se.verify_at = None
+    se.verify_original_score = None
+    se.result_public_id = None
+    se.result_verify_secret = ""
+    se.ai_summary_json = ""
+    se.answer_timings_json = ""
+    se.flagged_questions_json = "[]"
     update_fields = [
+        "verify_state",
+        "verify_reason",
+        "verify_note",
+        "verify_by",
+        "verify_at",
+        "verify_original_score",
+        "result_public_id",
+        "result_verify_secret",
+        "ai_summary_json",
+        "answer_timings_json",
+        "flagged_questions_json",
         "status",
         "answers_json",
         "score",
@@ -134,6 +167,8 @@ def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
         "device_session_token",
         "identity_verified_at",
         "question_lock_json",
+        "test_center_mode",
+        "test_center_at",
     ]
     exam = getattr(se, "exam", None)
     if exam is None:
@@ -141,13 +176,7 @@ def reset_fields_for_exam_retake(se: StudentExam) -> list[str]:
     # vacancy_ai: nomzodga qayta imkon berilsa, savollar YANGIDAN yaratilishi
     # kerak. Aks holda u xuddi o'sha 20 ta savolni qayta ko'rardi va qayta
     # topshirish ma'nosini yo'qotardi.
-    if exam and exam.exam_mode in (
-        "bank_mixed",
-        "imentor_mixed",
-        "vacancy_ai",
-        "static",
-        "",
-    ):
+    if exam and (exam.exam_mode or "") in REGENERATE_QUESTION_MODES:
         se.session_questions_json = None
         update_fields.append("session_questions_json")
     return update_fields
@@ -206,6 +235,53 @@ def exam_retakes_exhausted(se: StudentExam, exam: Exam) -> bool:
     return False
 
 
+def exam_rules(exam) -> dict:
+    """Imtihonning qo'shimcha sozlamalari (`custom_rules` JSON) — xavfsiz o'qish."""
+    import json as _json
+
+    raw = str(getattr(exam, "custom_rules", "") or "").strip()
+    if not raw:
+        return {}
+    try:
+        data = _json.loads(raw)
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def exam_is_remote(exam) -> bool:
+    """Imtihon uyidan topshiriladimi (test markazi PIN'i talab qilinmaydi).
+
+    Bu ATAYLAB alohida belgi: imtihonda PIN maydoni bo'sh qolgani o'zi yetarli
+    emas — aks holda yangi imtihon yaratib, PIN talabini chetlab o'tish mumkin
+    bo'lardi. Ishga kiruvchilar (vacancy) esa doim uydan topshiradi.
+    """
+    if str(getattr(exam, "audience", "") or "") == "vacancy":
+        return True
+    return bool(exam_rules(exam).get("remote"))
+
+
+def exam_auto_retake_all(exam: Exam) -> bool:
+    """Imtihonda HAR QANDAY chetlatish o'rniga (byudjet bo'lsa) qayta topshirish beriladimi.
+
+    Uyidan topshiriladigan imtihonlarda noto'g'ri aniqlash (stoldagi kitob,
+    qo'ldagi ruchka) tufayli odam chetlatilib qolardi va admin qo'lda qayta
+    ruxsat berishi kerak bo'lardi. Imtihon sozlamasida `auto_retake_all`
+    yoqilgan bo'lsa, tizim buni O'ZI qiladi: hodisa dalil sifatida saqlanadi,
+    urinish esa byudjetdan yechiladi. Byudjet tugagach odatdagidek ban bo'ladi.
+    """
+    import json as _json
+
+    raw = str(getattr(exam, "custom_rules", "") or "").strip()
+    if not raw:
+        return False
+    try:
+        data = _json.loads(raw)
+    except ValueError:
+        return False
+    return bool(isinstance(data, dict) and data.get("auto_retake_all"))
+
+
 def try_apply_exam_retake(
     se: StudentExam,
     exam: Exam,
@@ -216,7 +292,7 @@ def try_apply_exam_retake(
 ) -> dict | None:
     """Ban o'rniga qayta topshirish. Imkon yo'q bo'lsa None (keyin ban)."""
     vtype = str(violation_type or "").strip()
-    if not retake_allowed_for_violation(vtype):
+    if not retake_allowed_for_violation(vtype) and not exam_auto_retake_all(exam):
         # Ataylab chiterlik — ikkinchi imkoniyat yo'q. Chaqiruvchi ban qiladi.
         return None
     if vtype == IDENTITY_VIOLATION_TYPE:

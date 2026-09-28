@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+const PERSON_IDENTITY_MONITORING_ENABLED = false;
+const DISABLED_PERSON_SIGNALS = new Set(['IDENTITY_SUBSTITUTION', 'MULTIPLE_FACES']);
+import { CENTER_IGNORED } from '../lib/testCenterPolicy';
 import { AdminBtn, AdminAlert } from './admin/ui';
 import { useServerProctoring } from '../lib/useServerProctoring';
 import { useRealtimeProctoring } from '../lib/useRealtimeProctoring';
@@ -45,6 +48,7 @@ import { SecureText } from '../components/SecureText';
 import { startExtensionWatch } from '../lib/extensionDetect';
 import { captureScreenJpeg, isScreenShareActive, onScreenShareEnded, requestScreenShare, stopScreenShare } from '../lib/screenShare';
 import { getDesktop } from '../lib/desktop';
+import { noteServerDate, serverNow } from '../lib/serverClock';
 import { cleanQuestionPrompt, normalizeQuestionOptions, optionLetter } from '../lib/examQuestionUtils';
 
 // Savol panjarasi izohi (uz/ru/en) — katta i18n fayliga tegmasdan.
@@ -245,7 +249,19 @@ const FORMAL_WARN_AUTOCLOSE_MS = 10000;
  */
 const SPEECH_LEDGER_KEY = 'WHISPER_OR_CONVERSATION_SUSPECTED';
 
-type QTiming = { ms: number; first: number | null; changes: number };
+type QTiming = {
+  ms: number;
+  first: number | null;
+  changes: number;
+  /** Birinchi javobdan oldingi 3 s da kamida 0.7 s chetga qaragan (1). */
+  glance?: number;
+  /** O'sha qarash yo'nalishi. */
+  gdir?: 'L' | 'R';
+  /** Savol ko'rsatilgan vaqtdagi jami chetga qarash (ms) — talabaning odati. */
+  side?: number;
+  /** Savol davomida chetga qarashlar soni (0.7 s dan uzun). */
+  eps?: number;
+};
 
 /** Savollarga sarflangan vaqt — joriy ko'rsatilayotgan savolning jonli vaqti ham qo'shiladi. */
 function buildTimings(acc: Record<string, QTiming>, shown: { id: string; at: number } | null): Record<string, QTiming> {
@@ -361,12 +377,12 @@ function reportPrintScreenViolation(log: (type: string) => void): void {
 function initialSecondsLeft(exam: ExamRoomProps['exam']) {
   if (exam.submission_deadline) {
     const end = new Date(exam.submission_deadline).getTime();
-    const s = Math.floor((end - Date.now()) / 1000);
+    const s = Math.floor((end - serverNow()) / 1000);
     if (!Number.isNaN(end) && s > 0) return s;
   }
   if (!exam.startedAt) return exam.duration_minutes * 60;
   const startedAtTime = new Date(exam.startedAt).getTime();
-  const elapsedSeconds = Math.floor((Date.now() - startedAtTime) / 1000);
+  const elapsedSeconds = Math.floor((serverNow() - startedAtTime) / 1000);
   const totalDurationSeconds = exam.duration_minutes * 60;
   const remaining = totalDurationSeconds - elapsedSeconds;
   return remaining > 0 ? remaining : 0;
@@ -482,6 +498,81 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
   // Har bir savolga sarflangan vaqt (ko'chirish tahlili uchun serverga yuboriladi).
   const qTimingRef = useRef<Record<string, QTiming>>({});
   const qShownRef = useRef<{ id: string; at: number } | null>(null);
+  /** Javobdan oldin chetga qarash naqshi: kadrdan tashqaridagi odam ekranni ko'rib,
+   *  imo-ishora bilan javob ko'rsatsa, talaba deyarli har savolda javobni belgilashdan
+   *  oldin o'sha tomonga qaraydi. Kamera yordamchini ko'rmaydi — naqshni ko'radi. */
+  /** Hozirgi chetga qarash epizodi (yo'nalish + boshlanish vaqti). */
+  const sideEpisodeRef = useRef<{ dir: 'L' | 'R'; since: number } | null>(null);
+  /** Oxirgi YAROQLI (>= 0.7 s) chetga qarash qachon tugagan va qaysi tomonga. */
+  const lastGlanceRef = useRef<{ dir: 'L' | 'R'; end: number } | null>(null);
+  const gazePatternNextRef = useRef(5);
+  const GLANCE_MIN_MS = 700;
+  const GLANCE_WINDOW_MS = 3000;
+  /** Har kadrda: epizodlarni yig'adi, savol bo'yicha jami chetga qarash vaqti va sonini hisoblaydi. */
+  const onSideGazeFrame = (dir: 'L' | 'R' | null) => {
+    if (testCenterRef.current) return;
+    const now = Date.now();
+    const ep = sideEpisodeRef.current;
+    const shown = qShownRef.current;
+    if (ep && ep.dir !== dir) {
+      const len = now - ep.since;
+      if (len >= GLANCE_MIN_MS) {
+        lastGlanceRef.current = { dir: ep.dir, end: now };
+        if (shown) {
+          const r = qTimingRef.current[shown.id] || { ms: 0, first: null, changes: 0 };
+          r.side = (r.side || 0) + len;
+          r.eps = (r.eps || 0) + 1;
+          qTimingRef.current[shown.id] = r;
+        }
+      }
+      sideEpisodeRef.current = null;
+    }
+    if (dir && !sideEpisodeRef.current) sideEpisodeRef.current = { dir, since: now };
+  };
+  /** Birinchi javob: oldingi 3 s da yaroqli chetga qarash bo'lganmi + jonli naqsh tekshiruvi.
+   *  Naqsh talabaning O'Z odati bilan solishtiriladi (server `gaze_answer_assessment` bilan bir xil). */
+  const noteAnswerGlance = (qid: string, r: QTiming) => {
+    if (testCenterRef.current) return;
+    const now = Date.now();
+    const ep = sideEpisodeRef.current;
+    const last = lastGlanceRef.current;
+    let dir: 'L' | 'R' | null = null;
+    if (ep && now - ep.since >= GLANCE_MIN_MS) dir = ep.dir;
+    else if (last && now - last.end <= GLANCE_WINDOW_MS) dir = last.dir;
+    r.glance = dir ? 1 : 0;
+    if (dir) r.gdir = dir;
+    let answered = 0;
+    let glances = 0;
+    let totalMs = 0;
+    let sideMs = 0;
+    let eps = 0;
+    const dirs = { L: 0, R: 0 };
+    const all: Record<string, QTiming> = { ...qTimingRef.current, [qid]: r };
+    for (const v of Object.values(all)) {
+      totalMs += v.ms || 0;
+      sideMs += v.side || 0;
+      eps += v.eps || 0;
+      if (v.first == null) continue;
+      answered += 1;
+      if (v.glance) {
+        glances += 1;
+        if (v.gdir) dirs[v.gdir] += 1;
+      }
+    }
+    if (answered < 8 || glances < gazePatternNextRef.current) return;
+    const rate = glances / answered;
+    const expected = totalMs > 0 ? Math.min(1, (eps / totalMs) * GLANCE_WINDOW_MS + sideMs / totalMs) : 0;
+    const withDir = dirs.L + dirs.R;
+    const sameSide = withDir ? Math.max(dirs.L, dirs.R) / withDir : 0;
+    if (rate >= 0.6 && rate - expected >= 0.35 && sameSide >= 0.75) {
+      gazePatternNextRef.current = glances + 4;
+      const side = dirs.L >= dirs.R ? 'L' : 'R';
+      void logViolationRef.current(
+        'GAZE_ANSWER_PATTERN',
+        `${glances}/${answered} savol, odatiy ${Math.round(expected * 100)}%, ${side} tomonga ${Math.round(sameSide * 100)}%`,
+      );
+    }
+  };
   useEffect(() => {
     sessionStartedRef.current = sessionStarted;
   }, [sessionStarted]);
@@ -625,6 +716,9 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
    */
   const showSmallWarn = useCallback(
     (graceKey: string, violationType: string, text: string) => {
+      // Test markazi: xonada nazoratchi bor — ekranda ogohlantirish chiqmaydi,
+      // hodisalar faqat serverda qayd etiladi va admin panelida ko'rinadi.
+      if (testCenterRef.current) return;
       if (smallWarnOpenRef.current) return; // bitta modal — biri ochiq bo'lsa yangisi kutadi
       if (graceKey === smallWarnKeyRef.current && Date.now() < smallWarnGraceRef.current) return;
       smallWarnKeyRef.current = graceKey;
@@ -701,11 +795,45 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
    *  qurilma imtihonni butunlay bloklab qo'ymasin. Default: TALAB QILINADI. */
   const requireRealtimeEngine =
     String((import.meta as any).env?.VITE_REQUIRE_REALTIME_ENGINE || '') !== '0';
-  const engineRequirementMet = !requireRealtimeEngine || realtimeEngineReady;
+  // Test markazida nazoratchi xonada — engine yuklanishini kutib savollarni
+  // ushlab turish shart emas. Boshqa joylarda ham 25 s dan ortiq kutilmaydi:
+  // engine sekin/yuklanmaydigan kompyuterda imtihon abadiy qotib qolardi.
+  const [engineWaitOver, setEngineWaitOver] = useState(false);
+  const isTestCenter = Boolean(exam?.test_center_mode);
+  const [privacyShield, setPrivacyShield] = useState(false);
+  useEffect(() => {
+    if (!sessionStarted || banned) { setPrivacyShield(false); return; }
+    let holdUntil=0;
+    const hide=() => setPrivacyShield(true);
+    const restore=() => {
+      if (document.hasFocus() && !document.hidden && Date.now()>=holdUntil) setPrivacyShield(false);
+    };
+    const visibility=() => { if (document.hidden) hide(); else restore(); };
+    const screenshot=(e:KeyboardEvent) => {
+      if (isPrintScreenKeyboardEvent(e)) { holdUntil=Date.now()+1500; hide(); }
+    };
+    window.addEventListener('blur',hide);
+    window.addEventListener('focus',restore);
+    document.addEventListener('visibilitychange',visibility);
+    window.addEventListener('keydown',screenshot,true);
+    const timer=window.setInterval(restore,250);
+    return () => {
+      window.removeEventListener('blur',hide); window.removeEventListener('focus',restore);
+      document.removeEventListener('visibilitychange',visibility);
+      window.removeEventListener('keydown',screenshot,true); window.clearInterval(timer);
+    };
+  },[sessionStarted,banned]);
+  const engineRequirementMet =
+    !requireRealtimeEngine || realtimeEngineReady || isTestCenter || engineWaitOver;
 
   const questionsUnlocked =
     engineRequirementMet && (proctorMediaReady || (startMediaGateDone && !mediaLostSustained));
   const showExamMediaGate = Boolean(sessionStarted && !banned && !questionsUnlocked);
+  useEffect(() => {
+    if (!sessionStarted || realtimeEngineReady || engineWaitOver) return;
+    const id = window.setTimeout(() => setEngineWaitOver(true), 25000);
+    return () => window.clearTimeout(id);
+  }, [sessionStarted, realtimeEngineReady, engineWaitOver]);
 
   useEffect(() => {
     if (!sessionStarted || banned) return;
@@ -735,7 +863,14 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
     };
   }, [showExamMediaGate, cameraErrorHint, lang]);
 
+  /** Test markazi rejimi: mikrofon talab qilinmaydi va ovoz tahlil qilinmaydi. */
+  const testCenterRef = useRef(Boolean(exam?.test_center_mode));
+  testCenterRef.current = Boolean(exam?.test_center_mode);
   const syncMicReadyFromStream = useCallback((stream: MediaStream | null | undefined) => {
+    if (testCenterRef.current) {
+      setMicReady(true);
+      return true;
+    }
     const tracks = stream?.getAudioTracks?.() ?? [];
     const live = tracks.some((t) => t.readyState === 'live' && t.enabled);
     setMicReady(live);
@@ -749,6 +884,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
   }, [exam.sessionSeqStart, exam.sessionChallenge, exam.id]);
 
   const syncVacIfOk = (res: Response) => {
+    noteServerDate(res);
     syncVacFromResponse(res.headers, vacStateRef.current);
   };
 
@@ -1862,6 +1998,17 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
         } else {
           stream = await openPreferredProctorStream();
         }
+        if (testCenterRef.current) {
+          // Test markazi: mikrofon umuman ishlatilmaydi — oqimdan olib tashlanadi.
+          for (const tr of stream.getAudioTracks()) {
+            try {
+              tr.stop();
+              stream.removeTrack(tr);
+            } catch {
+              /* ignore */
+            }
+          }
+        }
         streamRef.current = stream;
         setProctorStreamRevision((n) => n + 1);
 
@@ -1960,6 +2107,13 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
         );
         socketRef.current = wsInstance;
 
+        // Test markazi: mikrofon umuman ishlatilmaydi — ovoz izlari o'chiriladi.
+        if (testCenterRef.current) {
+          for (const tr of stream.getAudioTracks()) {
+            tr.stop();
+            stream.removeTrack(tr);
+          }
+        }
         // 2. Setup Audio Analysis (mikrofon izlari bo'lmasa — ovoz tahlilini o'tkazib yuboramiz)
         if (stream.getAudioTracks().length > 0) {
           const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -2119,7 +2273,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
     // `examArmed`: fullscreen'da + media tayyor + engine yuklangan. Ilgari bu
     // sikl sessiya boshlanishi bilan ishlardi va ovoz ogohlantirishlari
     // to'liq-ekran qoplamasi ustiga chiqib kelardi.
-    if (!examArmed) return;
+    if (!examArmed || testCenterRef.current) return;
     // analyserRef dependency sifatida ishlamaydi — micReady state orqali qayta ulanamiz.
     if (!micReady) return;
     const analyser = analyserRef.current;
@@ -2286,6 +2440,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
   const micDownContinuousRef = useRef<ContinuousSignalTracker | null>(null);
   useEffect(() => {
     if (!examArmed) return;
+    if (testCenterRef.current) return;
     const graceUntil = Date.now() + 12_000;
     if (!micDownContinuousRef.current) micDownContinuousRef.current = new ContinuousSignalTracker(1000);
     const id = window.setInterval(() => {
@@ -2379,8 +2534,10 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
   const isRawCode = (s: string) => /^[A-Z][A-Z0-9_]{3,}$/.test(s.trim());
 
   const logViolation = async (type: string, note?: string) => {
+    if (DISABLED_PERSON_SIGNALS.has(type)) return;
     if (bannedRef.current) return;
     if (!sessionStartedRef.current) return;
+    if (testCenterRef.current && CENTER_IGNORED.has(type)) return;
 
     // Server strict VAC da shu turlarni DARHOL to'xtatadi (ogohlantirishsiz).
     // Ro'yxat backend'dagi PROCTOR_INSTANT_BAN_VIOLATIONS bilan bir xil bo'lishi
@@ -2388,7 +2545,6 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
     // umuman yetib bormaydi — ya'ni ogohlantirish oynasini ochiq qoldirib
     // telefonga qarab o'tirish mumkin bo'lib qolardi.
     const INSTANT_BAN_TYPES = new Set([
-      'IDENTITY_SUBSTITUTION',
       'FORBIDDEN_OBJECT_CELL_PHONE',
       'FORBIDDEN_OBJECT_LAPTOP',
       'FORBIDDEN_OBJECT_BOOK',
@@ -2453,7 +2609,8 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
     try {
       const v = videoRef.current;
       if (v && v.readyState >= 2 && type !== 'PROCTOR_FEED_LOST') {
-        evidence = compressVideoFrameToJpeg(v, 0.6, 320) || '';
+        evidence = compressVideoFrameToJpeg(v, type.startsWith('FORBIDDEN_OBJECT_') ? 0.8 : 0.6,
+          type.startsWith('FORBIDDEN_OBJECT_') ? 960 : 320) || '';
       }
     } catch {
       evidence = '';
@@ -2484,6 +2641,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
         violationReason?: string;
         isFinalWarning?: boolean;
         warningSuppressed?: boolean;
+        reviewOnly?: boolean;
         startupGrace?: boolean;
         officialWarnings?: number;
         mergeWindowSeconds?: number;
@@ -2521,6 +2679,15 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
         return;
       }
 
+      if (data.warningSuppressed && !data.banned) {
+        // Test markazida xonada nazoratchi bor: "ko'rib chiqiladi" turidagi
+        // xabarlar topshiruvchini chalg'itadi va unga hech narsa bildirmaydi —
+        // ular faqat admin paneliga yoziladi.
+        if (data.reviewOnly && data.violationReason && !testCenterRef.current) {
+          showWarningMsg(data.violationReason, 5000);
+        }
+        return;
+      }
       if (data.banned) {
         if (INSTANT_BAN_TYPES.has(type)) setIdentityTerminated(true);
         setViolationWarning(null);
@@ -2922,12 +3089,10 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
       isFrozen: () =>
         Boolean(smallWarnOpenRef.current || warningModalShowingRef.current || bannedRef.current),
       onSmall: (violationType) => {
+        if (testCenterRef.current && violationType === 'FORBIDDEN_OBJECT_LAPTOP') return;
         activeType = violationType;
-        const key = OBJECT_LABEL[violationType] || 'livePhone';
-        const label = withSmallCount(EXAM_L[langRef.current][key], violationType);
-        setObjectLiveLabel(label);
-        noteSmallWarningRef.current(violationType);
-        showSmallWarnRef.current(`o:${violationType}`, violationType, label);
+        setObjectLiveLabel(langRef.current === 'ru' ? 'Проверка предмета…' :
+          langRef.current === 'en' ? 'Checking visible object…' : 'Ko‘ringan buyum tekshirilmoqda…');
       },
       onClear: (violationType) => {
         smallWarningLedgerRef.current.noteCleared(violationType);
@@ -2936,9 +3101,9 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
           setObjectLiveLabel(null);
         }
       },
-      onFormal: (violationType) => {
+      onFormal: (violationType, detail) => {
         formalIssuedFor(violationType);
-        void logViolationRef.current(violationType);
+        void logViolationRef.current(violationType, detail);
       },
     });
     objectProctorRef.current = proctor;
@@ -2988,6 +3153,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
 
   useRealtimeProctoring({
     videoRef,
+    testCenter: isTestCenter,
     streamRevision: proctorStreamRevision,
     eyeBaseline,
     // Motor: fullscreen + media yetarli. Uning tayyorligi `examArmed` ni ochadi.
@@ -2996,16 +3162,19 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
       setRealtimeEngineReady(ok);
       void reportProctorDiag('realtime-proctor', ok, detail);
     },
-    onViolation: (type) => {
+    onViolation: (type, detail) => {
       // Uzluksiz eskalatsiya bo'yicha rasmiy berildi — shu tur hisobi nolga qaytadi.
       formalIssuedFor(type);
-      void logViolationRef.current(type);
+      void logViolationRef.current(type, detail);
     },
     onRecheckIdentity: () => triggerIdentityCheckRef.current(),
-    onFaceStatus: setFaceStatus,
+    onFaceStatus: (status) => setFaceStatus(
+      status === 'MULTIPLE_FACES' || (testCenterRef.current && !['NO_FACE', 'WAITING'].includes(status)) ? 'OK' : status,
+    ),
     onMouthActivity: (active) => {
       mouthActiveRef.current = active;
     },
+    onSideGaze: (dir) => onSideGazeFrame(dir),
     onSmallWarningStage: (types) => {
       // Modal ochiq — nazorat muzlagan: bu kadrda hech narsa sanamaymiz.
       if (smallWarnOpenRef.current) return;
@@ -3014,7 +3183,10 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
       const active = new Set<string>(types.map(liveSignalViolationType));
       for (const key of ALL_LIVE_SIGNAL_VIOLATIONS) {
         // Gapirish video orqali hisoblanMAYDI (Silero audio).
-        if (key === 'MOUTH_MOVEMENT_TALKING') continue;
+        if (DISABLED_PERSON_SIGNALS.has(key) || key === 'MOUTH_MOVEMENT_TALKING' || (testCenterRef.current && CENTER_IGNORED.has(key))) {
+          smallWarningLedgerRef.current.noteCleared(key);
+          continue;
+        }
         if (active.has(key)) noteSmallWarningRef.current(key);
         else smallWarningLedgerRef.current.noteCleared(key);
       }
@@ -3040,6 +3212,10 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
       // Gapirish chip/modal — faqat Silero audio (pastdagi interval).
       if (type === 'TALKING') return;
       const violationType = liveSignalViolationType(type);
+      if (DISABLED_PERSON_SIGNALS.has(violationType) || (testCenterRef.current && CENTER_IGNORED.has(violationType))) {
+        setLiveSignalLabel(null);
+        return;
+      }
       const label = withSmallCount(msg, violationType);
       setLiveSignalLabel(label);
       showSmallWarnRef.current(`v:${type}`, violationType, label);
@@ -3055,7 +3231,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
   const triggerIdentityCheckRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    if (banned || !user.profile_image || !sessionStarted) return;
+    if (!PERSON_IDENTITY_MONITORING_ENABLED || banned || !user.profile_image || !sessionStarted) return;
 
     const setIdStatus = (s: 'idle' | 'checking' | 'ok' | 'fail') => {
       if (identityStatusTimerRef.current !== null) {
@@ -3442,6 +3618,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
         const r = qTimingRef.current[qid] || { ms: 0, first: null, changes: 0 };
         if (r.first == null) {
           r.first = r.ms + (shown && shown.id === qid ? Math.max(0, Date.now() - shown.at) : 0);
+          noteAnswerGlance(qid, r);
         }
         r.changes += 1;
         qTimingRef.current[qid] = r;
@@ -4012,6 +4189,9 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
 
   return (
     <div className="h-[100dvh] flex flex-col bg-gray-50 overflow-hidden select-none">
+      {privacyShield && <div className="fixed inset-0 z-[20000] flex items-center justify-center bg-slate-950 text-white" role="alert">
+        {lang==='ru' ? 'Вернитесь в окно экзамена' : lang==='en' ? 'Return to the exam window' : 'Imtihon oynasiga qayting'}
+      </div>}
       {/* ── Majburiy fullscreen qoplamasi ──
           Savollarni to'sib turadi: fullscreen'siz imtihon davom etmaydi.
           Matn ikki xil: birinchi kirishda neytral ("boshlash"), keyin esa
@@ -4279,13 +4459,15 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
                           <span className={`w-1.5 h-1.5 rounded-full ${cameraPreviewOk ? 'bg-emerald-500' : 'bg-gray-400 animate-pulse'}`} />
                           {cameraPreviewOk ? t.preExamCameraActive : t.examCameraLoadingPreview}
                         </span>
+                        {!isTestCenter && (
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${micReady ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${micReady ? 'bg-emerald-500' : 'bg-gray-400 animate-pulse'}`} />
                           {micReady ? t.preExamMicActive : t.preExamMicInactive}
                         </span>
+                        )}
                         {/* Nazorat tizimi (MediaPipe) — imtihon shu tayyor bo'lguncha
                             ochilmaydi. Talaba nima kutilayotganini ko'rib tursin. */}
-                        {requireRealtimeEngine && (
+                        {requireRealtimeEngine && !isTestCenter && (
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${realtimeEngineReady ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${realtimeEngineReady ? 'bg-emerald-500' : 'bg-gray-400 animate-pulse'}`} />
                             {realtimeEngineReady ? EXAM_L[lang].engineReady : EXAM_L[lang].engineLoading}
@@ -4396,6 +4578,7 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
                         const r = qTimingRef.current[qid] || { ms: 0, first: null, changes: 0 };
                         if (r.first == null) {
                           r.first = r.ms + (shown && shown.id === qid ? Math.max(0, Date.now() - shown.at) : 0);
+          noteAnswerGlance(qid, r);
                         }
                         r.changes += 1;
                         qTimingRef.current[qid] = r;

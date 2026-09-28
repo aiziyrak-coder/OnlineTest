@@ -1,15 +1,128 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { apiUrl } from '../lib/apiUrl';
 import { authHeaders } from '../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../lib/http';
 import { translations, Language } from '../i18n';
-import { motion, AnimatePresence } from 'motion/react';
 import { LiveMonitor } from '../components/LiveMonitor';
 import { ExamEditModal } from '../components/ExamEditModal';
-import { AdminBtn, AdminSelect, AdminEmpty, AdminPagination, usePagedList } from './admin/ui';
+import { AdminBtn, AdminEmpty, AdminInput, AdminModal, AdminPagination, AdminSelect, usePagedList } from './admin/ui';
 
-const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } };
-const item: any = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 26 } } };
+/*
+ * Imtihonlar ro'yxati — jadval ko'rinishi.
+ *
+ * Ilgari har imtihon katta kartochka edi (sahifaga 6 ta sig'ardi) va 100+
+ * imtihon orasidan keraklisini topish qiyin edi. Endi: holat tablari
+ * (soni bilan), toifa chiplari, qidiruv, saralash va ixcham qatorlar.
+ * Natijalar tanlangan imtihon ostida emas, alohida panelda — ro'yxat
+ * joyidan siljimaydi.
+ *
+ * Staff portal ham shu komponentni ishlatadi (apiVariant="staff"): u yerda
+ * tahrirlash/savollar yo'q va eksport CSV (xlsx endpointi faqat admin).
+ */
+
+type TimeStatus = 'upcoming' | 'live' | 'ended';
+
+const CARD =
+  'rounded-2xl bg-white border border-gray-200 shadow-[0_1px_2px_rgba(13,27,42,0.04),0_8px_24px_-16px_rgba(13,27,42,0.10)]';
+
+const AUD_ORDER = ['student', 'faculty', 'ordinator', 'magistr', 'entrant', 'vacancy'];
+
+const TX = {
+  uz: {
+    aud: { student: 'Talabalar', faculty: "O'qituvchilar", ordinator: 'Ordinatorlar', magistr: 'Magistrlar', entrant: 'Maxsus kiruvchilar', vacancy: 'Nomzodlar' } as Record<string, string>,
+    all: 'Barchasi', live: 'Jonli', upcoming: 'Kelgusi', ended: 'Tugagan', allAud: 'Barcha toifalar',
+    search: 'Nomi, kafedra yoki fan', title: 'Imtihon', when: 'Vaqti', audience: 'Toifa', params: 'Parametrlar',
+    min: 'daq', q: 'savol', ai: 'AI', course: 'kurs', sortNew: 'Yangilari avval', sortOld: 'Eskilari avval', sortSoon: 'Yaqinlashayotgan',
+    monitor: 'Jonli kuzatuv', results: 'Natijalar', edit: 'Tahrirlash', questions: 'Savollar', more: 'Yana',
+    found: 'ta imtihon', refresh: 'Yangilash', empty: "Filtr bo'yicha imtihon yo'q.",
+    rTitle: 'Natijalar', rTotal: 'Jami', rDone: 'Topshirdi', rAvg: "O'rtacha ball", rBanned: 'Chetlatildi', rReview: "Ko'rib chiqish kerak",
+    rAllSt: 'Barcha holatlar', onlyReview: "Faqat ko'rib chiqiladiganlar", export: 'Excel', close: 'Yopish',
+    name: 'F.I.Sh.', score: 'Ball', time: 'Vaqt', risk: 'Xavf', viol: 'Qoidabuzarlik', status: 'Holat',
+    details: 'Tafsilot', retake: 'Qayta ruxsat', retakeConfirm: 'Bu kishiga imtihonni qayta topshirishga ruxsat berilsinmi?',
+    incorrect: "Noto'g'ri javoblar", timeline: "Savollar bo'yicha xavf", violations: 'Qoidabuzarliklar', flagged: 'Belgilangan',
+    noResults: "Natija yo'q.", student: 'Javobi', correct: "To'g'ri", langPending: 'tarjima kutilmoqda', langReady: '{n}/3 til',
+  },
+  ru: {
+    aud: { student: 'Студенты', faculty: 'Преподаватели', ordinator: 'Ординаторы', magistr: 'Магистранты', entrant: 'Спец. поступающие', vacancy: 'Кандидаты' } as Record<string, string>,
+    all: 'Все', live: 'Идут', upcoming: 'Предстоящие', ended: 'Завершённые', allAud: 'Все категории',
+    search: 'Название, кафедра или предмет', title: 'Экзамен', when: 'Время', audience: 'Категория', params: 'Параметры',
+    min: 'мин', q: 'вопр.', ai: 'ИИ', course: 'курс', sortNew: 'Сначала новые', sortOld: 'Сначала старые', sortSoon: 'Ближайшие',
+    monitor: 'Мониторинг', results: 'Результаты', edit: 'Изменить', questions: 'Вопросы', more: 'Ещё',
+    found: 'экзаменов', refresh: 'Обновить', empty: 'Нет экзаменов по фильтру.',
+    rTitle: 'Результаты', rTotal: 'Всего', rDone: 'Сдали', rAvg: 'Средний балл', rBanned: 'Отстранены', rReview: 'Требуют проверки',
+    rAllSt: 'Все статусы', onlyReview: 'Только на проверку', export: 'Excel', close: 'Закрыть',
+    name: 'Ф.И.О.', score: 'Балл', time: 'Время', risk: 'Риск', viol: 'Нарушения', status: 'Статус',
+    details: 'Подробнее', retake: 'Разрешить пересдачу', retakeConfirm: 'Разрешить этому человеку пересдать экзамен?',
+    incorrect: 'Неверные ответы', timeline: 'Риск по вопросам', violations: 'Нарушения', flagged: 'Отмечено',
+    noResults: 'Нет результатов.', student: 'Ответ', correct: 'Верно', langPending: 'ожидает перевода', langReady: '{n}/3 языка',
+  },
+  en: {
+    aud: { student: 'Students', faculty: 'Teachers', ordinator: 'Residents', magistr: 'Master students', entrant: 'Special entrants', vacancy: 'Applicants' } as Record<string, string>,
+    all: 'All', live: 'Live', upcoming: 'Upcoming', ended: 'Ended', allAud: 'All groups',
+    search: 'Title, department or subject', title: 'Exam', when: 'When', audience: 'Group', params: 'Setup',
+    min: 'min', q: 'q', ai: 'AI', course: 'year', sortNew: 'Newest first', sortOld: 'Oldest first', sortSoon: 'Starting soon',
+    monitor: 'Live monitor', results: 'Results', edit: 'Edit', questions: 'Questions', more: 'More',
+    found: 'exams', refresh: 'Refresh', empty: 'No exams match the filter.',
+    rTitle: 'Results', rTotal: 'Total', rDone: 'Completed', rAvg: 'Average score', rBanned: 'Banned', rReview: 'Needs review',
+    rAllSt: 'All statuses', onlyReview: 'Needs review only', export: 'Excel', close: 'Close',
+    name: 'Full name', score: 'Score', time: 'Time', risk: 'Risk', viol: 'Violations', status: 'Status',
+    details: 'Details', retake: 'Allow retake', retakeConfirm: 'Allow this person to retake the exam?',
+    incorrect: 'Incorrect answers', timeline: 'Risk by question', violations: 'Violations', flagged: 'Flagged',
+    noResults: 'No results.', student: 'Answer', correct: 'Correct', langPending: 'translation pending', langReady: '{n}/3 languages',
+  },
+};
+
+const pad = (n: number) => String(n).padStart(2, '0');
+function fmtDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+function fmtTime(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function timeStatus(e: any): TimeStatus {
+  const now = Date.now();
+  const s = new Date(e.start_time).getTime();
+  const en = new Date(e.end_time).getTime();
+  if (now < s) return 'upcoming';
+  if (now > en) return 'ended';
+  return 'live';
+}
+function parseList(raw: unknown): any[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== 'string' || !raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function minutesBetween(a?: string | null, b?: string | null): number | null {
+  if (!a || !b) return null;
+  const d = new Date(b).getTime() - new Date(a).getTime();
+  return Number.isFinite(d) && d >= 0 ? d / 60000 : null;
+}
+
+function StatusDot({ st, T }: { st: TimeStatus; T: (typeof TX)['uz'] }) {
+  const map: Record<TimeStatus, string> = {
+    live: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+    upcoming: 'bg-amber-50 text-amber-800 ring-amber-600/20',
+    ended: 'bg-gray-100 text-gray-600 ring-gray-500/10',
+  };
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-semibold ring-1 ${map[st]}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${st === 'live' ? 'bg-emerald-500 animate-pulse' : st === 'upcoming' ? 'bg-amber-500' : 'bg-gray-400'}`} />
+      {st === 'live' ? T.live : st === 'upcoming' ? T.upcoming : T.ended}
+    </span>
+  );
+}
 
 export function AdminExamsTab({
   token,
@@ -20,534 +133,613 @@ export function AdminExamsTab({
   lang: Language;
   apiVariant?: 'admin' | 'staff';
 }) {
+  const t = translations[lang];
+  const T = TX[lang] || TX.uz;
+  const isStaffPortal = apiVariant === 'staff';
+  const examsListUrl = isStaffPortal ? '/api/staff/exams' : '/api/admin/exams';
+  const resultsUrl = (id: number) => (isStaffPortal ? `/api/staff/exams/${id}/results` : `/api/admin/exams/${id}/results`);
+  const h = useMemo(() => authHeaders(token, lang), [token, lang]);
+
   const [exams, setExams] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
-  const [selectedExam, setSelectedExam] = useState<any>(null);
-  const [results, setResults] = useState<any>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('All');
-  const [examListFilter, setExamListFilter] = useState<string>('All');
-  /* Auditoriya filtri: 56 ta imtihon orasidan ordinator imtihonini
-     topish uchun. Ilgari ro'yxatda imtihon KIM UCHUN ekani umuman
-     ko'rsatilmasdi -- sarlavhadan taxmin qilishga to'g'ri kelardi. */
-  const [audienceFilter, setAudienceFilter] = useState<string>('All');
-  const AUD_LABEL: Record<string, string> = {
-    student: lang === 'ru' ? 'Studenty' : lang === 'en' ? 'Students' : 'Talabalar',
-    faculty: lang === 'ru' ? 'Prepodavateli' : lang === 'en' ? 'Teachers' : "O'qituvchilar",
-    ordinator: lang === 'ru' ? 'Ordinatory' : lang === 'en' ? 'Residents' : 'Ordinatorlar',
-    magistr: lang === 'ru' ? 'Magistry' : lang === 'en' ? 'Masters' : 'Magistrlar',
-    vacancy: lang === 'ru' ? 'Kandidaty' : lang === 'en' ? 'Applicants' : 'Nomzodlar',
-  };
-  const [recommendedOnly, setRecommendedOnly] = useState(false);
+  const [kafedraNames, setKafedraNames] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [stF, setStF] = useState<'all' | TimeStatus>('all');
+  const [audF, setAudF] = useState('');
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<'new' | 'old' | 'soon'>('new');
+
   const [activeMonitorExamId, setActiveMonitorExamId] = useState<number | null>(null);
   const [editingExamId, setEditingExamId] = useState<number | null>(null);
   const [questionsExamId, setQuestionsExamId] = useState<number | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [kafedraNames, setKafedraNames] = useState<Record<number, string>>({});
-  const t = translations[lang];
-  const statusLabel = (status?: string | null) =>
-    status === 'Completed' ? t.examStatusCompleted
-      : status === 'Banned' ? t.examStatusBanned
-      : status === 'Failed' ? t.examStatusFailed
-      : status === 'In Progress' ? t.examStatusInProgress
-      : status === 'Pending' ? t.examStatusPending
-      : (status || '');
-  const examsListUrl = apiVariant === 'staff' ? '/api/staff/exams' : '/api/admin/exams';
-  const resultsUrl = (examId: number) => apiVariant === 'staff' ? `/api/staff/exams/${examId}/results` : `/api/admin/exams/${examId}/results`;
-  const isStaffPortal = apiVariant === 'staff';
+
+  const [selectedExam, setSelectedExam] = useState<number | null>(null);
+  const [results, setResults] = useState<any>(null);
+  const [resLoading, setResLoading] = useState(false);
+  const [rStatus, setRStatus] = useState('All');
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const [rSort, setRSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' });
+  const [openRow, setOpenRow] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const statusLabel = (s?: string | null) =>
+    s === 'Completed' ? t.examStatusCompleted
+      : s === 'Banned' ? t.examStatusBanned
+      : s === 'Failed' ? t.examStatusFailed
+      : s === 'In Progress' ? t.examStatusInProgress
+      : s === 'Pending' ? t.examStatusPending
+      : (s || '');
 
   const fetchExams = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true);
-    const res = await fetch(apiUrl(examsListUrl), { headers: authHeaders(token, lang) });
-    if (!checkAdminAuthResponse(res)) { if (manual) setRefreshing(false); return; }
-    if (res.ok) { const raw = await readJsonSafe<unknown>(res); setExams(Array.isArray(raw) ? raw : []); }
-    if (manual) setRefreshing(false);
-  }, [token, examsListUrl]);
+    try {
+      const res = await fetch(apiUrl(examsListUrl), { headers: h });
+      if (!checkAdminAuthResponse(res)) return;
+      if (res.ok) {
+        const raw = await readJsonSafe<unknown>(res);
+        setExams(Array.isArray(raw) ? raw : []);
+      }
+    } finally {
+      setLoading(false);
+      if (manual) setRefreshing(false);
+    }
+  }, [examsListUrl, h]);
 
-  const fetchGroups = useCallback(async () => {
-    if (isStaffPortal) return;
-    const res = await fetch(apiUrl('/api/admin/groups'), { headers: authHeaders(token, lang) });
-    if (!checkAdminAuthResponse(res)) return;
-    if (res.ok) { const raw = await readJsonSafe<unknown>(res); setGroups(Array.isArray(raw) ? raw : []); }
-  }, [token, isStaffPortal]);
-
-  useEffect(() => { void fetchExams(); void fetchGroups(); }, [fetchExams, fetchGroups]);
+  useEffect(() => { void fetchExams(); }, [fetchExams]);
 
   useEffect(() => {
     if (isStaffPortal) return;
     (async () => {
       try {
-        const r = await fetch(apiUrl('/api/admin/kafedralar'), { headers: authHeaders(token, lang) });
-        if (!r.ok) return;
-        const raw = await readJsonSafe<any>(r);
-        const list = Array.isArray(raw) ? raw : (raw && raw.results) || [];
-        const map: Record<number, string> = {};
-        list.forEach((k: any) => { map[Number(k.id)] = String(k.name || ''); });
-        setKafedraNames(map);
-      } catch { /* kafedra nomlari ko'rsatish uchun -- xato bo'lsa jim o'tamiz */ }
+        const [rg, rk] = await Promise.all([
+          fetch(apiUrl('/api/admin/groups'), { headers: h }),
+          fetch(apiUrl('/api/admin/kafedralar'), { headers: h }),
+        ]);
+        if (rg.ok) {
+          const g = await readJsonSafe<unknown>(rg);
+          setGroups(Array.isArray(g) ? g : []);
+        }
+        if (rk.ok) {
+          const raw = await readJsonSafe<any>(rk);
+          const list = Array.isArray(raw) ? raw : (raw && raw.results) || [];
+          const map: Record<number, string> = {};
+          list.forEach((k: any) => { map[Number(k.id)] = String(k.name || ''); });
+          setKafedraNames(map);
+        }
+      } catch {
+        /* nomlarsiz ham ishlaydi */
+      }
     })();
-  }, [token, lang, isStaffPortal]);
+  }, [h, isStaffPortal]);
 
+  /* ── Ro'yxat filtrlari ─────────────────────────────────────────────────── */
+  const byAud = useMemo(() => exams.filter((e) => !audF || String(e.audience || 'student') === audF), [exams, audF]);
+  const counts = useMemo(() => {
+    const c = { all: byAud.length, live: 0, upcoming: 0, ended: 0 };
+    byAud.forEach((e) => { c[timeStatus(e)] += 1; });
+    return c;
+  }, [byAud]);
+  const audiences = useMemo(() => {
+    const present = new Map<string, number>();
+    exams.forEach((e) => {
+      const a = String(e.audience || 'student');
+      present.set(a, (present.get(a) || 0) + 1);
+    });
+    return AUD_ORDER.filter((a) => present.has(a)).map((a) => ({ id: a, n: present.get(a) || 0 }));
+  }, [exams]);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const list = byAud.filter((e) => {
+      if (stF !== 'all' && timeStatus(e) !== stF) return false;
+      if (!needle) return true;
+      const hay = [e.title, e.faculty_subject, kafedraNames[Number(e.kafedra_id)], e.teacher_name].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(needle);
+    });
+    const ts = (e: any) => new Date(e.start_time).getTime() || 0;
+    if (sort === 'old') list.sort((a, b) => ts(a) - ts(b));
+    else if (sort === 'soon') {
+      const now = Date.now();
+      list.sort((a, b) => Math.abs(ts(a) - now) - Math.abs(ts(b) - now));
+    } else list.sort((a, b) => ts(b) - ts(a));
+    return list;
+  }, [byAud, stF, q, sort, kafedraNames]);
+
+  const examPage = usePagedList(filtered, 25);
+  const selected = exams.find((e) => e.id === selectedExam) || null;
+
+  /* ── Natijalar ───────────────────────────────────────────────────────── */
   const viewResults = async (examId: number) => {
-    const res = await fetch(apiUrl(resultsUrl(examId)), { headers: authHeaders(token, lang) });
-    if (!checkAdminAuthResponse(res)) return;
-    if (res.ok) {
-      const raw = await readJsonSafe<unknown>(res);
-      setResults(raw && typeof raw === 'object' ? raw : null);
-      setSelectedExam(examId);
-      setSortConfig(null);
-      setFilterStatus('All');
-      setRecommendedOnly(false);
-    }
-  };
-
-  const allowRetake = async (studentExamId: number) => {
-    const retakeRes = await fetch(apiUrl(`/api/admin/student_exams/${studentExamId}/retake`), {
-      method: 'POST', headers: authHeaders(token, lang),
-    });
-    if (!checkAdminAuthResponse(retakeRes)) return;
-    if (selectedExam != null) viewResults(selectedExam);
-  };
-
-  const exportCSV = () => {
-    if (!results?.results) return;
-    const exam = exams.find((e: any) => e.id === selectedExam) as any;
-    const headers = ['Student ID', 'Student Name', 'Score', 'Status', 'Started At', 'Completed At', 'Violations'];
-    const rows = results.results.map((r: any) => {
-      const violations = results.violations.filter((v: any) => v.student_id === r.student_id);
-      const violText = violations.map((v: any) => `${v.violation_type} (${new Date(v.timestamp).toLocaleTimeString()})`).join('; ');
-      return [r.student_id, r.name, r.score ?? '-', r.status, r.started_at ? new Date(r.started_at).toLocaleString() : '-', r.completed_at ? new Date(r.completed_at).toLocaleString() : '-', `"${violText}"`];
-    });
-    const csv = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
-    const link = document.createElement('a');
-    link.href = encodeURI(csv);
-    link.download = `exam_${exam?.title || selectedExam}_results.csv`;
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
-
-  const handleSort = (key: string) => {
-    setSortConfig((prev) => ({ key, direction: prev?.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }));
-  };
-
-  const getSortedAndFilteredResults = () => {
-    if (!results?.results) return [];
-    let filtered = results.results;
-    if (filterStatus !== 'All') filtered = filtered.filter((r: any) => r.status === filterStatus);
-    if (recommendedOnly) filtered = filtered.filter((r: any) => Boolean(r.recommended_review));
-    if (sortConfig) {
-      filtered = [...filtered].sort((a: any, b: any) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-    return filtered;
-  };
-
-  const calculateTimeTaken = (start: string, end: string) => {
-    if (!start || !end) return '-';
-    const diff = new Date(end).getTime() - new Date(start).getTime();
-    return `${Math.floor(diff / 60000)}m ${Math.floor((diff % 60000) / 1000)}s`;
-  };
-
-  const getIncorrectAnswers = (answersJson: string, questionsJson: string) => {
-    if (!answersJson || !questionsJson) return [];
+    setSelectedExam(examId);
+    setResults(null);
+    setResLoading(true);
+    setRStatus('All');
+    setReviewOnly(false);
+    setOpenRow(null);
     try {
-      const answers = JSON.parse(answersJson) as Record<string, string>;
-      const questions = JSON.parse(questionsJson) as Array<{ id: number | string; text?: string; correctAnswer?: string }>;
-      if (!answers || typeof answers !== 'object' || !Array.isArray(questions)) return [];
-      const incorrect: any[] = [];
-      questions.forEach((q: any) => {
-        const qid = String(q.id ?? '');
-        if (!qid) return;
-        const studentAnswer = answers[qid] ?? answers[String(Number(qid))];
-        if (studentAnswer !== q.correctAnswer) incorrect.push({ question: q.text, studentAnswer, correctAnswer: q.correctAnswer });
-      });
-      return incorrect;
-    } catch { return []; }
-  };
-
-  const getFlaggedCount = (flaggedJson: string) => {
-    if (!flaggedJson) return 0;
-    try { const p = JSON.parse(flaggedJson); return Array.isArray(p) ? p.length : 0; } catch { return 0; }
-  };
-
-  const ExamStatusBadge = ({ e }: { e: any }) => {
-    const status = getExamTimeStatus(e);
-    if (status === 'upcoming') return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{t.examListUpcoming}</span>;
-    if (status === 'ended') return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{t.examListEnded}</span>;
-    return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 animate-pulse">{t.examListLive}</span>;
-  };
-
-  const getExamTimeStatus = (e: any): 'upcoming' | 'live' | 'ended' => {
-    const now = Date.now();
-    const start = new Date(e.start_time).getTime();
-    const end = new Date(e.end_time).getTime();
-    if (now < start) return 'upcoming';
-    if (now > end) return 'ended';
-    return 'live';
-  };
-
-  const filteredExams = exams.filter((e) => {
-    if (audienceFilter !== 'All' && String(e.audience || 'student') !== audienceFilter) {
-      return false;
+      const res = await fetch(apiUrl(resultsUrl(examId)), { headers: h });
+      if (!checkAdminAuthResponse(res)) return;
+      if (res.ok) {
+        const raw = await readJsonSafe<unknown>(res);
+        setResults(raw && typeof raw === 'object' ? raw : null);
+      }
+    } finally {
+      setResLoading(false);
     }
-    if (examListFilter === 'All') return true;
-    const st = getExamTimeStatus(e);
-    if (examListFilter === 'Upcoming') return st === 'upcoming';
-    if (examListFilter === 'Live') return st === 'live';
-    if (examListFilter === 'Ended') return st === 'ended';
-    return true;
-  });
-  const examPage = usePagedList(filteredExams);
+  };
+
+  const allowRetake = async (seId: number) => {
+    if (!window.confirm(T.retakeConfirm)) return;
+    const res = await fetch(apiUrl(`/api/admin/student_exams/${seId}/retake`), { method: 'POST', headers: h });
+    if (!checkAdminAuthResponse(res)) return;
+    if (selectedExam != null) void viewResults(selectedExam);
+  };
+
+  const rows = useMemo(() => {
+    const list: any[] = Array.isArray(results?.results) ? results.results : [];
+    const viol: any[] = Array.isArray(results?.violations) ? results.violations : [];
+    const examTotal = Number(selected?.bank_question_count || 0);
+    return list.map((r) => {
+      const qs = parseList(r.session_questions_json).length || parseList(r.questions_json).length || parseList(results?.questions_json).length;
+      const total = qs || examTotal;
+      const pct = r.score != null && total ? Math.round((Number(r.score) / total) * 100) : null;
+      return {
+        ...r,
+        _total: total,
+        _pct: pct,
+        _min: minutesBetween(r.started_at, r.completed_at),
+        _viol: viol.filter((v) => v.student_id === r.student_id),
+      };
+    });
+  }, [results, selected]);
+
+  const rStats = useMemo(() => {
+    const done = rows.filter((r) => r.status === 'Completed');
+    const pcts = done.map((r) => r._pct).filter((p): p is number => p != null);
+    return {
+      total: rows.length,
+      done: done.length,
+      avg: pcts.length ? Math.round(pcts.reduce((s, x) => s + x, 0) / pcts.length) : null,
+      banned: rows.filter((r) => r.status === 'Banned').length,
+      review: rows.filter((r) => r.recommended_review).length,
+    };
+  }, [rows]);
+
+  const shownRows = useMemo(() => {
+    let list = rows;
+    if (rStatus !== 'All') list = list.filter((r) => r.status === rStatus);
+    if (reviewOnly) list = list.filter((r) => r.recommended_review);
+    const get: Record<string, (r: any) => string | number> = {
+      name: (r) => String(r.name || ''),
+      score: (r) => (r._pct ?? -1),
+      risk: (r) => Number(r.risk_score || 0),
+      viol: (r) => r._viol.length,
+      time: (r) => (r._min ?? -1),
+    };
+    const g = get[rSort.key] || get.name;
+    const mul = rSort.dir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const x = g(a);
+      const y = g(b);
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * mul;
+    });
+  }, [rows, rStatus, reviewOnly, rSort]);
+
+  const incorrectOf = (r: any) => {
+    try {
+      const answers = JSON.parse(r.answers_json || '{}') as Record<string, string>;
+      const questions = parseList(r.session_questions_json).length ? parseList(r.session_questions_json) : parseList(r.questions_json || results?.questions_json);
+      return questions
+        .filter((qq: any) => {
+          const id = String(qq?.id ?? '');
+          if (!id) return false;
+          const a = answers[id] ?? answers[String(Number(id))];
+          return a !== qq.correctAnswer;
+        })
+        .map((qq: any) => {
+          const id = String(qq.id);
+          return { question: qq.text, studentAnswer: answers[id] ?? answers[String(Number(id))], correctAnswer: qq.correctAnswer };
+        });
+    } catch {
+      return [];
+    }
+  };
+
+  const exportResults = async () => {
+    if (!selected) return;
+    const columns = ['№', T.name, 'Login', T.status, T.score, '%', T.time, T.risk, T.viol];
+    const data = shownRows.map((r, i) => [
+      i + 1, r.name, r.student_id, statusLabel(r.status),
+      r.score != null ? `${r.score}/${r._total || '?'}` : '', r._pct ?? '',
+      r._min != null ? Math.round(r._min) : '', Number(r.risk_score || 0),
+      r._viol.map((v: any) => v.violation_type).join(', '),
+    ]);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const base = String(selected.title || 'imtihon').replace(/[^\w\-]+/g, '_').slice(0, 60);
+    if (isStaffPortal) {
+      const esc = (v: unknown) => {
+        const s = String(v ?? '');
+        return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const csv = '﻿' + [columns, ...data].map((r) => r.map(esc).join(';')).join('\r\n');
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = `${base}-${stamp}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    }
+    setExporting(true);
+    try {
+      const res = await fetch(apiUrl('/api/admin/reports/xlsx'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...h },
+        body: JSON.stringify({ title: selected.title, filename: `${base}-${stamp}.xlsx`, sheets: [{ title: T.rTitle, columns, rows: data }] }),
+      });
+      if (!checkAdminAuthResponse(res) || !res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${base}-${stamp}.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /* ── Ko'rinish ───────────────────────────────────────────────────────── */
+  const statTabs: Array<['all' | TimeStatus, string, number]> = [
+    ['all', T.all, counts.all],
+    ['live', T.live, counts.live],
+    ['upcoming', T.upcoming, counts.upcoming],
+    ['ended', T.ended, counts.ended],
+  ];
+
+  const RSortTh = ({ k, label, right = false }: { k: string; label: string; right?: boolean }) => {
+    const on = rSort.key === k;
+    return (
+      <th className={`px-3 py-2.5 font-semibold ${right ? 'text-right' : 'text-left'}`}>
+        <button
+          type="button"
+          onClick={() => setRSort({ key: k, dir: on && rSort.dir === 'desc' ? 'asc' : on ? 'desc' : k === 'name' ? 'asc' : 'desc' })}
+          className={`inline-flex items-center gap-1 hover:text-gray-900 ${on ? 'text-gray-900' : ''}`}
+        >
+          {label}
+          <span className={`text-[10px] ${on ? 'text-indigo-600' : 'text-gray-300'}`}>{on ? (rSort.dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+        </button>
+      </th>
+    );
+  };
+
+  const td = 'px-4 py-3 border-b border-gray-100 align-top';
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-5">
-      {/* ── Exams list ── */}
-      <motion.div variants={item}>
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center shrink-0">
-                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-[15px] font-semibold text-gray-900">{isStaffPortal ? t.staffMyExamsTitle : t.exams}</h2>
-                <p className="text-[12px] text-gray-400 mt-0.5">
-                  {filteredExams.length}
-                  {examListFilter !== 'All' ? ` / ${exams.length}` : ''}{' '}
-                  {t.examsCountLabel}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <AdminSelect
-                value={examListFilter}
-                onChange={(e) => setExamListFilter(e.target.value)}
-                className="h-9 w-full sm:w-auto min-w-[9rem] text-[13px]"
+    <div className="space-y-5">
+      <section className={`${CARD} overflow-hidden`}>
+        {/* Holat tablari */}
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 px-3 sm:px-4">
+          <div className="-mb-px flex overflow-x-auto" role="tablist">
+            {statTabs.map(([k, label, n]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={stF === k}
+                onClick={() => setStF(k)}
+                className={`whitespace-nowrap border-b-2 px-3 py-3.5 text-[13.5px] font-semibold transition-colors ${
+                  stF === k ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
               >
-                <option value="All">{t.examFilterAll}</option>
-                <option value="Upcoming">{t.examFilterUpcoming}</option>
-                <option value="Live">{t.examFilterLive}</option>
-                <option value="Ended">{t.examFilterEnded}</option>
-              </AdminSelect>
-              <AdminSelect
-                value={audienceFilter}
-                onChange={(e) => setAudienceFilter(e.target.value)}
-                className="h-9 w-full sm:w-auto min-w-[10rem] text-[13px]"
-              >
-                <option value="All">
-                  {lang === 'ru' ? 'Vse auditorii' : lang === 'en' ? 'All audiences' : 'Barcha auditoriyalar'}
-                </option>
-                {Object.entries(AUD_LABEL).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </AdminSelect>
-              <AdminBtn
-                variant="ghost"
-                size="sm"
-                loading={refreshing}
-                onClick={() => fetchExams(true)}
-                icon={
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                }
-              >
-                <span className="hidden sm:inline">{t.reload}</span>
-              </AdminBtn>
-            </div>
+                {k === 'live' && n > 0 ? <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500 align-middle" /> : null}
+                {label}
+                <span className={`ml-1.5 rounded-full px-1.5 py-px text-[11.5px] tabular-nums ${stF === k ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>{n}</span>
+              </button>
+            ))}
           </div>
-
-          <div className="p-4">
-            {filteredExams.length === 0 ? (
-              <AdminEmpty
-                icon={<svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>}
-                title={isStaffPortal ? t.staffNoExamsHint : t.adminNoExamsYet}
-              />
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {examPage.pageItems.map((e: any, i: number) => (
-                  <motion.div
-                    key={e.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    className={`border rounded-lg p-4 flex flex-col gap-3 transition-colors ${selectedExam === e.id ? 'border-indigo-300 bg-indigo-50/40' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 text-[15px] leading-snug">{e.title}</p>
-                        {(e.faculty_subject || e.kafedra_id) && (
-                          <p className="text-[12px] text-gray-400 mt-0.5 truncate">
-                            {[kafedraNames[Number(e.kafedra_id)], e.faculty_subject]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                          <ExamStatusBadge e={e} />
-                          {(e.exam_mode === 'bank_mixed' || e.exam_mode === 'imentor_mixed') && (
-                            <span className="text-[11px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                              {e.exam_mode === 'imentor_mixed' ? t.imentorExamBadge : t.bankExamBadge}
-                            </span>
-                          )}
-                          <span className="text-[11px] font-semibold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full">
-                            {AUD_LABEL[String(e.audience || 'student')] || e.audience}
-                          </span>
-                          <span className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium uppercase">{e.language}</span>
-                          {e.language === 'auto' && e.languages_ready != null && (
-                            <span
-                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                                e.languages_ready >= 3
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : e.languages_ready > 0
-                                    ? 'bg-amber-100 text-amber-700'
-                                    : 'bg-red-100 text-red-700'
-                              }`}
-                            >
-                              {e.languages_ready > 0
-                                ? t.examLangReadyLabel.replace('{n}', String(e.languages_ready))
-                                : t.examLangPendingLabel}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                        <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">{t.startTime}</p>
-                        <p className="text-[12px] text-gray-700 font-medium">{new Date(e.start_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                        <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">{t.endTime}</p>
-                        <p className="text-[12px] text-gray-700 font-medium">{new Date(e.end_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5 border border-gray-200">
-                        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span className="text-[12px] text-gray-600 font-semibold">{e.duration_minutes} min</span>
-                      </div>
-                      {e.bank_question_count > 0 && (
-                        <div className="bg-indigo-50 rounded-lg px-2.5 py-1.5 border border-indigo-100">
-                          <span className="text-[12px] text-indigo-700 font-semibold">{e.bank_question_count} {t.questionsShort}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2 mt-auto pt-2 border-t border-gray-100">
-                      <AdminBtn variant="ghost" size="sm" onClick={() => setActiveMonitorExamId(e.id)} className="flex-1 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        {t.monitorBtn}
-                      </AdminBtn>
-                      <AdminBtn variant={selectedExam === e.id ? 'violet' : 'ghost'} size="sm" onClick={() => viewResults(e.id)} className="flex-1">
-                        {t.results}
-                      </AdminBtn>
-                      {!isStaffPortal && (
-                        <AdminBtn variant="ghost" size="sm" onClick={() => setEditingExamId(e.id)} className="flex-1">
-                          {t.edit}
-                        </AdminBtn>
-                      )}
-                    </div>
-                    {!isStaffPortal && (
-                      <AdminBtn
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setQuestionsExamId(e.id)}
-                        className="w-full mt-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                      >
-                        {qtext(lang).button}
-                      </AdminBtn>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-            )}
+          <div className="flex items-center gap-2 py-2">
+            <AdminBtn variant="ghost" size="sm" loading={refreshing} onClick={() => fetchExams(true)}>{T.refresh}</AdminBtn>
           </div>
-          <AdminPagination
-            page={examPage.page}
-            totalPages={examPage.totalPages}
-            onPageChange={examPage.setPage}
-            total={examPage.total}
-            pageSize={examPage.pageSize}
-          />
         </div>
-      </motion.div>
 
-      {/* ── Results panel ── */}
-      <AnimatePresence mode="wait">
-        {results && (
-          <motion.div
-            key="results"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          >
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-[15px] font-semibold text-gray-900">{t.results}</h2>
-                    {results?.review_priority_counts && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <span className="text-[12px] px-2.5 py-1 rounded-full border border-red-200 bg-red-50 text-red-700 font-semibold">Critical: {results.review_priority_counts.critical || 0}</span>
-                        <span className="text-[12px] px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-semibold">High: {results.review_priority_counts.high || 0}</span>
-                        <span className="text-[12px] px-2.5 py-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold">Medium: {results.review_priority_counts.medium || 0}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <AdminSelect value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="h-9 text-[13px] w-full sm:w-[150px]">
-                      <option value="All">{t.examStatusAll}</option>
-                      <option value="Completed">{t.examStatusCompleted}</option>
-                      <option value="Pending">{t.examStatusPending}</option>
-                      <option value="Banned">{t.examStatusBanned}</option>
-                    </AdminSelect>
-                    <div className="flex flex-wrap gap-1 bg-white border border-gray-200 p-1 rounded-xl">
-                      {['score', 'name', 'risk_score'].map((key) => (
-                        <button key={key} type="button" onClick={() => handleSort(key)}
-                          className={`px-2.5 py-1 text-[12px] font-semibold rounded-lg transition-colors ${sortConfig?.key === key ? 'bg-indigo-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`}>
-                          {key === 'risk_score' ? t.examResultRisk : key === 'score' ? t.examResultScore : t.nameColumn}
-                          {sortConfig?.key === key && (sortConfig.direction === 'asc' ? ' ↑' : ' ↓')}
-                        </button>
-                      ))}
-                    </div>
-                    <AdminBtn variant={recommendedOnly ? 'violet' : 'ghost'} size="sm" onClick={() => setRecommendedOnly((v) => !v)}>
-                      {t.examResultReview}
-                    </AdminBtn>
-                    {!isStaffPortal && <AdminBtn variant="ghost" size="sm" onClick={exportCSV}>{t.exportCsv}</AdminBtn>}
-                    <AdminBtn variant="ghost" size="sm" onClick={() => { setResults(null); setSelectedExam(null); }}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </AdminBtn>
-                  </div>
-                </div>
-              </div>
+        {/* Toifa + qidiruv + saralash */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3">
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setAudF('')}
+              className={`h-8 rounded-full px-3 text-[12.5px] font-semibold ${!audF ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {T.allAud}
+            </button>
+            {audiences.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setAudF(a.id)}
+                className={`h-8 rounded-full px-3 text-[12.5px] font-semibold ${audF === a.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                {T.aud[a.id] || a.id}
+                <span className={`ml-1 tabular-nums ${audF === a.id ? 'text-white/60' : 'text-gray-400'}`}>{a.n}</span>
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <AdminInput type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={T.search} className="h-9 sm:w-72" />
+            <AdminSelect value={sort} onChange={(e) => setSort(e.target.value as 'new' | 'old' | 'soon')} className="h-9 sm:w-48">
+              <option value="new">{T.sortNew}</option>
+              <option value="soon">{T.sortSoon}</option>
+              <option value="old">{T.sortOld}</option>
+            </AdminSelect>
+          </div>
+        </div>
 
-              <div className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
-                {getSortedAndFilteredResults().map((r: any) => {
-                  const studentViolations = results.violations.filter((v: any) => v.student_id === r.student_id);
-                  const timeTaken = calculateTimeTaken(r.started_at, r.completed_at);
-                  const flaggedCount = getFlaggedCount(r.flagged_questions_json);
-                  const incorrectAnswers = getIncorrectAnswers(r.answers_json, r.questions_json || results.questions_json);
-
-                  return (
-                    <div key={r.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 font-semibold flex items-center justify-center text-[15px] shrink-0">
-                            {r.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900 text-[15px]">{r.name}</h3>
-                            <p className="text-[13px] text-gray-400 font-mono">{r.student_id}</p>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                              {r.recommended_review && <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 font-semibold">{t.reviewBadge}</span>}
-                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">{t.riskLabel}: {r.risk_score ?? 0}</span>
-                              <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium uppercase ${r.highest_priority === 'critical' ? 'bg-red-50 border-red-200 text-red-700' : r.highest_priority === 'high' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
-                                {r.highest_priority === 'critical' ? t.priorityCritical : r.highest_priority === 'high' ? t.priorityHigh : r.highest_priority === 'low' ? t.priorityLow : t.priorityMedium}
+        {/* Jadval */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-[13.5px]">
+            <thead className="bg-gray-50/80 text-[12px] text-gray-500">
+              <tr className="border-b border-gray-200 text-left">
+                <th className="px-4 py-2.5 font-semibold">{T.title}</th>
+                <th className="px-4 py-2.5 font-semibold">{T.when}</th>
+                <th className="px-4 py-2.5 font-semibold">{T.params}</th>
+                <th className="px-4 py-2.5 font-semibold" />
+              </tr>
+            </thead>
+            <tbody>
+              {examPage.pageItems.map((e: any) => {
+                const st = timeStatus(e);
+                const kaf = kafedraNames[Number(e.kafedra_id)];
+                const sameDay = fmtDate(e.start_time) === fmtDate(e.end_time);
+                const on = selectedExam === e.id;
+                return (
+                  <tr key={e.id} className={on ? 'bg-indigo-50/50' : 'hover:bg-gray-50/70'}>
+                    <td className={`${td} max-w-[420px]`}>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold leading-snug text-gray-900">{e.title}</p>
+                          {kaf || e.faculty_subject ? (
+                            <p className="mt-0.5 truncate text-[12.5px] text-gray-500">{[kaf, e.faculty_subject].filter(Boolean).join(' · ')}</p>
+                          ) : null}
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <StatusDot st={st} T={T} />
+                            <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11.5px] font-semibold text-indigo-700">
+                              {T.aud[String(e.audience || 'student')] || e.audience}
+                              {e.course ? ` · ${e.course}-${T.course}` : ''}
+                            </span>
+                            {e.test_center_pin ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-800 ring-1 ring-emerald-600/15">
+                                {lang === 'ru' ? 'PIN центра' : lang === 'en' ? 'Centre PIN' : 'Test markazi PIN'}: <b className="font-mono tracking-wider">{e.test_center_pin}</b>
                               </span>
+                            ) : null}
+                            {e.language === 'auto' && e.languages_ready != null && e.languages_ready < 3 ? (
+                              <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${e.languages_ready > 0 ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-700'}`}>
+                                {e.languages_ready > 0 ? T.langReady.replace('{n}', String(e.languages_ready)) : T.langPending}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className={`${td} whitespace-nowrap`}>
+                      <p className="font-medium tabular-nums text-gray-800">{fmtDate(e.start_time)}</p>
+                      <p className="text-[12.5px] tabular-nums text-gray-500">
+                        {fmtTime(e.start_time)} – {sameDay ? fmtTime(e.end_time) : `${fmtDate(e.end_time)} ${fmtTime(e.end_time)}`}
+                      </p>
+                    </td>
+                    <td className={`${td} whitespace-nowrap text-[12.5px] text-gray-600`}>
+                      <p><b className="font-semibold tabular-nums text-gray-900">{e.duration_minutes}</b> {T.min}</p>
+                      {Number(e.bank_question_count) > 0 ? (
+                        <p>
+                          <b className="font-semibold tabular-nums text-gray-900">{e.bank_question_count}</b> {T.q}
+                          {Number(e.ai_question_count) > 0 ? <span className="text-gray-400"> · {e.ai_question_count} {T.ai}</span> : null}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className={`${td} text-right`}>
+                      <div className="inline-flex flex-wrap justify-end gap-1.5">
+                        {st === 'live' ? (
+                          <AdminBtn size="sm" onClick={() => setActiveMonitorExamId(e.id)}>{T.monitor}</AdminBtn>
+                        ) : (
+                          <AdminBtn variant="ghost" size="sm" onClick={() => setActiveMonitorExamId(e.id)}>{T.monitor}</AdminBtn>
+                        )}
+                        <AdminBtn variant={on ? 'blue' : 'ghost'} size="sm" onClick={() => viewResults(e.id)}>{T.results}</AdminBtn>
+                        {!isStaffPortal ? (
+                          <>
+                            <AdminBtn variant="ghost" size="sm" onClick={() => setQuestionsExamId(e.id)}>{T.questions}</AdminBtn>
+                            <AdminBtn variant="ghost" size="sm" onClick={() => setEditingExamId(e.id)}>{T.edit}</AdminBtn>
+                          </>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!loading && filtered.length === 0 ? (
+            <AdminEmpty title={isStaffPortal && exams.length === 0 ? t.staffNoExamsHint : T.empty} />
+          ) : null}
+          {loading ? <p className="py-14 text-center text-[13.5px] text-gray-500">…</p> : null}
+        </div>
+        <AdminPagination page={examPage.page} totalPages={examPage.totalPages} onPageChange={examPage.setPage} total={examPage.total} pageSize={examPage.pageSize} />
+      </section>
+
+      {/* Natijalar paneli */}
+      {selectedExam != null ? (
+        <section className={`${CARD} overflow-hidden`}>
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-5 py-4">
+            <div className="min-w-0">
+              <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-700">{T.rTitle}</p>
+              <h3 className="mt-0.5 truncate text-[18px] font-extrabold text-gray-900">{selected?.title}</h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <AdminSelect value={rStatus} onChange={(e) => setRStatus(e.target.value)} className="h-9 w-44">
+                <option value="All">{T.rAllSt}</option>
+                <option value="Completed">{t.examStatusCompleted}</option>
+                <option value="In Progress">{t.examStatusInProgress}</option>
+                <option value="Pending">{t.examStatusPending}</option>
+                <option value="Banned">{t.examStatusBanned}</option>
+              </AdminSelect>
+              <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-gray-600">
+                <input type="checkbox" className="h-4 w-4 accent-[var(--color-indigo-600)]" checked={reviewOnly} onChange={(e) => setReviewOnly(e.target.checked)} />
+                {T.onlyReview}
+              </label>
+              <AdminBtn variant="ghost" size="sm" loading={exporting} disabled={!shownRows.length} onClick={exportResults}>{T.export}</AdminBtn>
+              <AdminBtn variant="ghost" size="sm" onClick={() => { setSelectedExam(null); setResults(null); }}>{T.close}</AdminBtn>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-5">
+            {[
+              { l: T.rTotal, v: rStats.total, tone: 'text-gray-900' },
+              { l: T.rDone, v: rStats.done, tone: 'text-gray-900' },
+              { l: T.rAvg, v: rStats.avg != null ? `${rStats.avg}%` : '—', tone: 'text-gray-900' },
+              { l: T.rBanned, v: rStats.banned, tone: rStats.banned ? 'text-red-600' : 'text-gray-900' },
+              { l: T.rReview, v: rStats.review, tone: rStats.review ? 'text-amber-600' : 'text-gray-900' },
+            ].map((s) => (
+              <div key={s.l} className="bg-white px-5 py-3.5">
+                <p className="text-[12px] font-semibold text-gray-500">{s.l}</p>
+                <p className={`mt-1 font-display text-[22px] font-extrabold leading-none tabular-nums ${s.tone}`}>{resLoading ? '…' : s.v}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-x-auto border-t border-gray-200">
+            <table className="w-full min-w-[860px] text-[13.5px]">
+              <thead className="bg-gray-50/80 text-[12px] text-gray-500">
+                <tr className="border-b border-gray-200">
+                  <RSortTh k="name" label={T.name} />
+                  <th className="px-3 py-2.5 text-left font-semibold">{T.status}</th>
+                  <RSortTh k="score" label={T.score} right />
+                  <RSortTh k="time" label={T.time} right />
+                  <RSortTh k="risk" label={T.risk} right />
+                  <RSortTh k="viol" label={T.viol} right />
+                  <th className="px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {shownRows.map((r: any) => {
+                  const open = openRow === r.id;
+                  const sCls =
+                    r.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/15'
+                      : r.status === 'Banned' ? 'bg-red-50 text-red-700 ring-red-600/15'
+                        : r.status === 'In Progress' ? 'bg-sky-50 text-sky-700 ring-sky-600/15'
+                          : 'bg-gray-100 text-gray-600 ring-gray-500/10';
+                  const pri = r.highest_priority;
+                  const incorrect = open ? incorrectOf(r) : [];
+                  return (
+                    <React.Fragment key={r.id}>
+                      <tr className={open ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
+                        <td className="border-b border-gray-100 px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-gray-900">{r.name}</p>
+                              <p className="font-mono text-[11.5px] text-gray-400">{r.student_id}</p>
                             </div>
+                            {r.recommended_review ? (
+                              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 ring-1 ring-amber-600/20">!</span>
+                            ) : null}
                           </div>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-[12px] font-semibold shrink-0 border ${r.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : r.status === 'Banned' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                          {statusLabel(r.status)}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-                        {[
-                          { label: t.examResultScore, value: r.score !== null ? r.score : '—', cls: 'text-2xl font-extrabold text-gray-900' },
-                          { label: t.examResultTime, value: timeTaken, cls: 'text-[15px] font-semibold text-gray-700' },
-                          { label: t.examResultFlagged, value: flaggedCount, cls: 'text-[15px] font-semibold text-amber-600' },
-                          { label: t.examResultIncorrect, value: incorrectAnswers.length, cls: 'text-[15px] font-semibold text-red-600' },
-                        ].map((s) => (
-                          <div key={s.label} className="bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
-                            <p className={s.cls}>{s.value}</p>
-                          </div>
-                        ))}
-                      </div>
-
-                      {incorrectAnswers.length > 0 && r.status === 'Completed' && (
-                        <details className="group mb-3">
-                          <summary className="text-[13px] font-semibold text-gray-600 cursor-pointer hover:text-indigo-700 transition-colors flex items-center gap-2 select-none py-1.5">
-                            <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                            {t.examIncorrectAnswers} ({incorrectAnswers.length})
-                          </summary>
-                          <div className="mt-2 space-y-2 pl-5 border-l-2 border-red-100">
-                            {incorrectAnswers.map((inc: any, idx: number) => (
-                              <div key={idx} className="text-[13px] bg-red-50 p-3 rounded-xl border border-red-100">
-                                <p className="font-medium text-gray-800 mb-1.5">{inc.question}</p>
-                                <div className="flex flex-wrap gap-3 text-[12px]">
-                                  <span className="text-red-600">{t.examStudentAnswer}: <span className="font-bold">{inc.studentAnswer || '—'}</span></span>
-                                  <span className="text-emerald-600">{t.examCorrectAnswer}: <span className="font-bold">{inc.correctAnswer}</span></span>
-                                </div>
+                        </td>
+                        <td className="border-b border-gray-100 px-3 py-2.5">
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[12px] font-semibold ring-1 ${sCls}`}>{statusLabel(r.status)}</span>
+                        </td>
+                        <td className="border-b border-gray-100 px-3 py-2.5 text-right tabular-nums">
+                          {r.score != null ? (
+                            <>
+                              <b className="font-bold text-gray-900">{r.score}</b>
+                              <span className="text-gray-400">/{r._total || '?'}</span>
+                              {r._pct != null ? <span className="ml-1.5 text-gray-500">{r._pct}%</span> : null}
+                            </>
+                          ) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="border-b border-gray-100 px-3 py-2.5 text-right tabular-nums text-gray-600">
+                          {r._min != null ? `${Math.floor(r._min)}:${pad(Math.round((r._min % 1) * 60))}` : '—'}
+                        </td>
+                        <td className="border-b border-gray-100 px-3 py-2.5 text-right">
+                          <span className={`tabular-nums font-semibold ${pri === 'critical' ? 'text-red-600' : pri === 'high' ? 'text-amber-600' : 'text-gray-600'}`}>
+                            {Number(r.risk_score || 0)}
+                          </span>
+                        </td>
+                        <td className="border-b border-gray-100 px-3 py-2.5 text-right tabular-nums">
+                          <span className={r._viol.length ? 'font-semibold text-red-600' : 'text-gray-400'}>{r._viol.length}</span>
+                        </td>
+                        <td className="border-b border-gray-100 px-3 py-2.5 text-right whitespace-nowrap">
+                          <button type="button" onClick={() => setOpenRow(open ? null : r.id)} className="mr-2 text-[12.5px] font-semibold text-indigo-700 hover:underline">
+                            {T.details} {open ? '▴' : '▾'}
+                          </button>
+                          {!isStaffPortal && (r.status === 'Banned' || r.status === 'Completed' || r.status === 'Failed') ? (
+                            <AdminBtn variant="ghost" size="sm" onClick={() => allowRetake(r.id)}>{T.retake}</AdminBtn>
+                          ) : null}
+                        </td>
+                      </tr>
+                      {open ? (
+                        <tr className="bg-gray-50">
+                          <td colSpan={7} className="border-b border-gray-200 px-4 pb-4 pt-1">
+                            <div className="grid gap-3 lg:grid-cols-3">
+                              <div className="rounded-xl border border-gray-200 bg-white p-3">
+                                <p className="mb-2 text-[12.5px] font-bold text-gray-800">{T.violations} ({r._viol.length})</p>
+                                {r._viol.length ? (
+                                  <ul className="max-h-48 space-y-1 overflow-y-auto text-[12.5px]">
+                                    {r._viol.map((v: any, i: number) => (
+                                      <li key={i} className="flex justify-between gap-2">
+                                        <span className="truncate text-gray-700">{v.violation_type}</span>
+                                        <span className="shrink-0 tabular-nums text-gray-400">{fmtTime(v.timestamp)}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : <p className="text-[12.5px] text-gray-400">—</p>}
                               </div>
-                            ))}
-                          </div>
-                        </details>
-                      )}
-
-                      {Array.isArray(r.question_risk_timeline) && r.question_risk_timeline.length > 0 && (
-                        <details className="group mb-3">
-                          <summary className="text-[13px] font-semibold text-gray-600 cursor-pointer hover:text-red-600 transition-colors flex items-center gap-2 select-none py-1.5">
-                            <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                            {t.examResultRisk} Timeline ({r.question_risk_timeline.length})
-                          </summary>
-                          <div className="mt-2 flex flex-wrap gap-2 pl-5">
-                            {r.question_risk_timeline.map((q: any) => (
-                              <div key={q.question_id} className="text-[12px] bg-orange-50 px-2.5 py-1.5 rounded-xl border border-orange-100 flex items-center gap-1.5">
-                                <span className="font-bold text-gray-800">Q{q.question_no}</span>
-                                <span className="text-gray-500">r:{q.risk_score}</span>
-                                {q.flagged && <span className="text-red-600 font-semibold">🚩</span>}
-                                {q.incorrect && <span className="text-amber-600 font-semibold">✗</span>}
+                              <div className="rounded-xl border border-gray-200 bg-white p-3">
+                                <p className="mb-2 text-[12.5px] font-bold text-gray-800">{T.timeline}</p>
+                                {Array.isArray(r.question_risk_timeline) && r.question_risk_timeline.length ? (
+                                  <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto">
+                                    {r.question_risk_timeline.map((qq: any) => (
+                                      <span
+                                        key={qq.question_id}
+                                        title={`r:${qq.risk_score}`}
+                                        className={`rounded-md px-1.5 py-0.5 text-[11.5px] font-semibold tabular-nums ${
+                                          qq.flagged ? 'bg-red-50 text-red-700' : qq.incorrect ? 'bg-amber-50 text-amber-800' : 'bg-gray-100 text-gray-600'
+                                        }`}
+                                      >
+                                        {qq.question_no}{qq.flagged ? ' ⚑' : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : <p className="text-[12.5px] text-gray-400">—</p>}
                               </div>
-                            ))}
-                          </div>
-                        </details>
-                      )}
-
-                      {studentViolations.length > 0 && (
-                        <div className="bg-red-50 rounded-xl border border-red-100 p-3 mb-3">
-                          <p className="text-[13px] font-semibold text-red-700 mb-2 flex items-center gap-1.5">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                            {t.examViolations} ({studentViolations.length})
-                          </p>
-                          <ul className="space-y-1">
-                            {studentViolations.map((v: any, i: number) => (
-                              <li key={i} className="text-[13px] text-red-600 flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-                                {v.violation_type}
-                                <span className="text-red-400 text-[11px]">({new Date(v.timestamp).toLocaleTimeString()})</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {(r.status === 'Banned' || r.status === 'Completed' || r.status === 'Failed') && (
-                        <AdminBtn variant="ghost" size="sm" onClick={() => allowRetake(r.id)}>{t.allowRetake}</AdminBtn>
-                      )}
-                    </div>
+                              <div className="rounded-xl border border-gray-200 bg-white p-3">
+                                <p className="mb-2 text-[12.5px] font-bold text-gray-800">{T.incorrect} ({r.status === 'Completed' ? incorrect.length : '—'})</p>
+                                {r.status === 'Completed' && incorrect.length ? (
+                                  <ul className="max-h-48 space-y-2 overflow-y-auto text-[12.5px]">
+                                    {incorrect.map((inc: any, i: number) => (
+                                      <li key={i} className="border-b border-gray-100 pb-1.5 last:border-0">
+                                        <p className="text-gray-800">{inc.question}</p>
+                                        <p className="mt-0.5">
+                                          <span className="text-red-600">{T.student}: <b>{inc.studentAnswer || '—'}</b></span>
+                                          <span className="ml-2 text-emerald-700">{T.correct}: <b>{inc.correctAnswer}</b></span>
+                                        </p>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : <p className="text-[12.5px] text-gray-400">—</p>}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </React.Fragment>
                   );
                 })}
-                {getSortedAndFilteredResults().length === 0 && (
-                  <AdminEmpty
-                    icon={<svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                    title={t.examNoResultsFilter}
-                  />
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </tbody>
+            </table>
+            {!resLoading && shownRows.length === 0 ? <AdminEmpty title={T.noResults} /> : null}
+            {resLoading ? <p className="py-10 text-center text-[13.5px] text-gray-500">…</p> : null}
+          </div>
+        </section>
+      ) : null}
 
       <AnimatePresence>
         {activeMonitorExamId && (
@@ -571,80 +763,23 @@ export function AdminExamsTab({
       )}
 
       {questionsExamId != null && (
-        <ExamQuestionsModal
-          token={token}
-          lang={lang}
-          examId={questionsExamId}
-          apiVariant={apiVariant}
-          onClose={() => setQuestionsExamId(null)}
-        />
+        <ExamQuestionsModal token={token} lang={lang} examId={questionsExamId} onClose={() => setQuestionsExamId(null)} />
       )}
-    </motion.div>
+    </div>
   );
 }
+
 // ── Imtihon savollarini ko'rish ────────────────────────────────────────────
-// Ma'lumot allaqachon API da bor: GET /api/admin/exams/<id> javobida
-// `questions` massivi qaytadi. Bu yerda uni faqat ekranga chiqaramiz.
+// GET /api/admin/exams/<id> javobidagi `questions` massivi ekranga chiqariladi.
 
-type QuestionsText = {
-  button: string; title: string; count: string; loading: string;
-  empty: string; error: string; correct: string; close: string; noAnswer: string;
+const QUESTIONS_TEXT: Record<string, { title: string; count: string; loading: string; empty: string; error: string; correct: string; noAnswer: string }> = {
+  uz: { title: 'Imtihon savollari', count: 'ta savol', loading: 'Yuklanmoqda…', empty: 'Bu imtihonda hali savol yo‘q.', error: 'Savollarni yuklab bo‘lmadi.', correct: 'To‘g‘ri javob', noAnswer: 'javob belgilanmagan' },
+  ru: { title: 'Вопросы экзамена', count: 'вопросов', loading: 'Загрузка…', empty: 'В этом экзамене пока нет вопросов.', error: 'Не удалось загрузить вопросы.', correct: 'Правильный ответ', noAnswer: 'ответ не указан' },
+  en: { title: 'Exam questions', count: 'questions', loading: 'Loading…', empty: 'This exam has no questions yet.', error: 'Could not load questions.', correct: 'Correct answer', noAnswer: 'no answer marked' },
 };
 
-const QUESTIONS_TEXT: Record<string, QuestionsText> = {
-  uz: {
-    button: 'Savollarni ko‘rish',
-    title: 'Imtihon savollari',
-    count: 'ta savol',
-    loading: 'Yuklanmoqda…',
-    empty: 'Bu imtihonda hali savol yo‘q.',
-    error: 'Savollarni yuklab bo‘lmadi.',
-    correct: 'To‘g‘ri javob',
-    close: 'Yopish',
-    noAnswer: 'javob belgilanmagan',
-  },
-  ru: {
-    button: 'Посмотреть вопросы',
-    title: 'Вопросы экзамена',
-    count: 'вопросов',
-    loading: 'Загрузка…',
-    empty: 'В этом экзамене пока нет вопросов.',
-    error: 'Не удалось загрузить вопросы.',
-    correct: 'Правильный ответ',
-    close: 'Закрыть',
-    noAnswer: 'ответ не указан',
-  },
-  en: {
-    button: 'View questions',
-    title: 'Exam questions',
-    count: 'questions',
-    loading: 'Loading…',
-    empty: 'This exam has no questions yet.',
-    error: 'Could not load questions.',
-    correct: 'Correct answer',
-    close: 'Close',
-    noAnswer: 'no answer marked',
-  },
-};
-
-function qtext(lang: string): QuestionsText {
-  return QUESTIONS_TEXT[lang] || QUESTIONS_TEXT.uz;
-}
-
-function ExamQuestionsModal({
-  token,
-  lang,
-  examId,
-  apiVariant,
-  onClose,
-}: {
-  token: string;
-  lang: Language;
-  examId: number;
-  apiVariant: 'admin' | 'staff';
-  onClose: () => void;
-}) {
-  const L = qtext(lang);
+function ExamQuestionsModal({ token, lang, examId, onClose }: { token: string; lang: Language; examId: number; onClose: () => void }) {
+  const L = QUESTIONS_TEXT[lang] || QUESTIONS_TEXT.uz;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [title, setTitle] = useState('');
@@ -655,15 +790,13 @@ function ExamQuestionsModal({
     (async () => {
       setLoading(true);
       setError('');
-      const base = '/api/admin/exams/';
       try {
-        const res = await fetch(apiUrl(base + examId), { headers: authHeaders(token, lang) });
+        const res = await fetch(apiUrl('/api/admin/exams/' + examId), { headers: authHeaders(token, lang) });
         if (!checkAdminAuthResponse(res)) return;
         const data = await readJsonSafe<any>(res);
         if (!alive) return;
-        if (!res.ok || !data) {
-          setError(L.error);
-        } else {
+        if (!res.ok || !data) setError(L.error);
+        else {
           setTitle(String(data.title || ''));
           setQuestions(Array.isArray(data.questions) ? data.questions : []);
         }
@@ -673,79 +806,46 @@ function ExamQuestionsModal({
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [examId, token, lang, apiVariant]);
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId, token, lang]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
+    <AdminModal
+      open
+      onClose={onClose}
+      title={L.title}
+      subtitle={`${title}${!loading && !error ? ` · ${questions.length} ${L.count}` : ''}`}
+      maxWidth="max-w-3xl"
+      scroll
     >
-      <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col"
-        onClick={(ev) => ev.stopPropagation()}
-      >
-        <div className="px-5 py-4 border-b border-gray-100">
-          <div className="text-base font-semibold text-gray-900">{L.title}</div>
-          <div className="text-[13px] text-gray-500 mt-0.5">
-            {title}
-            {!loading && !error ? ` · ${questions.length} ${L.count}` : ''}
-          </div>
-        </div>
-
-        <div className="px-5 py-4 overflow-y-auto grow">
-          {loading && <div className="text-sm text-gray-500">{L.loading}</div>}
-          {!loading && error && <div className="text-sm text-red-600">{error}</div>}
-          {!loading && !error && questions.length === 0 && (
-            <div className="text-sm text-gray-500">{L.empty}</div>
-          )}
-          {!loading && !error && questions.map((q: any, qi: number) => {
-            const opts: any[] = Array.isArray(q?.options) ? q.options : [];
-            const correct = String(q?.correctAnswer ?? '');
-            return (
-              <div key={q?.id ?? qi} className="mb-5 last:mb-0">
-                <div className="text-sm font-medium text-gray-900">
-                  {qi + 1}. {String(q?.text ?? '')}
-                </div>
-                <ul className="mt-2 space-y-1">
-                  {opts.map((o: any, oi: number) => {
-                    const val = String(o ?? '');
-                    const isCorrect = correct !== '' && val === correct;
-                    return (
-                      <li
-                        key={oi}
-                        className={
-                          'text-[13px] px-2.5 py-1.5 rounded-lg border ' +
-                          (isCorrect
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium'
-                            : 'bg-gray-50 border-gray-100 text-gray-700')
-                        }
-                      >
-                        {String.fromCharCode(65 + oi)}. {val}
-                        {isCorrect ? ` ✓ ${L.correct}` : ''}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {correct === '' && (
-                  <div className="text-[12px] text-amber-600 mt-1">{L.noAnswer}</div>
-                )}
-                {q?.explanation ? (
-                  <div className="text-[12px] text-gray-500 mt-1.5">{String(q.explanation)}</div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
-          <AdminBtn variant="ghost" size="sm" onClick={onClose}>
-            {L.close}
-          </AdminBtn>
-        </div>
-      </div>
-    </div>
+      {loading ? <p className="text-[13.5px] text-gray-500">{L.loading}</p> : null}
+      {!loading && error ? <p className="text-[13.5px] text-red-600">{error}</p> : null}
+      {!loading && !error && questions.length === 0 ? <p className="text-[13.5px] text-gray-500">{L.empty}</p> : null}
+      <ol className="space-y-5">
+        {!loading && !error && questions.map((qq: any, qi: number) => {
+          const opts: any[] = Array.isArray(qq?.options) ? qq.options : [];
+          const correct = String(qq?.correctAnswer ?? '');
+          return (
+            <li key={qq?.id ?? qi}>
+              <p className="text-[14px] font-semibold text-gray-900">{qi + 1}. {String(qq?.text ?? '')}</p>
+              <ul className="mt-2 space-y-1">
+                {opts.map((o: any, oi: number) => {
+                  const val = String(o ?? '');
+                  const ok = correct !== '' && val === correct;
+                  return (
+                    <li key={oi} className={`rounded-lg border px-2.5 py-1.5 text-[13px] ${ok ? 'border-emerald-200 bg-emerald-50 font-medium text-emerald-800' : 'border-gray-100 bg-gray-50 text-gray-700'}`}>
+                      {String.fromCharCode(65 + oi)}. {val}{ok ? ` ✓ ${L.correct}` : ''}
+                    </li>
+                  );
+                })}
+              </ul>
+              {correct === '' ? <p className="mt-1 text-[12px] text-amber-700">{L.noAnswer}</p> : null}
+              {qq?.explanation ? <p className="mt-1.5 text-[12px] text-gray-500">{String(qq.explanation)}</p> : null}
+            </li>
+          );
+        })}
+      </ol>
+    </AdminModal>
   );
 }

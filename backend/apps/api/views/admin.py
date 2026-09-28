@@ -34,7 +34,7 @@ def admin_users(request):
     if request.user.role != "admin":
         return Response({"error": "Forbidden"}, status=403)
     if request.method == "GET":
-        qs = AppUser.objects.select_related("group", "kafedra").all()
+        qs = AppUser.objects.select_related("group", "group__level", "group__direction", "kafedra").all()
         gid = request.query_params.get("group_id")
         if gid not in (None, ""):
             try:
@@ -60,7 +60,35 @@ def admin_users(request):
         status_f = request.query_params.get("status")
         if status_f:
             qs = qs.filter(status=status_f)
-        qs = qs.order_by("name")
+        # Talaba kursi = guruh darajasi ("1-kurs".."6-kurs"). 5000+ talabani
+        # brauzerga to'liq yuklab filtrlash imkonsiz (limit 500) — shuning
+        # uchun kurs, yo'nalish va rasm filtri serverda.
+        lvl_f = request.query_params.get("level_id")
+        if lvl_f not in (None, ""):
+            try:
+                qs = qs.filter(group__level_id=int(lvl_f))
+            except (TypeError, ValueError):
+                pass
+        dir_f = request.query_params.get("direction_id")
+        if dir_f not in (None, ""):
+            try:
+                qs = qs.filter(group__direction_id=int(dir_f))
+            except (TypeError, ValueError):
+                pass
+        photo_f = str(request.query_params.get("photo") or "").strip()
+        if photo_f in ("yes", "no"):
+            from django.db.models.functions import Length
+
+            qs = qs.annotate(_img_len=Length("profile_image"))
+            qs = qs.filter(_img_len__gt=50) if photo_f == "yes" else qs.filter(_img_len__lte=50)
+        sort_f = str(request.query_params.get("sort") or "name").strip()
+        sort_map = {
+            "name": ("name", "id"), "-name": ("-name", "id"),
+            "id": ("id",), "-id": ("-id",),
+            "group": ("group__name", "name"), "-group": ("-group__name", "name"),
+            "kafedra": ("kafedra__name", "name"), "-kafedra": ("-kafedra__name", "name"),
+        }
+        qs = qs.order_by(*sort_map.get(sort_f, ("name", "id")))
         total = qs.count()
         try:
             limit = int(request.query_params.get("limit", 200))
@@ -92,6 +120,9 @@ def admin_users(request):
                     "position": u.position or "",
                     "stavka": u.stavka or "",
                     "course": int(getattr(u, "course", 0) or 0),
+                    "level_id": u.group.level_id if u.group_id else None,
+                    "level_name": (u.group.level.name if u.group_id and u.group.level_id else None),
+                    "direction_name": (u.group.direction.name if u.group_id and u.group.direction_id else None),
                 }
             )
         resp = Response({"results": rows, "total": total, "limit": limit, "offset": offset})
@@ -445,6 +476,10 @@ def admin_student_exams_score(request, pk: int):
         return Response({"error": "Not found"}, status=404)
 
     raw = (request.data or {}).get("score")
+    if se.status != "Completed":
+        return Response({"error": "Only completed results can be edited"}, status=409)
+    if isinstance(raw, bool) or (not isinstance(raw, (int, str))) or not str(raw).strip().isdigit():
+        return Response({"error": "Score must be a whole number"}, status=400)
     try:
         new_score = int(raw)
     except (TypeError, ValueError):
@@ -464,44 +499,29 @@ def admin_student_exams_score(request, pk: int):
     if new_score < 0:
         return Response({"error": "Score out of range"}, status=400)
 
+    # Yuzma-yuz tasdiqlash bilan ziddiyat bo'lmasin: kutilayotgan natija avval
+    # tasdiqlanadi/rad etiladi; rad etilgan natijada tahrir ASL ballni o'zgartiradi
+    # (aks holda keyingi "tasdiqlash" eski ballni qaytarib, tahrirni yo'qotardi).
+    _vstate = str(getattr(se, "verify_state", "") or "")
+    if _vstate == "pending":
+        return Response(
+            {"error": "Natija yuzma-yuz tasdiqlashni kutmoqda — avval tasdiqlash yoki rad etish qarorini chiqaring.",
+             "code": "VERIFY_PENDING"},
+            status=409,
+        )
     old_score = se.score
     if old_score == new_score:
         return Response({"success": True, "score": new_score, "total": total, "changed": False})
 
     se.score = new_score
     _fields = ["score"]
+    if _vstate == "rejected":
+        se.verify_original_score = new_score
+        se.score = 0
+        _fields.append("verify_original_score")
 
-    # Javoblarni ballga moslash: aks holda natija oynasida "7 ta belgilangan,
-    # 15 ball" degan ziddiyat qoladi. Tasodifiy N ta savol to'g'ri deb
-    # belgilanadi, qolganiga noto'g'ri variant qo'yiladi.
-    _old_answers = se.answers_json or ""
-    _questions = safe_json_loads(se.session_questions_json or "", [])
-    if not _questions:
-        _questions = safe_json_loads(se.exam.questions_json or "[]", [])
-    _questions = [q for q in _questions if isinstance(q, dict)]
-    if _questions and total:
-        import random as _r
-
-        _idx = list(range(len(_questions)))
-        _r.shuffle(_idx)
-        _correct_set = set(_idx[: max(0, min(new_score, len(_idx)))])
-        _new_answers = {}
-        for _i, _q in enumerate(_questions):
-            _qid = str(_q.get("id") if _q.get("id") is not None else _i + 1)
-            _opts = [str(o) for o in (_q.get("options") or []) if str(o).strip()]
-            _cor = str(_q.get("correctAnswer") or "")
-            if _i in _correct_set:
-                _new_answers[_qid] = _cor
-            else:
-                _wrong = next((o for o in _opts if o != _cor), "")
-                if _wrong:
-                    _new_answers[_qid] = _wrong
-        se.answers_json = json.dumps(_new_answers, ensure_ascii=False)
-        _fields.append("answers_json")
-        # Tahlil (AI xulosasi) eski javoblardan tuzilgan — qayta hisoblansin.
-        if se.ai_summary_json:
-            se.ai_summary_json = ""
-            _fields.append("ai_summary_json")
+    # Manual score adjustment must never fabricate the student's answers.
+    # Preserve original answers and their analysis; audit the official score.
 
     se.save(update_fields=_fields)
 
@@ -513,8 +533,7 @@ def admin_student_exams_score(request, pk: int):
         getattr(se.student, "name", str(pk)),
         "exam=" + str(getattr(se.exam, "title", "")) + ", " + str(old_score)
         + " -> " + str(new_score) + "/" + str(total)
-        + ("; javoblar qayta yig'ildi, eski: " + _old_answers[:400]
-           if "answers_json" in _fields else ""),
+        + "; original answers preserved",
     )
     pct = round((new_score / total) * 100) if total else 0
     return Response(
@@ -1337,7 +1356,7 @@ def admin_audit_log(request):
         for r in all_rows:
             w.writerow([r["id"], r["actor_id"], r["actor_name"], r["action"],
                         r["target_type"], r["target_id"], r["target_name"],
-                        r["detail"], r["created_at"].strftime("%Y-%m-%d %H:%M") if r["created_at"] else ""])
+                        r["detail"], dj_tz.localtime(r["created_at"]).strftime("%Y-%m-%d %H:%M") if r["created_at"] else ""])
         return resp
 
     total = qs.count()
@@ -2105,6 +2124,10 @@ def admin_exam_detail(request, pk: int):
                 from apps.api.views._helpers import _bool_arg
 
                 e.ambient_audio_enabled = _bool_arg(d.get("ambient_audio_enabled"), True)
+            if "test_center_pin" in d:
+                from apps.api.views._helpers import _test_center_pin_arg
+
+                e.test_center_pin = _test_center_pin_arg(d.get("test_center_pin"))
             if d.get("identity_retakes_allowed") is not None:
                 e.identity_retakes_allowed = max(0, min(5, int(d.get("identity_retakes_allowed") or 0)))
             # Kafedraga biriktiriladigan auditoriyalar uchun kafedra va fan

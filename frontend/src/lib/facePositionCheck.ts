@@ -14,6 +14,7 @@
 
 import { createWithDelegateFallback } from './mediapipeDelegate';
 import { mediapipeAssetSources } from './mediapipeAssets';
+import { primaryFaceIndex } from './testCenterFaces';
 import {
   LivenessSequence,
   averageEar,
@@ -157,6 +158,7 @@ export class FacePositionChecker {
     video: HTMLVideoElement,
     onUpdate: FacePositionUpdate,
     onEyeRatio?: (ratio: number | null) => void,
+    private testCenter = false,
   ) {
     this.video = video;
     this.onUpdate = onUpdate;
@@ -234,12 +236,12 @@ export class FacePositionChecker {
       this.onEyeRatio?.(null);
       return 'NO_FACE';
     }
-    if (faces.length >= 2) {
+    if (faces.length >= 2 && !this.testCenter) {
       this.onEyeRatio?.(null);
       return 'MULTIPLE_FACES';
     }
 
-    const lm = faces[0];
+    const lm = faces[this.testCenter ? Math.max(0, primaryFaceIndex(faces)) : 0];
     this.onEyeRatio?.(averageEar(lm));
     const nose = lm[1];
     const left = lm[234];

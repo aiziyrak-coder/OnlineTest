@@ -32,6 +32,26 @@ def _audience_label(aud: str) -> str:
     return AUDIENCE_LABELS.get(a, a.title())
 
 
+def _report_audience(row: dict) -> tuple[str, str]:
+    """Hisobot uchun auditoriya va qo'shimcha izoh.
+
+    Imtihonning `custom_rules` ichidagi "report_audience" kirish huquqiga
+    tegmasdan faqat hisobotdagi joyini o'zgartiradi. Harbiy xizmatga
+    chaqiriluvchilar shu yo'l bilan "Maxsus kiruvchilar" hisobotiga tushadi:
+    hisoblari oddiy talaba hisobi bo'lgani uchun imtihonning audience maydoni
+    "student" bo'lib qolishi shart, aks holda imtihonni ko'rmaydi.
+    """
+    aud = str(row.get("audience") or "student").strip().lower()
+    rules = safe_json_loads(str(row.get("custom_rules") or ""), {}) or {}
+    if not isinstance(rules, dict):
+        return aud, ""
+    over = str(rules.get("report_audience") or "").strip().lower()
+    note = str(rules.get("report_note") or "").strip()
+    if over and over in AUDIENCE_LABELS:
+        return over, note
+    return aud, note
+
+
 def list_seasons() -> list[dict]:
     """Imtihonlarni auditoriya va sanalar bo'yicha mavsumlarga ajratadi.
 
@@ -43,36 +63,36 @@ def list_seasons() -> list[dict]:
     """
     rows = list(
         Exam.objects.exclude(start_time=None)
-        .values("id", "audience", "start_time", "course")
+        .values("id", "audience", "start_time", "course", "custom_rules")
         .order_by("audience", "course", "start_time")
     )
-    # Auditoriya + KURS bo'yicha guruhlaymiz: ordinatura 1-kurs va 2-kurs
-    # (DAK) imtihonlari bir vaqtda ochiq turadi va sana bo'yicha bitta
-    # mavsumga qo'shilib ketardi.
+    # Auditoriya + KURS + hisobot izohi bo'yicha guruhlaymiz: ordinatura
+    # 1-kurs va 2-kurs (DAK) imtihonlari bir vaqtda ochiq turadi va sana
+    # bo'yicha bitta mavsumga qo'shilib ketardi.
     by_aud: dict[tuple, list] = {}
     for r in rows:
-        aud = str(r["audience"] or "student").strip().lower()
-        by_aud.setdefault((aud, int(r.get("course") or 0)), []).append(r)
+        aud, note = _report_audience(r)
+        by_aud.setdefault((aud, int(r.get("course") or 0), note), []).append(r)
 
     seasons: list[dict] = []
-    for (aud, course), items in by_aud.items():
+    for (aud, course, note), items in by_aud.items():
         cluster: list = []
         prev = None
         for r in items:
             d = dj_tz.localtime(r["start_time"]).date()
             if prev is not None and (d - prev).days > SEASON_GAP_DAYS:
-                seasons.append(_make_season(aud, cluster, course))
+                seasons.append(_make_season(aud, cluster, course, note))
                 cluster = []
             cluster.append(r)
             prev = d
         if cluster:
-            seasons.append(_make_season(aud, cluster, course))
+            seasons.append(_make_season(aud, cluster, course, note))
 
     seasons.sort(key=lambda x: x["date_to"], reverse=True)
     return seasons
 
 
-def _make_season(aud: str, items: list, course: int = 0) -> dict:
+def _make_season(aud: str, items: list, course: int = 0, note: str = "") -> dict:
     dates = [dj_tz.localtime(r["start_time"]).date() for r in items]
     d1, d2 = min(dates), max(dates)
     label_dates = d1.strftime("%d.%m.%Y") if d1 == d2 else (d1.strftime("%d.%m") + "-" + d2.strftime("%d.%m.%Y"))
@@ -82,12 +102,17 @@ def _make_season(aud: str, items: list, course: int = 0) -> dict:
     # testi — alohida, oraliq nazorat; unga "(DAK)" yozish noto'g'ri edi.
     if str(aud or "").strip().lower() == "ordinator" and int(course or 0) == 1:
         base = "Ordinatorlar"
+    # Izoh mavsum kalitiga ham kiradi: bir xil auditoriyadagi turli
+    # to'plamlar (masalan harbiylar) bir-biriga qo'shilib ketmasin.
+    note_label = (" — " + note) if note else ""
+    note_key = (":" + note.replace(":", " ")) if note else ""
     return {
-        "key": "%s:%d:%s:%s" % (aud, int(course or 0), d1.isoformat(), d2.isoformat()),
+        "key": "%s:%d:%s:%s%s" % (aud, int(course or 0), d1.isoformat(), d2.isoformat(), note_key),
         "audience": aud,
         "course": int(course or 0),
-        "audience_label": base + course_label,
-        "label": base + course_label + " · " + label_dates,
+        "report_note": note,
+        "audience_label": base + course_label + note_label,
+        "label": base + course_label + note_label + " · " + label_dates,
         "date_from": d1.isoformat(),
         "date_to": d2.isoformat(),
         "exam_count": len(items),
@@ -188,8 +213,12 @@ def build_kafedra_report(season_key: str | None = None) -> dict:
 
     for row in StudentExam.objects.filter(
         exam_id__in=list(exam_kaf.keys())
-    ).values("exam_id", "student_id"):
+    ).values("exam_id", "student_id", "status", "started_at"):
         kaf = exam_kaf.get(int(row["exam_id"]))
+        # Qayta ruxsat berilgan, lekin hali kirmagan (Pending, boshlanmagan) —
+        # bu "boshlab tugatmagan" emas: u hali kirmaganlar qatorida sanaladi.
+        if str(row["status"] or "").strip() == "Pending" and row["started_at"] is None:
+            continue
         if kaf:
             attempted.setdefault(kaf, set()).add(str(row["student_id"]))
 
@@ -332,14 +361,22 @@ def build_absent_report(season_key: str | None = None, only_active: bool = True)
     # Kim topshirgan / kim urinib ko'rgan.
     done: dict[int, set[str]] = {}
     tried: dict[int, set[str]] = {}
-    for row in StudentExam.objects.filter(exam_id__in=list(exam_kaf.keys())).values(
-        "exam_id", "student_id", "status"
+    # Qayta ruxsat berilgan, lekin hali kirmaganlar (Pending, boshlanmagan).
+    granted: dict[int, set[str]] = {}
+    # Boshlab tugatmagan/chetlatilgan urinish — dalillarni ko'rish uchun sessiya raqami.
+    last_se: dict[tuple[int, str], tuple[int, str]] = {}
+    for row in StudentExam.objects.filter(exam_id__in=list(exam_kaf.keys())).order_by("id").values(
+        "id", "exam_id", "student_id", "status", "started_at", "ban_reason"
     ):
         kaf = exam_kaf.get(int(row["exam_id"]))
         if not kaf:
             continue
         sid = str(row["student_id"])
+        if str(row["status"] or "").strip() == "Pending" and row["started_at"] is None:
+            granted.setdefault(kaf, set()).add(sid)
+            continue
         tried.setdefault(kaf, set()).add(sid)
+        last_se[(kaf, sid)] = (int(row["id"]), str(row["ban_reason"] or "") if str(row["status"] or "").strip() == "Banned" else "")
         if str(row["status"] or "").strip() == "Completed":
             done.setdefault(kaf, set()).add(sid)
 
@@ -363,7 +400,13 @@ def build_absent_report(season_key: str | None = None, only_active: bool = True)
                 {
                     "student_id": sid,
                     "name": str(u.name or ""),
-                    "state": "unfinished" if sid in urinib else "never_started",
+                    "student_exam_id": last_se.get((kaf_id, sid), (None, ""))[0] if sid in urinib else None,
+                    "ban_reason": last_se.get((kaf_id, sid), (None, ""))[1] if sid in urinib else "",
+                    "state": (
+                        "unfinished" if sid in urinib
+                        else "retake_granted" if sid in granted.get(kaf_id, set())
+                        else "never_started"
+                    ),
                 }
             )
         if not people:
@@ -562,4 +605,100 @@ def admin_reports_full_pdf(request):
     resp["Content-Disposition"] = (
         'attachment; filename="imtihon-hisoboti-' + now.strftime("%Y-%m-%d") + '.pdf"'
     )
+    return resp
+
+
+_XLSX_MAX_SHEETS = 12
+_XLSX_MAX_ROWS = 20000
+_XLSX_MAX_COLS = 60
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def admin_reports_xlsx(request):
+    """Admin paneldagi joriy (filtrlangan, saralangan) jadvallardan haqiqiy .xlsx.
+
+    Ilgari "Excel" tugmasi `;` bilan ajratilgan CSV berardi: Excel uni ba'zan
+    bitta ustunga tiqardi, sonlar matn bo'lib qolardi. Brauzer ko'rinib turgan
+    jadvallarni yuboradi — natijada fayl ekrandagi filtr bilan bir xil bo'ladi.
+    Faqat formatlash: ma'lumot bazasiga murojaat yo'q.
+    """
+    if _request_user_role_norm(request.user) != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    import io
+    import re
+
+    from django.http import HttpResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    data = request.data if isinstance(request.data, dict) else {}
+    sheets = data.get("sheets") if isinstance(data.get("sheets"), list) else []
+    sheets = [s for s in sheets if isinstance(s, dict)][:_XLSX_MAX_SHEETS]
+    if not sheets:
+        return Response({"error": "sheets required"}, status=400)
+    title = str(data.get("title") or "").strip()[:200]
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    used: set[str] = set()
+    head_font = Font(bold=True, color="FFFFFF")
+    head_fill = PatternFill("solid", fgColor="0E6D89")
+    for sh in sheets:
+        base = re.sub(r"[\\\[\]\*\?/:]", " ", str(sh.get("title") or "Sheet")).strip()[:31] or "Sheet"
+        name, i = base, 2
+        while name.lower() in used:
+            suffix = f" ({i})"
+            name = base[: 31 - len(suffix)] + suffix
+            i += 1
+        used.add(name.lower())
+        ws = wb.create_sheet(name)
+
+        cols = [str(c)[:120] for c in (sh.get("columns") or []) if c is not None][:_XLSX_MAX_COLS]
+        rows = sh.get("rows") if isinstance(sh.get("rows"), list) else []
+        rows = [r for r in rows if isinstance(r, list)][:_XLSX_MAX_ROWS]
+
+        r0 = 1
+        if title:
+            ws.cell(row=1, column=1, value=f"{title} — {name}").font = Font(bold=True, size=13)
+            r0 = 3
+        widths = [len(c) for c in cols]
+        for ci, c in enumerate(cols, 1):
+            cell = ws.cell(row=r0, column=ci, value=c)
+            cell.font = head_font
+            cell.fill = head_fill
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+        ncols = len(cols) or _XLSX_MAX_COLS
+        for ri, row in enumerate(rows, r0 + 1):
+            for ci, v in enumerate(row[:ncols], 1):
+                if isinstance(v, bool):
+                    v = int(v)
+                elif not isinstance(v, (int, float)):
+                    v = "" if v is None else str(v)[:2000]
+                cell = ws.cell(row=ri, column=ci, value=v)
+                # "=..." bilan boshlangan matn formula bo'lib bajarilmasin.
+                if isinstance(v, str) and v.startswith("="):
+                    cell.data_type = "s"
+                w = len(str(v))
+                if ci - 1 < len(widths):
+                    widths[ci - 1] = max(widths[ci - 1], w)
+                else:
+                    widths.append(w)
+        for ci, w in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(ci)].width = min(60, max(6, w + 2))
+        ws.freeze_panes = ws.cell(row=r0 + 1, column=1)
+        if cols:
+            ws.auto_filter.ref = f"A{r0}:{get_column_letter(len(cols))}{r0 + max(1, len(rows))}"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    fname = re.sub(r"[^A-Za-z0-9._-]+", "-", str(data.get("filename") or "hisobot.xlsx")).strip("-.")[:80] or "hisobot"
+    if not fname.lower().endswith(".xlsx"):
+        fname += ".xlsx"
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{fname}"'
     return resp

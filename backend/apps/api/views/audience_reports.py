@@ -220,8 +220,10 @@ def _integrity_flags(se: StudentExam, p: dict) -> dict:
     empty = {"bank_pct": None, "ai_pct": None, "flags": [], "_bank_answers": {}}
     if p.get("state") != "completed":
         return empty
-    qs = safe_json_loads(se.session_questions_json or "", []) or []
-    ans = safe_json_loads(se.answers_json or "", {}) or {}
+    # Baholashdagi tilda (auto imtihonda EN/RU javoblar ham to'g'ri sanalsin).
+    from apps.api.services import graded_session_questions
+
+    qs, ans = graded_session_questions(se)
     bt = bo = at = ao = 0
     bank_answers: dict = {}
     for q in qs:
@@ -291,6 +293,21 @@ def _integrity_flags(se: StudentExam, p: dict) -> dict:
                           "tez TO'G'RI javob (%d tadan) — javob tashqaridan kelgan bo'lishi mumkin" % (fast_ok, fast_n)})
     except Exception:
         pass
+    try:
+        from apps.api.answer_timing import gaze_answer_assessment
+
+        _ga = gaze_answer_assessment(safe_json_loads(se.answer_timings_json or "", {}) or {})
+        if _ga["suspicious"]:
+            _det = "" if _ga["legacy"] else " (odatiy %d%%, %s tomonga %d%%)" % (
+                round(_ga["expected"] * 100), _ga["side"], round(_ga["same_side"] * 100))
+            flags.append({"code": "GAZE_ANSWER", "label": "javobdan oldin chetga qarash %d/%d savolda%s"
+                          " — kadrdan tashqaridagi yordam gumoni" % (_ga["glance"], _ga["answered"], _det)})
+    except Exception:
+        pass
+    if getattr(se, "verify_state", ""):
+        flags.append({"code": "VERIFY_" + se.verify_state.upper(), "label": {
+            "pending": "yuzma-yuz tasdiqlash kutilmoqda", "confirmed": "yuzma-yuz tasdiqlangan",
+            "rejected": "yuzma-yuz tasdiqlanmadi — ball bekor"}.get(se.verify_state, se.verify_state)})
     if n_audio >= 2:
         flags.append({"code": "AUDIO", "label": "ovoz gumoni %d marta (gaplashish/pichirlash) — "
                       "ko'rib chiqing" % n_audio})
@@ -563,8 +580,9 @@ def build_vacancy_report(ids: list[int], season: dict) -> dict:
 # --------------------------------------------------------- maxsus kiruvchi --
 def _subject_breakdown(se: StudentExam) -> tuple[list[dict], bool]:
     """Fanlar kesimida to'g'ri javoblar. exact=False — rasmiy ball bilan farq bor."""
-    qs = safe_json_loads(se.session_questions_json or "", []) or []
-    ans = safe_json_loads(se.answers_json or "", {}) or {}
+    from apps.api.services import graded_session_questions
+
+    qs, ans = graded_session_questions(se)
     rows: dict[str, dict] = {}
     correct_total = 0
     for q in qs:
@@ -705,7 +723,10 @@ def admin_student_exam_evidence(request, pk: int):
     started = se.started_at
     items = []
     for ts, vt, img, detail, outcome in (
+        # Imtihon kutubxonada o'tkaziladi: javondagi kitoblar qoidabuzarlik emas,
+        # shuning uchun ular dalillar ro'yxatida umuman ko'rsatilmaydi.
         ViolationLog.objects.filter(student_id=se.student_id, exam_id=se.exam_id)
+        .exclude(violation_type="FORBIDDEN_OBJECT_BOOK")
         .order_by("timestamp")
         .values_list("timestamp", "violation_type", "screenshot_url", "detail", "outcome")[:300]
     ):

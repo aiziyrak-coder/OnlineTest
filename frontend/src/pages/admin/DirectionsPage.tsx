@@ -1,12 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { translations, Language } from '../../i18n';
 import { apiUrl } from '../../lib/apiUrl';
 import { authHeaders } from '../../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../../lib/http';
 import {
-  AdminInput, AdminField, AdminBtn, AdminCard,
-  AdminEmpty, AdminPageMessage, AdminPagination, usePagedList, PlusIcon,
+  AdminAlert, AdminBtn, AdminEmpty, AdminField, AdminInput, AdminModal,
+  AdminPageMessage, AdminPagination, AdminSelect, usePagedList,
 } from './ui';
 import type { Direction, Group, Kafedra } from './types';
 
@@ -15,318 +14,248 @@ interface Props {
   lang: Language;
 }
 
-/** Yo'nalishlar (fakultet) — Level (kurs) bilan mustaqil o'q. Guruh ikkalasiga ham
- *  bog'lanadi: "1-kurs / Davolash ishi / 101-guruh". Bu sahifa LevelsPage bilan
- *  bir xil naqsh (CRUD, inline edit/delete) — faqat entity nomi boshqa. */
+const CARD =
+  'rounded-2xl bg-white border border-gray-200 shadow-[0_1px_2px_rgba(13,27,42,0.04),0_8px_24px_-16px_rgba(13,27,42,0.10)]';
+
+/** Yo'nalishlar — bir yoki bir nechta kafedraga bog'lanadi; guruhlar yo'nalishga. */
 export function DirectionsPage({ token, lang }: Props) {
   const t = translations[lang];
-  const h = authHeaders(token, lang);
+  const h = useMemo(() => authHeaders(token, lang), [token, lang]);
 
   const [directions, setDirections] = useState<Direction[]>([]);
-  const directionPage = usePagedList(directions);
   const [groups, setGroups] = useState<Group[]>([]);
   const [kafedralar, setKafedralar] = useState<Kafedra[]>([]);
-  const [newName, setNewName] = useState('');
-  const [newKafedraIds, setNewKafedraIds] = useState<number[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
+  const [kafF, setKafF] = useState('');
   const [msg, setMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editKafedraIds, setEditKafedraIds] = useState<number[]>([]);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState('');
-
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [form, setForm] = useState<{ id: number | null; name: string; kafedraIds: number[] } | null>(null);
+  const [kafQ, setKafQ] = useState('');
+  const [formErr, setFormErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<Direction | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const reload = useCallback(async () => {
-    const [rD, rG, rK] = await Promise.all([
-      fetch(apiUrl('/api/admin/directions'), { headers: h }),
-      fetch(apiUrl('/api/admin/groups'), { headers: h }),
-      fetch(apiUrl('/api/admin/kafedralar'), { headers: h }),
-    ]);
-    if (!checkAdminAuthResponse(rD) || !checkAdminAuthResponse(rG) || !checkAdminAuthResponse(rK)) return;
-    const jD = await readJsonSafe<Direction[]>(rD);
-    const jG = await readJsonSafe<Group[]>(rG);
-    const jK = await readJsonSafe<Kafedra[]>(rK);
-    setDirections(Array.isArray(jD) ? jD : []);
-    setGroups(Array.isArray(jG) ? jG : []);
-    setKafedralar(Array.isArray(jK) ? jK : []);
-  }, [token]);
+    try {
+      const [rD, rG, rK] = await Promise.all([
+        fetch(apiUrl('/api/admin/directions'), { headers: h }),
+        fetch(apiUrl('/api/admin/groups'), { headers: h }),
+        fetch(apiUrl('/api/admin/kafedralar'), { headers: h }),
+      ]);
+      if (!checkAdminAuthResponse(rD) || !checkAdminAuthResponse(rG) || !checkAdminAuthResponse(rK)) return;
+      const [jD, jG, jK] = await Promise.all([readJsonSafe<Direction[]>(rD), readJsonSafe<Group[]>(rG), readJsonSafe<Kafedra[]>(rK)]);
+      setDirections(Array.isArray(jD) ? jD : []);
+      setGroups(Array.isArray(jG) ? jG : []);
+      setKafedralar(Array.isArray(jK) ? jK : []);
+    } finally {
+      setLoading(false);
+    }
+  }, [h]);
 
   useEffect(() => { reload(); }, [reload]);
 
-  const toggleId = (ids: number[], id: number) => (
-    ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
-  );
+  const groupCount = useMemo(() => {
+    const m = new Map<number, { groups: number; students: number }>();
+    groups.forEach((g) => {
+      if (!g.direction_id) return;
+      const c = m.get(g.direction_id) || { groups: 0, students: 0 };
+      c.groups += 1;
+      c.students += Number(g.student_count || 0);
+      m.set(g.direction_id, c);
+    });
+    return m;
+  }, [groups]);
 
-  const addDirection = async (e: React.FormEvent) => {
+  const kafIdsOf = (d: Direction) => (d.kafedra_ids?.length ? d.kafedra_ids : d.kafedra_id ? [d.kafedra_id] : []);
+  const kafNamesOf = (d: Direction) => (d.kafedra_names?.length ? d.kafedra_names : d.kafedra_name ? [d.kafedra_name] : []);
+
+  const filtered = useMemo(() => {
+    const n = q.trim().toLowerCase();
+    return directions.filter((d) => {
+      if (kafF && !kafIdsOf(d).map(String).includes(kafF)) return false;
+      return !n || d.name.toLowerCase().includes(n) || kafNamesOf(d).join(' ').toLowerCase().includes(n);
+    });
+  }, [directions, q, kafF]);
+  const page = usePagedList(filtered, 25);
+
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!form || !form.name.trim()) return;
     setSaving(true);
-    setMsg(null);
-    const res = await fetch(apiUrl('/api/admin/directions'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify({
-        name: newName.trim(),
-        kafedra_ids: newKafedraIds,
-      }),
-    });
-    setSaving(false);
-    if (!checkAdminAuthResponse(res)) return;
-    if (res.ok) {
-      setNewName('');
-      setNewKafedraIds([]);
-      setMsg({ type: 'success', text: t.directionAddedOk });
+    setFormErr('');
+    try {
+      const isNew = form.id == null;
+      const res = await fetch(apiUrl(isNew ? '/api/admin/directions' : `/api/admin/directions/${form.id}`), {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...h },
+        body: JSON.stringify({ name: form.name.trim(), kafedra_ids: form.kafedraIds }),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      if (!res.ok) {
+        const d = await readJsonSafe<{ error?: string }>(res);
+        setFormErr(d?.error || t.errorGeneric);
+        return;
+      }
+      if (isNew) setMsg({ type: 'success', text: t.directionAddedOk });
+      setForm(null);
       reload();
-    } else {
-      const d = await readJsonSafe<{ error?: string }>(res);
-      setMsg({ type: 'error', text: d?.error || t.errorGeneric });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const startEdit = (dr: Direction) => {
-    setEditingId(dr.id);
-    setEditName(dr.name);
-    setEditKafedraIds(dr.kafedra_ids?.length ? dr.kafedra_ids : (dr.kafedra_id ? [dr.kafedra_id] : []));
-    setEditError('');
-    setDeleteConfirmId(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditName('');
-    setEditKafedraIds([]);
-    setEditError('');
-  };
-
-  const saveEdit = async (id: number) => {
-    if (!editName.trim()) return;
-    setEditSaving(true);
-    setEditError('');
-    const res = await fetch(apiUrl(`/api/admin/directions/${id}`), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify({
-        name: editName.trim(),
-        kafedra_ids: editKafedraIds,
-      }),
-    });
-    setEditSaving(false);
-    if (!checkAdminAuthResponse(res)) return;
-    if (res.ok) {
-      setEditingId(null);
-      reload();
-    } else {
-      const d = await readJsonSafe<{ error?: string }>(res);
-      setEditError(d?.error || t.errorGeneric);
+  const remove = async () => {
+    if (!confirmDel) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(apiUrl(`/api/admin/directions/${confirmDel.id}`), { method: 'DELETE', headers: h });
+      if (!checkAdminAuthResponse(res)) return;
+      if (!res.ok) {
+        const d = await readJsonSafe<{ error?: string }>(res);
+        setMsg({ type: 'error', text: d?.error || t.errorGeneric });
+      } else reload();
+    } finally {
+      setDeleting(false);
+      setConfirmDel(null);
     }
   };
 
-  const requestDelete = (id: number) => {
-    setDeleteConfirmId(id);
-    setEditingId(null);
-  };
-
-  const deleteDirection = async (id: number) => {
-    setDeletingId(id);
-    const res = await fetch(apiUrl(`/api/admin/directions/${id}`), {
-      method: 'DELETE',
-      headers: h,
-    });
-    setDeletingId(null);
-    setDeleteConfirmId(null);
-    if (!checkAdminAuthResponse(res)) return;
-    if (!res.ok) {
-      const d = await readJsonSafe<{ error?: string }>(res);
-      setMsg({ type: 'error', text: d?.error || t.errorGeneric });
-    } else {
-      reload();
-    }
-  };
+  const kafChoices = kafedralar.filter((k) => !kafQ.trim() || k.name.toLowerCase().includes(kafQ.trim().toLowerCase()));
+  const delGroups = confirmDel ? groupCount.get(confirmDel.id)?.groups ?? 0 : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <AdminPageMessage message={msg} onDismiss={() => setMsg(null)} />
-      <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-5 items-start">
 
-        {/* ── Yo'nalish qo'shish ── */}
-        <AdminCard
-          icon={<PlusIcon />}
-          title={t.kontingentAddDirection}
-          subtitle={t.directionSubtitle}
-        >
-          <div className="px-5 py-4 space-y-4">
-            <form onSubmit={addDirection} className="space-y-4">
-              <AdminField label={t.directionLabel} required>
-                <AdminInput
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder={t.directionPlaceholder}
-                  required
-                />
-              </AdminField>
-              <AdminField label={t.directionKafedraLabel}>
-                <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200 bg-white px-2 py-1.5 space-y-0.5">
-                  {kafedralar.length === 0 ? (
-                    <p className="text-[12px] text-gray-400 px-1 py-1">{t.directionKafedraNone}</p>
-                  ) : kafedralar.map((kf) => (
-                    <label key={kf.id} className="flex items-center gap-2 px-1 py-1 rounded hover:bg-gray-50 text-[13px] text-gray-700 cursor-pointer">
+      <section className={`${CARD} overflow-hidden`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+          <p className="text-[13.5px] text-gray-600">
+            <b className="font-display text-[18px] font-extrabold tabular-nums text-gray-900">{filtered.length}</b>
+            {filtered.length !== directions.length ? <span className="text-gray-400"> / {directions.length}</span> : null} {t.kontingentDirections.toLowerCase()}
+          </p>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <AdminSelect value={kafF} onChange={(e) => setKafF(e.target.value)} className="h-9 sm:w-64">
+              <option value="">{t.kontingentKafedralar}: —</option>
+              {kafedralar.map((k) => <option key={k.id} value={String(k.id)}>{k.name}</option>)}
+            </AdminSelect>
+            <AdminInput type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="…" className="h-9 sm:w-56" />
+            <AdminBtn size="sm" onClick={() => { setFormErr(''); setKafQ(''); setForm({ id: null, name: '', kafedraIds: kafF ? [Number(kafF)] : [] }); }}>
+              + {t.kontingentAddDirection}
+            </AdminBtn>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-[13.5px]">
+            <thead className="bg-gray-50/80 text-[12px] text-gray-500">
+              <tr className="border-b border-gray-200 text-left">
+                <th className="w-12 px-4 py-2.5 font-semibold">№</th>
+                <th className="px-4 py-2.5 font-semibold">{t.directionLabel}</th>
+                <th className="px-4 py-2.5 font-semibold">{t.kontingentKafedralar}</th>
+                <th className="px-4 py-2.5 text-right font-semibold">{t.kontingentGroups}</th>
+                <th className="px-4 py-2.5 text-right font-semibold">{t.kontingentStudents}</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {page.pageItems.map((d, i) => {
+                const c = groupCount.get(d.id) || { groups: 0, students: 0 };
+                const names = kafNamesOf(d);
+                return (
+                  <tr key={d.id} className="hover:bg-gray-50/70">
+                    <td className="border-b border-gray-100 px-4 py-3 tabular-nums text-gray-400">{(page.page - 1) * page.pageSize + i + 1}</td>
+                    <td className="border-b border-gray-100 px-4 py-3 font-semibold text-gray-900">{d.name}</td>
+                    <td className="border-b border-gray-100 px-4 py-3">
+                      {names.length ? (
+                        <div className="flex max-w-[420px] flex-wrap gap-1">
+                          {names.slice(0, 3).map((n) => <span key={n} className="rounded-md bg-gray-100 px-2 py-0.5 text-[12px] text-gray-700">{n}</span>)}
+                          {names.length > 3 ? <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[12px] text-gray-500" title={names.join(', ')}>+{names.length - 3}</span> : null}
+                        </div>
+                      ) : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="border-b border-gray-100 px-4 py-3 text-right tabular-nums">{c.groups}</td>
+                    <td className="border-b border-gray-100 px-4 py-3 text-right tabular-nums text-gray-600">{c.students}</td>
+                    <td className="border-b border-gray-100 px-4 py-3 text-right whitespace-nowrap">
+                      <AdminBtn variant="ghost" size="sm" onClick={() => { setFormErr(''); setKafQ(''); setForm({ id: d.id, name: d.name, kafedraIds: kafIdsOf(d) }); }}>{t.edit}</AdminBtn>
+                      <AdminBtn variant="red-ghost" size="sm" className="ml-2" onClick={() => setConfirmDel(d)}>{t.delete}</AdminBtn>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!loading && filtered.length === 0 ? <AdminEmpty title={t.emptyDirections} subtitle={directions.length ? undefined : t.directionEmptyHint} /> : null}
+        </div>
+        <AdminPagination page={page.page} totalPages={page.totalPages} onPageChange={page.setPage} total={page.total} pageSize={page.pageSize} />
+      </section>
+
+      <AdminModal
+        open={!!form}
+        onClose={() => setForm(null)}
+        title={form?.id == null ? t.kontingentAddDirection : `${t.edit} — ${form?.name}`}
+        subtitle={form?.id == null ? t.directionSubtitle : undefined}
+        maxWidth="max-w-xl"
+      >
+        {form ? (
+          <form onSubmit={save} className="space-y-4">
+            {formErr ? <AdminAlert type="error">{formErr}</AdminAlert> : null}
+            <AdminField label={t.directionLabel} required>
+              <AdminInput autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t.directionPlaceholder} required />
+            </AdminField>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="text-[13px] font-medium text-gray-600">{t.directionKafedraLabel}</span>
+                <span className="text-[12px] font-semibold text-indigo-700">{form.kafedraIds.length}</span>
+              </div>
+              <AdminInput type="search" value={kafQ} onChange={(e) => setKafQ(e.target.value)} placeholder="…" className="mb-2 h-9" />
+              <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-xl border border-gray-200 p-1.5">
+                {kafChoices.length === 0 ? (
+                  <p className="px-2 py-1.5 text-[12.5px] text-gray-400">{t.directionKafedraNone}</p>
+                ) : kafChoices.map((k) => {
+                  const on = form.kafedraIds.includes(k.id);
+                  return (
+                    <label key={k.id} className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] ${on ? 'bg-indigo-50 text-indigo-900' : 'text-gray-700 hover:bg-gray-50'}`}>
                       <input
                         type="checkbox"
-                        checked={newKafedraIds.includes(kf.id)}
-                        onChange={() => setNewKafedraIds((prev) => toggleId(prev, kf.id))}
+                        className="h-4 w-4 accent-[var(--color-indigo-600)]"
+                        checked={on}
+                        onChange={() => setForm({ ...form, kafedraIds: on ? form.kafedraIds.filter((x) => x !== k.id) : [...form.kafedraIds, k.id] })}
                       />
-                      <span className="truncate">{kf.name}</span>
+                      <span className="truncate">{k.name}</span>
                     </label>
-                  ))}
-                </div>
-              </AdminField>
-              <AdminBtn type="submit" variant="blue" size="lg" loading={saving} icon={<PlusIcon size={16} />} className="w-full">
-                {t.kontingentAddDirection}
-              </AdminBtn>
-            </form>
-            <p className="text-[12px] text-gray-400 leading-relaxed border-t border-gray-100 pt-3">
-              {t.directionHint}
-            </p>
-          </div>
-        </AdminCard>
+                  );
+                })}
+              </div>
+            </div>
+            {form.id == null ? <p className="text-[12.5px] leading-relaxed text-gray-500">{t.directionHint}</p> : null}
+            <div className="flex justify-end gap-2">
+              <AdminBtn variant="ghost" onClick={() => setForm(null)}>{t.cancel}</AdminBtn>
+              <AdminBtn type="submit" loading={saving}>{t.save}</AdminBtn>
+            </div>
+          </form>
+        ) : null}
+      </AdminModal>
 
-        {/* ── Yo'nalishlar ro'yxati ── */}
-        <AdminCard title={t.kontingentDirections} count={directions.length}>
-          <div className="divide-y divide-gray-100">
-            {directions.length === 0 ? (
-              <AdminEmpty
-                icon={<svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" /></svg>}
-                title={t.emptyDirections}
-                subtitle={t.directionEmptyHint}
-              />
-            ) : directionPage.pageItems.map((dr, i) => {
-              const gCount = groups.filter((g) => g.direction_id === dr.id).length;
-              const isEditing = editingId === dr.id;
-              const isDeleteConfirm = deleteConfirmId === dr.id;
-
-              return (
-                <motion.div key={dr.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                  <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3 sm:py-4 transition-colors ${isEditing || isDeleteConfirm ? 'bg-gray-50/80' : 'hover:bg-gray-50'}`}>
-                    <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 font-semibold flex items-center justify-center text-[15px] shrink-0 tabular-nums">
-                      {i + 1}
-                    </div>
-
-                    {isEditing ? (
-                      <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
-                        <AdminInput
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="flex-1 min-w-[140px]"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEdit(dr.id);
-                            if (e.key === 'Escape') cancelEdit();
-                          }}
-                        />
-                        <div className="w-full max-h-36 overflow-y-auto rounded-lg border border-gray-200 bg-white px-2 py-1 space-y-0.5">
-                          {kafedralar.map((kf) => (
-                            <label key={kf.id} className="flex items-center gap-2 px-1 py-0.5 text-[12px] text-gray-700 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={editKafedraIds.includes(kf.id)}
-                                onChange={() => setEditKafedraIds((prev) => toggleId(prev, kf.id))}
-                              />
-                              <span className="truncate">{kf.name}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <AdminBtn variant="blue" size="sm" loading={editSaving} onClick={() => saveEdit(dr.id)}>
-                          {t.save}
-                        </AdminBtn>
-                        <AdminBtn variant="ghost" size="sm" onClick={cancelEdit}>
-                          {t.cancel}
-                        </AdminBtn>
-                        {editError && <span className="text-[12px] text-red-600 w-full">{editError}</span>}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex-1 min-w-[130px] min-w-0">
-                          <p className="font-semibold text-gray-900 text-[14px] sm:text-[15px] truncate">{dr.name}</p>
-                          <p className="text-[12px] sm:text-[13px] text-gray-400 mt-0.5">
-                            {(() => {
-                              const names = dr.kafedra_names?.length
-                                ? dr.kafedra_names.join(', ')
-                                : (dr.kafedra_name || '');
-                              return names ? `${names} · ${gCount} ${t.kontingentGroups}` : `${gCount} ${t.kontingentGroups}`;
-                            })()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <AdminBtn variant="ghost" size="sm" onClick={() => startEdit(dr)}
-                            icon={<svg className="w-3.5 h-3.5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}>
-                            <span className="hidden sm:inline">{t.edit}</span>
-                          </AdminBtn>
-                          <AdminBtn variant="red-ghost" size="sm" onClick={() => requestDelete(dr.id)}
-                            icon={<svg className="w-3.5 h-3.5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>}>
-                            <span className="hidden sm:inline">{t.delete}</span>
-                          </AdminBtn>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <AnimatePresence>
-                    {isDeleteConfirm && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mx-5 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                          {gCount > 0 ? (
-                            <>
-                              <p className="text-[13px] font-semibold text-red-700 flex items-center gap-2 mb-1">
-                                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                                {t.directionHasGroups.replace('{n}', String(gCount))}
-                              </p>
-                              <AdminBtn variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
-                                {t.cancel}
-                              </AdminBtn>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-[13px] font-semibold text-red-700 mb-3">
-                                {t.directionDeleteConfirm.replace('{name}', dr.name)}
-                              </p>
-                              <div className="flex gap-2">
-                                <AdminBtn variant="red" size="sm" loading={deletingId === dr.id} onClick={() => deleteDirection(dr.id)}>
-                                {t.adminDeleteBtn}
-                              </AdminBtn>
-                              <AdminBtn variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
-                                {t.cancel}
-                              </AdminBtn>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
-          </div>
-          <AdminPagination
-            page={directionPage.page}
-            totalPages={directionPage.totalPages}
-            onPageChange={directionPage.setPage}
-            total={directionPage.total}
-            pageSize={directionPage.pageSize}
-          />
-        </AdminCard>
-      </div>
+      <AdminModal open={!!confirmDel} onClose={() => setConfirmDel(null)} title={t.delete}>
+        {confirmDel ? (
+          delGroups > 0 ? (
+            <div className="space-y-4">
+              <AdminAlert type="warning">{t.directionHasGroups.replace('{n}', String(delGroups))}</AdminAlert>
+              <div className="flex justify-end"><AdminBtn variant="ghost" onClick={() => setConfirmDel(null)}>{t.cancel}</AdminBtn></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-[14px] text-gray-700">{t.directionDeleteConfirm.replace('{name}', confirmDel.name)}</p>
+              <div className="flex justify-end gap-2">
+                <AdminBtn variant="ghost" onClick={() => setConfirmDel(null)}>{t.cancel}</AdminBtn>
+                <AdminBtn variant="red" loading={deleting} onClick={remove}>{t.adminDeleteBtn}</AdminBtn>
+              </div>
+            </div>
+          )
+        ) : null}
+      </AdminModal>
     </div>
   );
 }

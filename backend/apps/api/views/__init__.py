@@ -23,3 +23,7 @@ from apps.api.views.ordinator import *  # noqa: F401,F403
 from apps.api.views.ordinator_admin import *  # noqa: F401,F403
 from apps.api.views.staff import *  # noqa: F401,F403
 from apps.api.views.public import *  # noqa: F401,F403
+from apps.api.views.verification import *  # noqa: F401,F403
+from apps.api.views.integrity_digest import *  # noqa: F401,F403
+from apps.api.views.test_center import *  # noqa: F401,F403
+from apps.api.views.bulk_access import *  # noqa: F401,F403

@@ -75,6 +75,11 @@ def _no_retake_types() -> set[str]:
 # --- turlarning inson tilidagi nomlari -----------------------------------
 
 NAMES: dict[str, tuple[str, str, str]] = {
+    'SIDE_CONVERSATION_SUSPECTED': (
+        'yon tomonga burilib, lab harakati bilan 6 soniya davomli suhbat belgilari',
+        'признаки разговора в сторону с движением губ в течение 6 секунд',
+        'six seconds of sideways head orientation with visible speech movements',
+    ),
     "IDENTITY_SUBSTITUTION": (
         "kamerada boshqa odam ko'rinishi (shaxs almashtirish)",
         "в кадре другой человек (подмена личности)",
@@ -104,6 +109,11 @@ NAMES: dict[str, tuple[str, str, str]] = {
         "virtual (soxta) kamera",
         "виртуальная (поддельная) камера",
         "a virtual (fake) webcam",
+    ),
+    "HAND_GESTURE_SUSPECTED": (
+        "qo'l bilan ishora qilish gumoni",
+        "подозрение на жест рукой",
+        "a suspected hand gesture",
     ),
     "MICROPHONE_MUTED": (
         "mikrofonni o'chirib qo'yish",
@@ -255,6 +265,11 @@ NAMES: dict[str, tuple[str, str, str]] = {
         "длительный суммарный взгляд в сторону (сосед или бумага)",
         "looking to the side for a long total time (a person or paper beside you)",
     ),
+    "GAZE_ANSWER_PATTERN": (
+        "javobni belgilashdan oldin muntazam chetga qarash (kimdir javob ko'rsatmoqda)",
+        "регулярный взгляд в сторону перед выбором ответа (кто-то подсказывает)",
+        "regularly looking aside before choosing an answer (someone is signalling)",
+    ),
 }
 
 _L = {"uz": 0, "ru": 1, "en": 2}
@@ -273,7 +288,7 @@ def _names(codes, lang: str) -> list[str]:
 
 # --- qoidalar matnini yig'ish --------------------------------------------
 
-def build_vac_rules(exam, lang: str = "uz", user_id: str = "") -> dict:
+def build_vac_rules(exam, lang: str = "uz", user_id: str = "", test_center: bool = False) -> dict:
     """Topshiruvchiga ko'rsatiladigan qoidalar + matnning barmoq izi."""
     lang = lang if lang in _L else "uz"
     i = _L[lang]
@@ -282,6 +297,10 @@ def build_vac_rules(exam, lang: str = "uz", user_id: str = "") -> dict:
     technical = _technical_types()
     ignored = _ignored_types()
     no_retake = _no_retake_types()
+    from apps.api.test_center_policy import DISABLED_PERSON_SIGNALS
+    instant -= DISABLED_PERSON_SIGNALS
+    ignored |= DISABLED_PERSON_SIGNALS
+    no_retake -= DISABLED_PERSON_SIGNALS
     max_warn = max_warnings_before_ban()
     # Qoidalar matni tizimning HAQIQIY xatti-harakatiga mos bo'lsin:
     # yumshatilgan toifada nazorat qanday bo'lsa, matn ham shunday.
@@ -292,6 +311,19 @@ def build_vac_rules(exam, lang: str = "uz", user_id: str = "") -> dict:
         instant = {t for t in instant if t not in _rp["no_instant"]}
         ignored = set(ignored) | set(_rp["ignored"])
         max_warn = max(max_warn, _rp["max_warnings"])
+    # Test markazi: mikrofonga oid turlar jazolanmaydi (matn tizimga mos bo'lsin).
+    from apps.api.test_center_policy import CENTER_IGNORED, PROCTOR_ONLY
+    _tc_mic = set(CENTER_IGNORED)
+    if test_center:
+        instant = {t for t in instant if t not in _tc_mic}
+        no_retake = set(no_retake) - _tc_mic
+        ignored = set(ignored) | _tc_mic
+    if test_center and PROCTOR_ONLY:
+        # Xonada nazoratchi bor: tizim avtomatik ogohlantirmaydi va chetlatmaydi.
+        # Qoidalar matni tizim xatti-harakatiga mos bo'lishi shart.
+        instant = set()
+        no_retake = set()
+        ignored = set(NAMES)
     tech_retakes = exam_violation_retakes_allowed(exam)
     id_retakes = exam_identity_retakes_allowed(exam)
     duration = int(getattr(exam, "duration_minutes", 0) or 0)
@@ -320,6 +352,10 @@ def build_vac_rules(exam, lang: str = "uz", user_id: str = "") -> dict:
     )
 
     _qlock_on = question_lock_enabled(exam)
+    # Yuqori natija yuzma-yuz tasdiqlanishi mumkin — imtihon OLDIDAN ogohlantiriladi.
+    from apps.api.result_verification import applies_to as _v_applies, rules_text as _v_rules_text
+
+    _verify_rule = [_v_rules_text(i)] if (_v_applies(exam) and not test_center) else []
     _qsec = per_question_seconds(exam, n_q)
     _room = room_scan_required()
     _webcam = webcam_snapshots_enabled()
@@ -751,7 +787,7 @@ def build_vac_rules(exam, lang: str = "uz", user_id: str = "") -> dict:
                 "items": _names(technical | ignored, lang),
             },
             {"title": T["retake_title"], "items": retake_rules},
-            {"title": T["data_title"], "items": data_rules},
+            {"title": T["data_title"], "items": data_rules + _verify_rule},
             {"title": T["appeal_title"], "items": appeal_rules},
         ],
         "consent_label": T["consent_label"],
@@ -760,6 +796,58 @@ def build_vac_rules(exam, lang: str = "uz", user_id: str = "") -> dict:
     # Barmoq izi — matnning O'ZIDAN. Qoidalar o'zgarsa versiya ham
     # o'zgaradi va eski rozilik yangi qoidalarga tegishli emasligi
     # ko'rinib turadi.
+    if test_center:
+        _tc_text = (
+            (
+                "Test markazi rejimi: mikrofon ishlatilmaydi va ovoz nazorat qilinmaydi. "
+                "Orqadagi odamlar, yurib o'tayotgan nazoratchilar va xona kompyuterlari jazolanmaydi. "
+                "Nigoh, bosh yoki qo'l harakati, ikkinchi odam va suhbat gumoni avtomatik jazo bermaydi; ularni xonadagi nazoratchi baholaydi. "
+                "Avtomatik ogohlantirish va chetlatish o'chirilgan: hamma holatni xonadagi nazoratchi baholaydi, "
+                "hodisalar esa dalil sifatida yozib boriladi. "
+                "Suhbatlashish va yordam berish baribir taqiqlanadi. Kamera va kirishdagi shaxs tasdig'i saqlanadi; imtihon davomida boshqa shaxsni avtomatik aniqlash o'chirilgan. "
+                "Imtihon kutubxonada o'tkazilgani uchun kitob, daftar va qog'oz umuman nazorat qilinmaydi. Telefon esa faqat aniq ko'rinadigan buyum mustaqil tekshiruvda tasdiqlansa jazolanadi; qo'l holati dalil emas.",
+                "Режим тестового центра: микрофон не используется, звук не контролируется. "
+                "Люди на заднем плане, проходящие наблюдатели и компьютеры аудитории не считаются нарушением. "
+                "Взгляд, движения и подозрение на разговор или второго человека не вызывают автоматическое наказание: их оценивает наблюдатель в аудитории. Камера и проверка личности при входе сохраняются; автоматическая проверка другого человека во время экзамена отключена. "
+                "Разговоры в сторону и помощь запрещены. Экзамен проходит в библиотеке, поэтому книги, тетради и бумаги вообще не контролируются. Телефон наказывается только при независимом подтверждении видимого предмета; положение руки не является доказательством.",
+                "Test-centre mode: the microphone is not used and audio is not monitored. "
+                "Background people, passing proctors and room computers are ignored. "
+                "Gaze, movement, a second person and suspected conversation do not trigger automatic penalties: the room proctor assesses them. Camera and entry identity checks remain enabled; automatic person-identity monitoring during the exam is disabled. "
+                "Sideways conversation and assisting others are prohibited. The exam is held in a library, so books, notebooks and paper are not monitored at all. A phone is penalised only when a visible object is independently confirmed; hand posture is not evidence.",
+            )[i],
+            (
+                "Test markazida ovoz umuman tahlil qilinmaydi.",
+                "В тестовом центре звук не анализируется.",
+                "In the test centre audio is not analysed at all.",
+            )[i],
+        )
+
+        def _tc_swap(node):
+            if isinstance(node, str) and node == _names(['MULTIPLE_FACES'], lang)[0]:
+                return (
+                    "Ikkinchi odam (xonadagi nazoratchi baholaydi)",
+                    "Второй человек (оценивает наблюдатель в аудитории)",
+                    "Second person (assessed by the room proctor)",
+                )[i]
+            if isinstance(node, list):
+                out = []
+                for x in node:
+                    if isinstance(x, str) and x.startswith(("Mikrofon:", "Микрофон:", "Microphone:")):
+                        out.append(_tc_text[0])
+                    elif isinstance(x, str) and x.startswith(
+                        ("Ovoz yozib olinmaydi", "Звук не записывается", "Audio is not recorded")
+                    ):
+                        out.append(_tc_text[1])
+                    else:
+                        out.append(_tc_swap(x))
+                return out
+            if isinstance(node, dict):
+                return {k: _tc_swap(v) for k, v in node.items()}
+            return node
+
+        doc = _tc_swap(doc)
+        doc["test_center"] = True
+
     canon = json.dumps(doc, ensure_ascii=False, sort_keys=True)
     doc["version"] = "%s:%s" % (
         lang, hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16],

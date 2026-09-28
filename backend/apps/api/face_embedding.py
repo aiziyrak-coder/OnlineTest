@@ -432,6 +432,23 @@ def _detect_faces_raw(image_bytes: bytes, engine: dict[str, Any]):
     return img, list(faces)
 
 
+def center_identity_ambiguous(frame_b64: str) -> bool:
+    """Do not compare identity against a nearby bystander in a shared room."""
+    engine = _get_engine()
+    raw = _decode_frame_b64(frame_b64)
+    if not engine or not raw:
+        return False  # Existing identity error handling remains authoritative.
+    try:
+        img, faces = _detect_faces_raw(raw, engine)
+        if img is None or len(faces) < 2:
+            return False
+        ordered = sorted(faces, key=lambda f: float(f[2]) * float(f[3]), reverse=True)
+        first, second = ordered[:2]
+        return float(second[2]) * float(second[3]) >= float(first[2]) * float(first[3]) * 0.45
+    except Exception:
+        return False
+
+
 def analyze_proctor_frame_local(frame_b64: str) -> dict:
     """
     OpenCV YuNet — yuz soni va kadr markazidan og‘ish (qarab ketish).

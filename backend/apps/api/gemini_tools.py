@@ -187,6 +187,8 @@ def analyze_proctor_frame(frame_b64: str) -> dict:
             "Respond ONLY with a single JSON object, no other text:\n"
             '{"face_count": <integer 0/1/2+>, '
             '"forbidden_objects": [<detected items from the allowed list>], '
+            '"object_evidence": [{"type":"cell_phone|book|laptop", "confidence":0.0, '
+            '"bbox":[0.0,0.0,0.0,0.0], "features":[], "near_candidate":false}], '
             '"looking_away": <true if clearly looking away from the screen>}\n\n'
             "Allowed forbidden_objects values (use these exact strings only):\n"
             '- "cell_phone" — smartphone/mobile/tablet held in hand, on desk, or near face\n'
@@ -199,7 +201,16 @@ def analyze_proctor_frame(frame_b64: str) -> dict:
             "- Report an object if it is clearly visible and likely used for cheating aid.\n"
             "- Do NOT report the monitor/keyboard the student is using for the exam as laptop.\n"
             "- Empty hands, water bottle, headphones alone are NOT forbidden.\n"
-            "- Be moderately sensitive: if a phone/book/notebook is clearly in frame, include it."
+            "- Never infer a phone from a hand near the face/ear, a fist, fingers, shadows or posture. "
+            "An actual separate device body AND a screen or camera lenses must be visible.\n"
+            "- object_evidence: include only physically visible objects, with normalized [x,y,width,height] "
+            "bounding boxes and confidence 0..1. Empty list when uncertain.\n"
+            "- features must name visible evidence only: device_body, screen, camera_lenses, "
+            "bound_pages, printed_text, keyboard. A hand is never device_body.\n"
+            "- Books require bound pages and visible printed text; blank paper and partitions are not books.\n"
+            "- near_candidate is true only for an object held or used by the foreground examinee; "
+            "ignore other desks, background people and test-centre computers.\n"
+            "- Be conservative: uncertainty must not be treated as a confirmed violation."
         )
         raw = chat_vision(prompt, [(raw_bytes, _detect_image_mime(raw_bytes))])
         text = (raw or "").strip()
@@ -213,6 +224,7 @@ def analyze_proctor_frame(frame_b64: str) -> dict:
             "ok": True,
             "face_count": int(parsed.get("face_count") or 0),
             "forbidden_objects": [str(o) for o in (parsed.get("forbidden_objects") or [])],
+            "object_evidence": parsed.get('object_evidence') if isinstance(parsed.get('object_evidence'),list) else [],
             "looking_away": bool(parsed.get("looking_away", False)),
         }
     except Exception as exc:

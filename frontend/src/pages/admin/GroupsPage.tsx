@@ -1,12 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { translations, Language } from '../../i18n';
 import { apiUrl } from '../../lib/apiUrl';
 import { authHeaders } from '../../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../../lib/http';
 import {
-  AdminInput, AdminSelect, AdminField, AdminBtn, AdminCard,
-  AdminEmpty, AdminPageMessage, AdminPagination, usePagedList, ChevronRight, PlusIcon,
+  AdminAlert, AdminBtn, AdminEmpty, AdminField, AdminInput, AdminModal,
+  AdminPageMessage, AdminPagination, AdminSelect, usePagedList,
 } from './ui';
 import type { Level, Direction, Group } from './types';
 
@@ -17,383 +16,321 @@ interface Props {
   onViewStudents: (group: Group) => void;
 }
 
+const CARD =
+  'rounded-2xl bg-white border border-gray-200 shadow-[0_1px_2px_rgba(13,27,42,0.04),0_8px_24px_-16px_rgba(13,27,42,0.10)]';
+
+const levelNum = (name: string) => {
+  const m = /(\d+)/.exec(name || '');
+  return m ? Number(m[1]) : 99;
+};
+
+type FormState = {
+  name: string; levelId: string; directionId: string; track: string; year: string; intake: string;
+};
+
+/** Guruhlar — kurs chiplari, yo'nalish filtri, qidiruv va jadval. */
 export function GroupsPage({ token, lang, initialLevelId, onViewStudents }: Props) {
   const t = translations[lang];
-  const h = authHeaders(token, lang);
+  const h = useMemo(() => authHeaders(token, lang), [token, lang]);
   const trackLabel = (track?: string | null) =>
     track === 'residency' ? t.trackResidency : track === 'master' ? t.trackMaster : t.trackBachelor;
 
   const [levels, setLevels] = useState<Level[]>([]);
   const [directions, setDirections] = useState<Direction[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [filterLevelId, setFilterLevelId] = useState<string>(initialLevelId ? String(initialLevelId) : '');
-  const [filterDirectionId, setFilterDirectionId] = useState<string>('');
-  const [newGroupName, setNewGroupName] = useState('');
-  const [newDirectionId, setNewDirectionId] = useState('');
-  const [newTrack, setNewTrack] = useState('bachelor');
-  const [newYear, setNewYear] = useState('');
-  const [newIntakeYear, setNewIntakeYear] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [levelF, setLevelF] = useState(initialLevelId ? String(initialLevelId) : '');
+  const [dirF, setDirF] = useState('');
+  const [q, setQ] = useState('');
   const [msg, setMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
-  // Inline edit state
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState('');
-
-  // Inline delete confirm state
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-  const [deleteForcing, setDeleteForcing] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [addForm, setAddForm] = useState<FormState | null>(null);
+  const [edit, setEdit] = useState<{ id: number; name: string } | null>(null);
+  const [formErr, setFormErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<Group | null>(null);
+  const [needForce, setNeedForce] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const reload = useCallback(async () => {
-    const [rL, rD, rG] = await Promise.all([
-      fetch(apiUrl('/api/admin/levels'), { headers: h }),
-      fetch(apiUrl('/api/admin/directions'), { headers: h }),
-      fetch(apiUrl('/api/admin/groups'), { headers: h }),
-    ]);
-    if (!checkAdminAuthResponse(rL) || !checkAdminAuthResponse(rD) || !checkAdminAuthResponse(rG)) return;
-    const jL = await readJsonSafe<Level[]>(rL);
-    const jD = await readJsonSafe<Direction[]>(rD);
-    const jG = await readJsonSafe<Group[]>(rG);
-    setLevels(Array.isArray(jL) ? jL : []);
-    setDirections(Array.isArray(jD) ? jD : []);
-    setGroups(Array.isArray(jG) ? jG : []);
-  }, [token]);
+    try {
+      const [rL, rD, rG] = await Promise.all([
+        fetch(apiUrl('/api/admin/levels'), { headers: h }),
+        fetch(apiUrl('/api/admin/directions'), { headers: h }),
+        fetch(apiUrl('/api/admin/groups'), { headers: h }),
+      ]);
+      if (!checkAdminAuthResponse(rL) || !checkAdminAuthResponse(rD) || !checkAdminAuthResponse(rG)) return;
+      const [jL, jD, jG] = await Promise.all([readJsonSafe<Level[]>(rL), readJsonSafe<Direction[]>(rD), readJsonSafe<Group[]>(rG)]);
+      setLevels(Array.isArray(jL) ? jL : []);
+      setDirections(Array.isArray(jD) ? jD : []);
+      setGroups(Array.isArray(jG) ? jG : []);
+    } finally {
+      setLoading(false);
+    }
+  }, [h]);
 
   useEffect(() => { reload(); }, [reload]);
-  useEffect(() => { if (initialLevelId) setFilterLevelId(String(initialLevelId)); }, [initialLevelId]);
+  useEffect(() => { if (initialLevelId) setLevelF(String(initialLevelId)); }, [initialLevelId]);
 
-  const addGroup = async (e: React.FormEvent) => {
+  const sortedLevels = useMemo(() => [...levels].sort((a, b) => levelNum(a.name) - levelNum(b.name)), [levels]);
+  const levelCounts = useMemo(() => {
+    const m = new Map<number, number>();
+    groups.forEach((g) => m.set(g.level_id, (m.get(g.level_id) || 0) + 1));
+    return m;
+  }, [groups]);
+
+  const filtered = useMemo(() => {
+    const n = q.trim().toLowerCase();
+    return groups
+      .filter((g) => (!levelF || String(g.level_id) === levelF) && (!dirF || String(g.direction_id ?? '') === dirF) && (!n || g.name.toLowerCase().includes(n)))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  }, [groups, levelF, dirF, q]);
+  const page = usePagedList(filtered, 50);
+  const shownStudents = filtered.reduce((s, g) => s + Number(g.student_count || 0), 0);
+
+  const add = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!filterLevelId) { setMsg({ type: 'error', text: t.emptyLevels }); return; }
+    if (!addForm) return;
+    if (!addForm.levelId) { setFormErr(t.emptyLevels); return; }
+    if (!addForm.name.trim()) return;
     setSaving(true);
-    setMsg(null);
-    const body: Record<string, unknown> = {
-      name: newGroupName.trim(),
-      level_id: Number(filterLevelId),
-      direction_id: newDirectionId ? Number(newDirectionId) : null,
-      program_track: newTrack,
-    };
-    if (newYear.trim()) body.academic_year = Number(newYear);
-    if (newIntakeYear.trim()) body.intake_year = Number(newIntakeYear);
-    const res = await fetch(apiUrl('/api/admin/groups'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify(body),
-    });
-    setSaving(false);
-    if (!checkAdminAuthResponse(res)) return;
-    if (res.ok) {
-      setNewGroupName('');
-      setNewDirectionId('');
-      setNewIntakeYear('');
-      setMsg({ type: 'success', text: t.groupAddedOk });
-      reload();
-    } else {
-      const d = await readJsonSafe<{ error?: string }>(res);
-      setMsg({ type: 'error', text: d?.error || t.errorGeneric });
-    }
-  };
-
-  const startEdit = (g: Group) => {
-    setEditingId(g.id);
-    setEditName(g.name);
-    setEditError('');
-    setDeleteConfirmId(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditName('');
-    setEditError('');
-  };
-
-  const saveEdit = async (id: number) => {
-    if (!editName.trim()) return;
-    setEditSaving(true);
-    setEditError('');
-    const res = await fetch(apiUrl(`/api/admin/groups/${id}`), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify({ name: editName.trim() }),
-    });
-    setEditSaving(false);
-    if (!checkAdminAuthResponse(res)) return;
-    if (res.ok) {
-      setEditingId(null);
-      reload();
-    } else {
-      const d = await readJsonSafe<{ error?: string }>(res);
-      setEditError(d?.error || t.errorGeneric);
-    }
-  };
-
-  const requestDelete = (id: number) => {
-    setDeleteConfirmId(id);
-    setDeleteForcing(false);
-    setEditingId(null);
-  };
-
-  const deleteGroup = async (id: number, force = false) => {
-    setDeletingId(id);
-    const res = await fetch(apiUrl(`/api/admin/groups/${id}`), {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify({ force }),
-    });
-    setDeletingId(null);
-    if (!checkAdminAuthResponse(res)) return;
-    if (!res.ok) {
-      const d = await readJsonSafe<{ error?: string; requires_force?: boolean }>(res);
-      if (d?.requires_force) {
-        setDeleteForcing(true);
+    setFormErr('');
+    try {
+      const body: Record<string, unknown> = {
+        name: addForm.name.trim(),
+        level_id: Number(addForm.levelId),
+        direction_id: addForm.directionId ? Number(addForm.directionId) : null,
+        program_track: addForm.track,
+      };
+      if (addForm.year.trim()) body.academic_year = Number(addForm.year);
+      if (addForm.intake.trim()) body.intake_year = Number(addForm.intake);
+      const res = await fetch(apiUrl('/api/admin/groups'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...h }, body: JSON.stringify(body),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      if (!res.ok) {
+        const d = await readJsonSafe<{ error?: string }>(res);
+        setFormErr(d?.error || t.errorGeneric);
         return;
       }
-      setMsg({ type: 'error', text: d?.error || t.errorGeneric });
-      setDeleteConfirmId(null);
-    } else {
-      setDeleteConfirmId(null);
+      setMsg({ type: 'success', text: t.groupAddedOk });
+      setAddForm(null);
       reload();
+    } finally {
+      setSaving(false);
     }
   };
 
-  const selectedLevel = levels.find((l) => String(l.id) === filterLevelId);
-  const filtered = groups.filter((g) => {
-    if (filterLevelId && String(g.level_id) !== filterLevelId) return false;
-    if (filterDirectionId && String(g.direction_id ?? '') !== filterDirectionId) return false;
-    return true;
-  });
-  const groupPage = usePagedList(filtered);
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!edit || !edit.name.trim()) return;
+    setSaving(true);
+    setFormErr('');
+    try {
+      const res = await fetch(apiUrl(`/api/admin/groups/${edit.id}`), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...h }, body: JSON.stringify({ name: edit.name.trim() }),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      if (!res.ok) {
+        const d = await readJsonSafe<{ error?: string }>(res);
+        setFormErr(d?.error || t.errorGeneric);
+        return;
+      }
+      setEdit(null);
+      reload();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (force: boolean) => {
+    if (!confirmDel) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(apiUrl(`/api/admin/groups/${confirmDel.id}`), {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json', ...h }, body: JSON.stringify({ force }),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      if (!res.ok) {
+        const d = await readJsonSafe<{ error?: string; requires_force?: boolean }>(res);
+        if (d?.requires_force) { setNeedForce(true); return; }
+        setMsg({ type: 'error', text: d?.error || t.errorGeneric });
+        setConfirmDel(null);
+        return;
+      }
+      setConfirmDel(null);
+      reload();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const chip = (on: boolean) =>
+    `h-9 rounded-full px-4 text-[13px] font-semibold transition-colors ${on ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:ring-gray-300'}`;
 
   return (
-    <>
+    <div className="space-y-4">
       <AdminPageMessage message={msg} onDismiss={() => setMsg(null)} />
-      <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-5 items-start">
 
-      {/* ── Guruh qo'shish ── */}
-      <AdminCard
-        icon={<PlusIcon />}
-        title={t.kontingentAddGroup}
-        subtitle={t.groupsAddSubtitle}
-      >
-        <div className="px-5 py-4 space-y-4">
-          <form onSubmit={addGroup} className="space-y-4">
-            <AdminField label={t.levelLabel} required>
-              <AdminSelect value={filterLevelId} onChange={(e) => setFilterLevelId(e.target.value)} required>
-                <option value="">{t.allLevels}</option>
-                {levels.map((l) => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
-              </AdminSelect>
-            </AdminField>
-            <AdminField label={t.directionLabel}>
-              <AdminSelect value={newDirectionId} onChange={(e) => setNewDirectionId(e.target.value)}>
-                <option value="">{t.directionNone}</option>
-                {directions.map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
-              </AdminSelect>
-            </AdminField>
-            <AdminField label={t.groupName} required>
-              <AdminInput
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                required
-                placeholder="A-guruh"
-              />
-            </AdminField>
-            <div className="grid grid-cols-2 gap-3">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={chip(!levelF)} onClick={() => setLevelF('')}>
+          {t.allLevels} <span className={`ml-1 tabular-nums ${!levelF ? 'text-white/70' : 'text-gray-400'}`}>{groups.length}</span>
+        </button>
+        {sortedLevels.map((l) => {
+          const on = levelF === String(l.id);
+          return (
+            <button key={l.id} type="button" className={chip(on)} onClick={() => setLevelF(String(l.id))}>
+              {l.name} <span className={`ml-1 tabular-nums ${on ? 'text-white/70' : 'text-gray-400'}`}>{levelCounts.get(l.id) || 0}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <section className={`${CARD} overflow-hidden`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+          <p className="text-[13.5px] text-gray-600">
+            <b className="font-display text-[18px] font-extrabold tabular-nums text-gray-900">{filtered.length}</b> {t.kontingentGroups.toLowerCase()}
+            <span className="mx-2 text-gray-300">·</span>
+            <b className="tabular-nums text-gray-900">{shownStudents}</b> {t.kontingentStudents.toLowerCase()}
+          </p>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <AdminSelect value={dirF} onChange={(e) => setDirF(e.target.value)} className="h-9 sm:w-56">
+              <option value="">{t.kontingentDirections}: —</option>
+              {directions.map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+            </AdminSelect>
+            <AdminInput type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="…" className="h-9 sm:w-48" />
+            <AdminBtn
+              size="sm"
+              onClick={() => { setFormErr(''); setAddForm({ name: '', levelId: levelF, directionId: dirF, track: 'bachelor', year: '', intake: '' }); }}
+            >
+              + {t.kontingentAddGroup}
+            </AdminBtn>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-[13.5px]">
+            <thead className="bg-gray-50/80 text-[12px] text-gray-500">
+              <tr className="border-b border-gray-200 text-left">
+                <th className="px-4 py-2.5 font-semibold">{t.groupName}</th>
+                <th className="px-4 py-2.5 font-semibold">{t.levelLabel}</th>
+                <th className="px-4 py-2.5 font-semibold">{t.directionLabel}</th>
+                <th className="px-4 py-2.5 font-semibold">{t.programTrack}</th>
+                <th className="px-4 py-2.5 text-right font-semibold">{t.kontingentStudents}</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {page.pageItems.map((g) => (
+                <tr key={g.id} className="hover:bg-gray-50/70">
+                  <td className="border-b border-gray-100 px-4 py-3">
+                    <span className="font-semibold text-gray-900">{g.name}</span>
+                    {g.is_active === false ? <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-800">{t.groupGraduated}</span> : null}
+                  </td>
+                  <td className="border-b border-gray-100 px-4 py-3 whitespace-nowrap"><span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[12px] font-semibold text-indigo-700">{g.level_name}</span></td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-gray-600">{g.direction_name || <span className="text-gray-300">—</span>}</td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-[12.5px] text-gray-500">
+                    {trackLabel(g.program_track)}
+                    {g.intake_year != null ? <span className="text-gray-400"> · {g.intake_year}</span> : null}
+                  </td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-right tabular-nums">
+                    <button type="button" onClick={() => onViewStudents(g)} className="font-semibold text-indigo-700 hover:underline" title={t.kontingentStudents}>
+                      {g.student_count ?? 0}
+                    </button>
+                  </td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-right whitespace-nowrap">
+                    <AdminBtn variant="ghost" size="sm" onClick={() => { setFormErr(''); setEdit({ id: g.id, name: g.name }); }}>{t.edit}</AdminBtn>
+                    <AdminBtn variant="red-ghost" size="sm" className="ml-2" onClick={() => { setNeedForce(false); setConfirmDel(g); }}>{t.delete}</AdminBtn>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!loading && filtered.length === 0 ? <AdminEmpty title={t.groupsEmpty} /> : null}
+        </div>
+        <AdminPagination page={page.page} totalPages={page.totalPages} onPageChange={page.setPage} total={page.total} pageSize={page.pageSize} />
+      </section>
+
+      <AdminModal open={!!addForm} onClose={() => setAddForm(null)} title={t.kontingentAddGroup} subtitle={t.groupsAddSubtitle} maxWidth="max-w-xl">
+        {addForm ? (
+          <form onSubmit={add} className="space-y-4">
+            {formErr ? <AdminAlert type="error">{formErr}</AdminAlert> : null}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <AdminField label={t.levelLabel} required>
+                <AdminSelect value={addForm.levelId} onChange={(e) => setAddForm({ ...addForm, levelId: e.target.value })} required>
+                  <option value="">—</option>
+                  {sortedLevels.map((l) => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
+                </AdminSelect>
+              </AdminField>
+              <AdminField label={t.directionLabel}>
+                <AdminSelect value={addForm.directionId} onChange={(e) => setAddForm({ ...addForm, directionId: e.target.value })}>
+                  <option value="">{t.directionNone}</option>
+                  {directions.map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+                </AdminSelect>
+              </AdminField>
+              <AdminField label={t.groupName} required className="sm:col-span-2">
+                <AdminInput autoFocus value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="A-guruh" required />
+              </AdminField>
               <AdminField label={t.programTrack}>
-                <AdminSelect value={newTrack} onChange={(e) => setNewTrack(e.target.value)}>
+                <AdminSelect value={addForm.track} onChange={(e) => setAddForm({ ...addForm, track: e.target.value })}>
                   <option value="bachelor">{t.trackBachelor}</option>
                   <option value="residency">{t.trackResidency}</option>
                   <option value="master">{t.trackMaster}</option>
                 </AdminSelect>
               </AdminField>
-              <AdminField label={t.academicYear}>
-                <AdminInput
-                  value={newYear}
-                  onChange={(e) => setNewYear(e.target.value)}
-                  placeholder="1–6"
-                  type="number"
-                  min={1}
-                  max={6}
-                />
-              </AdminField>
+              <div className="grid grid-cols-2 gap-3">
+                <AdminField label={t.academicYear}>
+                  <AdminInput type="number" min={1} max={6} value={addForm.year} onChange={(e) => setAddForm({ ...addForm, year: e.target.value })} placeholder="1–6" />
+                </AdminField>
+                <AdminField label={t.intakeYear}>
+                  <AdminInput type="number" min={2000} max={2100} value={addForm.intake} onChange={(e) => setAddForm({ ...addForm, intake: e.target.value })} placeholder="2025" />
+                </AdminField>
+              </div>
             </div>
-            <AdminField label={t.intakeYear}>
-              <AdminInput
-                value={newIntakeYear}
-                onChange={(e) => setNewIntakeYear(e.target.value)}
-                placeholder="2025"
-                type="number"
-                min={2000}
-                max={2100}
-              />
-            </AdminField>
-            <AdminBtn type="submit" variant="blue" size="lg" loading={saving} icon={<PlusIcon size={16} />} className="w-full">
-              {t.groupAddBtn}
-            </AdminBtn>
+            <div className="flex justify-end gap-2">
+              <AdminBtn variant="ghost" onClick={() => setAddForm(null)}>{t.cancel}</AdminBtn>
+              <AdminBtn type="submit" loading={saving}>{t.groupAddBtn}</AdminBtn>
+            </div>
           </form>
-        </div>
-      </AdminCard>
+        ) : null}
+      </AdminModal>
 
-      {/* ── Guruhlar ro'yxati ── */}
-      <AdminCard
-        title={`${t.kontingentGroups}${selectedLevel ? ` — ${selectedLevel.name}` : ''}`}
-        count={filtered.length}
-        right={
-          <div className="flex gap-2">
-            <AdminSelect
-              value={filterDirectionId}
-              onChange={(e) => setFilterDirectionId(e.target.value)}
-              className="h-9 text-[13px] !w-[150px] shrink-0"
-            >
-              <option value="">{t.kontingentDirections}</option>
-              {directions.map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
-            </AdminSelect>
-            <AdminSelect
-              value={filterLevelId}
-              onChange={(e) => setFilterLevelId(e.target.value)}
-              className="h-9 text-[13px] !w-[150px] shrink-0"
-            >
-              <option value="">{t.allLevels}</option>
-              {levels.map((l) => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
-            </AdminSelect>
+      <AdminModal open={!!edit} onClose={() => setEdit(null)} title={edit ? `${t.edit} — ${edit.name}` : ''}>
+        {edit ? (
+          <form onSubmit={saveEdit} className="space-y-4">
+            {formErr ? <AdminAlert type="error">{formErr}</AdminAlert> : null}
+            <AdminField label={t.groupName} required>
+              <AdminInput autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} required />
+            </AdminField>
+            <div className="flex justify-end gap-2">
+              <AdminBtn variant="ghost" onClick={() => setEdit(null)}>{t.cancel}</AdminBtn>
+              <AdminBtn type="submit" loading={saving}>{t.save}</AdminBtn>
+            </div>
+          </form>
+        ) : null}
+      </AdminModal>
+
+      <AdminModal open={!!confirmDel} onClose={() => setConfirmDel(null)} title={t.delete}>
+        {confirmDel ? (
+          <div className="space-y-4">
+            {needForce ? (
+              <AdminAlert type="warning">
+                {(confirmDel.student_count ?? 0) > 0
+                  ? t.groupHasStudents.replace('{n}', String(confirmDel.student_count))
+                  : t.groupDeleteConfirm.replace('{name}', confirmDel.name)}
+              </AdminAlert>
+            ) : (
+              <p className="text-[14px] text-gray-700">{t.groupDeleteConfirm.replace('{name}', confirmDel.name)}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <AdminBtn variant="ghost" onClick={() => setConfirmDel(null)}>{t.cancel}</AdminBtn>
+              <AdminBtn variant="red" loading={deleting} onClick={() => remove(needForce)}>
+                {needForce ? t.groupDeleteForce : t.adminDeleteBtn}
+              </AdminBtn>
+            </div>
           </div>
-        }
-      >
-        <div className="divide-y divide-gray-100">
-          {groupPage.pageItems.length === 0 ? (
-            <AdminEmpty
-              icon={<svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-              title={t.groupsEmpty}
-            />
-          ) : groupPage.pageItems.map((g, i) => {
-            const isEditing = editingId === g.id;
-            const isDeleteConfirm = deleteConfirmId === g.id;
-            const sc = g.student_count ?? 0;
-
-            return (
-              <motion.div key={g.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3 sm:py-4 transition-colors ${isEditing || isDeleteConfirm ? 'bg-gray-50/80' : 'hover:bg-gray-50'}`}>
-                  <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 font-semibold flex items-center justify-center text-[15px] shrink-0">
-                    {g.name.charAt(0).toUpperCase()}
-                  </div>
-
-                  {isEditing ? (
-                    <div className="flex-1 min-w-0 flex items-center gap-2">
-                      <AdminInput
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveEdit(g.id);
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                      />
-                      <AdminBtn variant="blue" size="sm" loading={editSaving} onClick={() => saveEdit(g.id)}>
-                        {t.save}
-                      </AdminBtn>
-                      <AdminBtn variant="ghost" size="sm" onClick={cancelEdit}>
-                        {t.cancel}
-                      </AdminBtn>
-                      {editError && <span className="text-[12px] text-red-600">{editError}</span>}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex-1 min-w-[130px] min-w-0">
-                        <p className="font-semibold text-gray-900 text-[14px] sm:text-[15px] truncate">{g.name}</p>
-                        <p className="text-[12px] sm:text-[13px] text-gray-400 mt-0.5 truncate">
-                          {g.level_name}{g.direction_name ? ` · ${g.direction_name}` : ''} · {trackLabel(g.program_track)}
-                          {g.academic_year != null ? ` · ${g.academic_year}-yil` : ''}
-                          {g.intake_year != null ? ` · ${t.intakeYear}: ${g.intake_year}` : ''}
-                          {sc > 0 && (
-                            <span className="ml-2 font-medium text-indigo-600">{sc} {t.kontingentStudents}</span>
-                          )}
-                          {g.is_active === false && (
-                            <span className="ml-2 font-medium text-amber-600">{t.groupGraduated}</span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <AdminBtn variant="violet" size="sm" onClick={() => onViewStudents(g)}
-                          icon={<ChevronRight className="w-3.5 h-3.5 sm:hidden" />}>
-                          <span className="hidden sm:inline">{t.kontingentStudents}</span>
-                        </AdminBtn>
-                        <AdminBtn variant="ghost" size="sm" onClick={() => startEdit(g)}
-                          icon={<svg className="w-3.5 h-3.5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>}>
-                          <span className="hidden sm:inline">{t.edit}</span>
-                        </AdminBtn>
-                        <AdminBtn variant="red-ghost" size="sm" onClick={() => requestDelete(g.id)}
-                          icon={<svg className="w-3.5 h-3.5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>}>
-                          <span className="hidden sm:inline">{t.delete}</span>
-                        </AdminBtn>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* ── Delete confirmation inline ── */}
-                <AnimatePresence>
-                  {isDeleteConfirm && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="mx-5 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                        {deleteForcing ? (
-                          <>
-                            <p className="text-[13px] font-semibold text-red-700 flex items-center gap-2 mb-1">
-                              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                              </svg>
-                              {sc > 0
-                                ? t.groupHasStudents.replace('{n}', String(sc))
-                                : t.groupDeleteConfirm.replace('{name}', g.name)}
-                            </p>
-                            <div className="flex gap-2 mt-3">
-                              <AdminBtn variant="red" size="sm" loading={deletingId === g.id} onClick={() => deleteGroup(g.id, true)}>
-                                {t.groupDeleteForce}
-                              </AdminBtn>
-                              <AdminBtn variant="ghost" size="sm" onClick={() => { setDeleteConfirmId(null); setDeleteForcing(false); }}>
-                                {t.cancel}
-                              </AdminBtn>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-[13px] font-semibold text-red-700 mb-3">
-                              {t.groupDeleteConfirm.replace('{name}', g.name)}
-                            </p>
-                            <div className="flex gap-2">
-                              <AdminBtn variant="red" size="sm" loading={deletingId === g.id} onClick={() => deleteGroup(g.id, false)}>
-                                {t.adminDeleteBtn}
-                              </AdminBtn>
-                              <AdminBtn variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
-                                {t.cancel}
-                              </AdminBtn>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })}
-        </div>
-        <AdminPagination
-          page={groupPage.page}
-          totalPages={groupPage.totalPages}
-          onPageChange={groupPage.setPage}
-          total={groupPage.total}
-          pageSize={groupPage.pageSize}
-        />
-      </AdminCard>
+        ) : null}
+      </AdminModal>
     </div>
-    </>
   );
 }

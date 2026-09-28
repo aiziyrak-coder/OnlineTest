@@ -48,8 +48,14 @@ function preLangKeys(): Record<string, Set<string>> {
     }
     assert.ok(close > 0, `${lang} bloki yopilmagan`);
     const block = body.slice(m.index, close);
+    // Kalitlarni sanashdan oldin MATNLAR olib tashlanadi: tarjima ichidagi
+    // "Diqqat:" yoki "https:" kabi ikki nuqtalar kalit deb sanalmasin.
+    const noText = block
+      .replace(/"(?:[^"\\]|\\.)*"/g, '')
+      .replace(/`(?:[^`\\]|\\.)*`/g, '')
+      .replace(/'(?:[^'\\]|\\.)*'/g, '');
     out[lang] = new Set(
-      [...block.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:/g)]
+      [...noText.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:/g)]
         .map((x) => x[1])
         .filter((k) => k !== lang),
     );

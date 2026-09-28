@@ -1,4 +1,5 @@
 **/.git
+.secrets/
 **/.venv
 **/node_modules
 **/dist

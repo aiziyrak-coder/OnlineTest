@@ -96,6 +96,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 ROOT_URLCONF = "exam_platform.urls"
+# Testlar jonli server muhitidan (ilova talabi, VAC himoyalari) ajratilgan holda ishlaydi.
+TEST_RUNNER = "apps.api.test_runner.IsolatedEnvRunner"
 WSGI_APPLICATION = "exam_platform.wsgi.application"
 ASGI_APPLICATION = "exam_platform.asgi.application"
 

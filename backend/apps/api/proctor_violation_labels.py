@@ -7,6 +7,11 @@ def _tri(uz: str, ru: str, en: str) -> dict[str, str]:
 
 
 VIOLATION_REASONS: dict[str, dict[str, str]] = {
+    "SIDE_CONVERSATION_SUSPECTED": _tri(
+        "Yon tomonga qarab davomli gapirish belgilari aniqlandi. Suhbatlashmang va boshqalarga yordam bermang.",
+        "Обнаружены признаки продолжительного разговора в сторону. Не разговаривайте и не помогайте другим.",
+        "Sustained sideways talking was detected. Do not converse with or assist others.",
+    ),
     "SUSPICIOUS_AUDIO": _tri(
         "Shovqin aniqlandi! Jimlik saqlang, gapirmang.",
         "Обнаружен шум! Соблюдайте тишину, не разговаривайте.",
@@ -192,6 +197,11 @@ VIOLATION_REASONS: dict[str, dict[str, str]] = {
         "Imtihon davomida juda ko'p chetga (yonga) qaradingiz! Faqat ekranga qarang.",
         "Вы слишком часто смотрели в сторону! Смотрите только на экран.",
         "You looked to the side too much during the exam! Look only at the screen.",
+    ),
+    "GAZE_ANSWER_PATTERN": _tri(
+        "Javobni belgilashdan oldin muntazam chetga qarayapsiz! Faqat ekranga qarang — tashqi yordam gumoni qayd etildi.",
+        "Вы регулярно смотрите в сторону перед выбором ответа! Смотрите только на экран — зафиксировано подозрение на подсказку.",
+        "You keep looking aside before choosing answers! Look only at the screen — suspected outside help has been logged.",
     ),
 }
 

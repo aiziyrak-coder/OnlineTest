@@ -1,413 +1,247 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { translations, Language } from '../../i18n';
 import { apiUrl } from '../../lib/apiUrl';
 import { authHeaders } from '../../lib/uiLangHeader';
 import { readJsonSafe, parseAdminUsersList, checkAdminAuthResponse } from '../../lib/http';
-import {
-  AdminInput, AdminField, AdminBtn, AdminCard,
-  AdminEmpty, AdminAlert, AdminPageMessageStack, AdminPagination, usePagedList, PlusIcon,
-} from './ui';
+import { AdminAlert, AdminBtn, AdminEmpty, AdminField, AdminInput, AdminModal, AdminPageMessage } from './ui';
+import type { AdminPageMsg } from './ui';
 import type { StudentRow } from './types';
 
 interface Props { token: string; lang: Language; }
 
-type Msg = { type: 'ok' | 'err'; text: string };
+const CARD =
+  'rounded-2xl bg-white border border-gray-200 shadow-[0_1px_2px_rgba(13,27,42,0.04),0_8px_24px_-16px_rgba(13,27,42,0.10)]';
 
-function usePasswordChange(token: string, lang: Language) {
-  const h = authHeaders(token, lang);
-  const [pwdId, setPwdId] = useState<string | null>(null);
-  const [pwdValue, setPwdValue] = useState('');
-  const [pwdSaving, setPwdSaving] = useState(false);
-  const [pwdMsg, setPwdMsg] = useState<Msg | null>(null);
+type Role = 'staff' | 'admin';
 
-  const startPwd = (id: string) => { setPwdId(id); setPwdValue(''); setPwdMsg(null); };
-  const cancelPwd = () => { setPwdId(null); setPwdValue(''); setPwdMsg(null); };
-
-  const savePwd = async (id: string, lang: Language) => {
-    const t = translations[lang];
-    if (pwdValue.length < 10) { setPwdMsg({ type: 'err', text: t.adminMinPasswordHint }); return; }
-    setPwdSaving(true); setPwdMsg(null);
-    const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(id)}`), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify({ password: pwdValue }),
-    });
-    setPwdSaving(false);
-    if (!checkAdminAuthResponse(res)) return;
-    const d = await readJsonSafe<{ error?: string }>(res);
-    if (!res.ok) { setPwdMsg({ type: 'err', text: d?.error || t.errorGeneric }); return; }
-    setPwdMsg({ type: 'ok', text: t.pwdChangedOk });
-    setTimeout(() => { setPwdId(null); setPwdValue(''); setPwdMsg(null); }, 1500);
-  };
-
-  return { pwdId, pwdValue, setPwdValue, pwdSaving, pwdMsg, startPwd, cancelPwd, savePwd };
-}
-
-// ── UserRow — module-level component so React never unmounts it on re-render ──
-type UserRowProps = {
-  u: StudentRow;
-  lang: Language;
-  pwdHook: ReturnType<typeof usePasswordChange>;
-  isAdmin?: boolean;
-  deleteConfirmId: string | null;
-  deletingId: string | null;
-  onRequestDelete: (id: string) => void;
-  onCancelDelete: () => void;
-  onDeleteUser: (id: string) => void;
-};
-
-function UserRow({ u, lang, pwdHook, isAdmin = false, deleteConfirmId, deletingId, onRequestDelete, onCancelDelete, onDeleteUser }: UserRowProps) {
-  const t = translations[lang];
-  const isPwdActive = pwdHook.pwdId === u.id;
-  const isDeleteConfirm = deleteConfirmId === u.id;
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>
-      <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3 sm:py-4 transition-colors ${isPwdActive || isDeleteConfirm ? 'bg-gray-50/80' : 'hover:bg-gray-50'}`}>
-        <div className={`w-9 h-9 rounded-lg font-semibold flex items-center justify-center text-[15px] shrink-0 ${isAdmin ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
-          {u.name.charAt(0).toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-[140px] min-w-0 overflow-hidden">
-          <div className="flex items-center gap-2">
-            <p className="font-semibold text-gray-900 text-[14px] sm:text-[15px] truncate">{u.name}</p>
-            {isAdmin && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 shrink-0">{t.adminRoleBadge}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="font-mono text-[12px] sm:text-[13px] text-gray-400 truncate">{u.id}</span>
-            <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${u.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-              {u.status === 'Active' ? t.adminStatusActive : t.adminStatusBanned}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {isDeleteConfirm ? (
-            <>
-              <AdminBtn variant="red" size="sm" loading={deletingId === u.id} onClick={() => onDeleteUser(u.id)}>
-                {t.adminDeleteBtn}
-              </AdminBtn>
-              <AdminBtn variant="ghost" size="sm" onClick={onCancelDelete}>
-                {t.cancel}
-              </AdminBtn>
-            </>
-          ) : (
-            <>
-              <AdminBtn
-                variant={isPwdActive ? 'amber' : 'ghost'}
-                size="sm"
-                onClick={() => isPwdActive ? pwdHook.cancelPwd() : pwdHook.startPwd(u.id)}
-                icon={
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                  </svg>
-                }
-              >
-                <span className="hidden sm:inline">{t.staffChangePassword}</span>
-              </AdminBtn>
-              <AdminBtn variant="red-ghost" size="sm" onClick={() => onRequestDelete(u.id)}>
-                <span className="hidden sm:inline">{t.delete}</span>
-                <span className="sm:hidden">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </span>
-              </AdminBtn>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Delete confirm panel */}
-      <AnimatePresence>
-        {isDeleteConfirm && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="mx-5 mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-[13px] text-red-700 font-medium">
-              {t.userDeleteConfirm.replace('{name}', u.name).replace('{id}', u.id)}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Password change panel */}
-      <AnimatePresence>
-        {isPwdActive && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="mx-5 mb-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-[12px] font-semibold text-amber-700 mb-2">
-                {t.adminPasswordChangeFor} {u.name}
-              </p>
-              {pwdHook.pwdMsg && (
-                <div className="mb-2">
-                  <AdminAlert type={pwdHook.pwdMsg.type === 'ok' ? 'success' : 'error'}>{pwdHook.pwdMsg.text}</AdminAlert>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <AdminInput
-                  type="password"
-                  value={pwdHook.pwdValue}
-                  onChange={(e) => pwdHook.setPwdValue(e.target.value)}
-                  placeholder={t.adminMinPasswordHint}
-                  minLength={10}
-                  autoFocus
-                  autoComplete="new-password"
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') pwdHook.savePwd(u.id, lang);
-                    if (e.key === 'Escape') pwdHook.cancelPwd();
-                  }}
-                />
-                <AdminBtn variant="amber" size="sm" loading={pwdHook.pwdSaving} onClick={() => pwdHook.savePwd(u.id, lang)}>
-                  {t.adminSaveShort}
-                </AdminBtn>
-                <AdminBtn variant="ghost" size="sm" onClick={pwdHook.cancelPwd}>
-                  {t.cancel}
-                </AdminBtn>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
+/** Xodimlar — kuzatuvchilar (staff) va administratorlar, bitta jadval. */
 export function StaffPage({ token, lang }: Props) {
   const t = translations[lang];
-  const h = authHeaders(token, lang);
+  const h = useMemo(() => authHeaders(token, lang), [token, lang]);
 
-  const [staffList, setStaffList] = useState<StudentRow[]>([]);
-  const [adminList, setAdminList] = useState<StudentRow[]>([]);
-  const [staffMsg, setStaffMsg] = useState<Msg | null>(null);
-  const [adminMsg, setAdminMsg] = useState<Msg | null>(null);
-  const [pageMsg, setPageMsg] = useState<Msg | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'staff' | 'admin'>('staff');
-  const [staffFormKey, setStaffFormKey] = useState(0);
-  const [adminFormKey, setAdminFormKey] = useState(0);
+  const [staff, setStaff] = useState<StudentRow[]>([]);
+  const [admins, setAdmins] = useState<StudentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Role>('staff');
+  const [msg, setMsg] = useState<AdminPageMsg | null>(null);
 
-  const staffPwd = usePasswordChange(token, lang);
-  const adminPwd = usePasswordChange(token, lang);
+  const [addRole, setAddRole] = useState<Role | null>(null);
+  const [addErr, setAddErr] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+
+  const [pwFor, setPwFor] = useState<StudentRow | null>(null);
+  const [pwValue, setPwValue] = useState('');
+  const [pwErr, setPwErr] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
+
+  const [confirmDel, setConfirmDel] = useState<StudentRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const reload = useCallback(async () => {
-    const [rS, rA] = await Promise.all([
-      fetch(apiUrl('/api/admin/users?role=staff'), { headers: h }),
-      fetch(apiUrl('/api/admin/users?role=admin'), { headers: h }),
-    ]);
-    if (!checkAdminAuthResponse(rS) || !checkAdminAuthResponse(rA)) return;
-    const jS = await readJsonSafe<unknown>(rS);
-    const jA = await readJsonSafe<unknown>(rA);
-    setStaffList(parseAdminUsersList<StudentRow>(jS));
-    setAdminList(parseAdminUsersList<StudentRow>(jA));
-  }, [token]);
+    try {
+      const [rS, rA] = await Promise.all([
+        fetch(apiUrl('/api/admin/users?role=staff&limit=500'), { headers: h }),
+        fetch(apiUrl('/api/admin/users?role=admin&limit=500'), { headers: h }),
+      ]);
+      if (!checkAdminAuthResponse(rS) || !checkAdminAuthResponse(rA)) return;
+      const [jS, jA] = await Promise.all([readJsonSafe<unknown>(rS), readJsonSafe<unknown>(rA)]);
+      setStaff(parseAdminUsersList<StudentRow>(jS));
+      setAdmins(parseAdminUsersList<StudentRow>(jA));
+    } finally {
+      setLoading(false);
+    }
+  }, [h]);
 
   useEffect(() => { reload(); }, [reload]);
 
-  const addStaff = async (e: React.FormEvent<HTMLFormElement>) => {
+  const list = tab === 'staff' ? staff : admins;
+
+  const add = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setStaffMsg(null);
+    if (!addRole) return;
     const fd = new FormData(e.currentTarget);
-    const res = await fetch(apiUrl('/api/admin/users'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify({ id: fd.get('id'), password: fd.get('password'), role: 'staff', name: fd.get('name'), group_id: null }),
-    });
-    if (!checkAdminAuthResponse(res)) return;
-    const d = await readJsonSafe<{ error?: string }>(res);
-    if (!res.ok) { setStaffMsg({ type: 'err', text: d?.error || t.errorGeneric }); return; }
-    setStaffFormKey((k) => k + 1);
-    setStaffMsg({ type: 'ok', text: t.hodimAddedOk });
-    setTimeout(() => setStaffMsg(null), 3000);
-    reload();
-  };
-
-  const addAdmin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setAdminMsg(null);
-    const fd = new FormData(e.currentTarget);
-    const res = await fetch(apiUrl('/api/admin/users'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...h },
-      body: JSON.stringify({
-        id: fd.get('id'), password: fd.get('password'), role: 'admin',
-        name: fd.get('name'), group_id: null,
-      }),
-    });
-    if (!checkAdminAuthResponse(res)) return;
-    const d = await readJsonSafe<{ error?: string }>(res);
-    if (!res.ok) { setAdminMsg({ type: 'err', text: d?.error || t.errorGeneric }); return; }
-    setAdminFormKey((k) => k + 1);
-    setAdminMsg({ type: 'ok', text: t.adminAdminCreatedOk });
-    setTimeout(() => setAdminMsg(null), 3000);
-    reload();
-  };
-
-  const requestDelete = (id: string) => {
-    setDeleteConfirmId(id);
-    staffPwd.cancelPwd();
-    adminPwd.cancelPwd();
-  };
-
-  const deleteUser = async (id: string) => {
-    setDeletingId(id);
-    const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(id)}`), { method: 'DELETE', headers: h });
-    setDeletingId(null);
-    setDeleteConfirmId(null);
-    if (!checkAdminAuthResponse(res)) return;
-    if (res.ok) {
-      setPageMsg({ type: 'ok', text: t.staffDeletedOk });
-      setTimeout(() => setPageMsg(null), 3000);
-    } else {
+    setAddBusy(true);
+    setAddErr('');
+    try {
+      const res = await fetch(apiUrl('/api/admin/users'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...h },
+        body: JSON.stringify({ id: fd.get('id'), password: fd.get('password'), role: addRole, name: fd.get('name'), group_id: null }),
+      });
+      if (!checkAdminAuthResponse(res)) return;
       const d = await readJsonSafe<{ error?: string }>(res);
-      setPageMsg({ type: 'err', text: d?.error || t.errorGeneric });
+      if (!res.ok) { setAddErr(d?.error || t.errorGeneric); return; }
+      setMsg({ type: 'ok', text: addRole === 'staff' ? t.hodimAddedOk : t.adminAdminCreatedOk });
+      setTab(addRole);
+      setAddRole(null);
+      reload();
+    } finally {
+      setAddBusy(false);
     }
-    reload();
   };
 
-  const tabs = [
-    { id: 'staff' as const, label: t.adminStaffTab, count: staffList.length },
-    { id: 'admin' as const, label: t.adminAdminTab, count: adminList.length },
-  ];
-  const staffPage = usePagedList(staffList);
-  const adminPage = usePagedList(adminList);
+  const savePw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pwFor) return;
+    if (pwValue.length < 10) { setPwErr(t.adminMinPasswordHint); return; }
+    setPwBusy(true);
+    setPwErr('');
+    try {
+      const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(pwFor.id)}`), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...h }, body: JSON.stringify({ password: pwValue }),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      const d = await readJsonSafe<{ error?: string }>(res);
+      if (!res.ok) { setPwErr(d?.error || t.errorGeneric); return; }
+      setMsg({ type: 'ok', text: t.pwdChangedOk });
+      setPwFor(null);
+      setPwValue('');
+    } finally {
+      setPwBusy(false);
+    }
+  };
 
-  const namePlaceholder = t.namePlaceholderExample;
-  const pwdPlaceholder = t.pwdMinPlaceholder;
+  const remove = async () => {
+    if (!confirmDel) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(apiUrl(`/api/admin/users/${encodeURIComponent(confirmDel.id)}`), { method: 'DELETE', headers: h });
+      if (!checkAdminAuthResponse(res)) return;
+      if (res.ok) setMsg({ type: 'ok', text: t.staffDeletedOk });
+      else {
+        const d = await readJsonSafe<{ error?: string }>(res);
+        setMsg({ type: 'err', text: d?.error || t.errorGeneric });
+      }
+      reload();
+    } finally {
+      setDeleting(false);
+      setConfirmDel(null);
+    }
+  };
+
+  const tabs: Array<[Role, string, number]> = [
+    ['staff', t.adminStaffTab, staff.length],
+    ['admin', t.adminAdminTab, admins.length],
+  ];
 
   return (
-    <div className="space-y-3">
-      <AdminPageMessageStack
-        messages={[pageMsg, staffMsg, adminMsg]}
-        onDismiss={(m) => {
-          if (pageMsg && m.text === pageMsg.text) setPageMsg(null);
-          else if (staffMsg && m.text === staffMsg.text) setStaffMsg(null);
-          else setAdminMsg(null);
-        }}
-      />
+    <div className="space-y-4">
+      <AdminPageMessage message={msg} onDismiss={() => setMsg(null)} />
 
-      <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-5 items-start">
-
-        {/* ── Left: Add forms ── */}
-        <div className="space-y-5">
-          {/* Staff qo'shish */}
-          <AdminCard icon={<PlusIcon />} title={t.addHodimCardTitle} subtitle={t.staffPortalSubtitle}>
-            <div className="px-5 py-4 space-y-4">
-              <form key={staffFormKey} onSubmit={addStaff} className="space-y-4">
-                <AdminField label="ID" required>
-                  <AdminInput name="id" required autoComplete="off" placeholder="staff001" />
-                </AdminField>
-                <AdminField label={t.userFullName} required>
-                  <AdminInput name="name" required placeholder={namePlaceholder} />
-                </AdminField>
-                <AdminField label={t.password} required>
-                  <AdminInput name="password" type="password" required minLength={10} autoComplete="new-password" placeholder={pwdPlaceholder} />
-                </AdminField>
-                <p className="text-[12px] text-gray-400">{t.addHodimHint}</p>
-                <AdminBtn type="submit" variant="blue" size="lg" icon={<PlusIcon size={16} />} className="w-full">
-                  {t.addHodimCardTitle}
-                </AdminBtn>
-              </form>
-            </div>
-          </AdminCard>
-
-          {/* Admin qo'shish */}
-          <AdminCard
-            icon={<svg style={{width:18,height:18}} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
-            title={t.adminAddUserTitle}
-            subtitle={t.adminAdminSubtitle}
-          >
-            <div className="px-5 py-4 space-y-4">
-              <form key={adminFormKey} onSubmit={addAdmin} className="space-y-4">
-                <AdminField label="ID" required>
-                  <AdminInput name="id" required autoComplete="off" placeholder="admin001" />
-                </AdminField>
-                <AdminField label={t.userFullName} required>
-                  <AdminInput name="name" required placeholder={namePlaceholder} />
-                </AdminField>
-                <AdminField label={t.password} required>
-                  <AdminInput name="password" type="password" required minLength={10} autoComplete="new-password" placeholder={pwdPlaceholder} />
-                </AdminField>
-                <AdminBtn type="submit" variant="violet" size="lg" icon={<PlusIcon size={16} />} className="w-full">
-                  {t.adminCreateAdmin}
-                </AdminBtn>
-              </form>
-            </div>
-          </AdminCard>
+      <section className={`${CARD} overflow-hidden`}>
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 px-3 sm:px-4">
+          <div className="-mb-px flex" role="tablist">
+            {tabs.map(([k, label, n]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                onClick={() => setTab(k)}
+                className={`whitespace-nowrap border-b-2 px-3 py-3.5 text-[13.5px] font-semibold transition-colors ${
+                  tab === k ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {label}
+                <span className={`ml-1.5 rounded-full px-1.5 py-px text-[11.5px] tabular-nums ${tab === k ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>{n}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 py-2">
+            <AdminBtn variant="ghost" size="sm" onClick={() => { setAddErr(''); setAddRole('admin'); }}>+ {t.adminCreateAdmin}</AdminBtn>
+            <AdminBtn size="sm" onClick={() => { setAddErr(''); setAddRole('staff'); }}>+ {t.addHodimCardTitle}</AdminBtn>
+          </div>
         </div>
 
-        {/* ── Right: Users list with tabs ── */}
-        <AdminCard
-          title={t.adminStaffListTitle}
-          count={activeTab === 'staff' ? staffList.length : adminList.length}
-          right={
-            <div className="flex items-center h-8 bg-gray-100 rounded-lg p-0.5">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => { setActiveTab(tab.id); setDeleteConfirmId(null); staffPwd.cancelPwd(); adminPwd.cancelPwd(); }}
-                  className={`h-full px-3 rounded-md text-[12px] font-semibold transition-colors ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-                >
-                  {tab.label}
-                  <span className={`ml-1.5 text-[11px] ${activeTab === tab.id ? 'text-indigo-400' : 'text-gray-400'}`}>
-                    {tab.count}
-                  </span>
-                </button>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-[13.5px]">
+            <thead className="bg-gray-50/80 text-[12px] text-gray-500">
+              <tr className="border-b border-gray-200 text-left">
+                <th className="px-4 py-2.5 font-semibold">{t.userFullName}</th>
+                <th className="px-4 py-2.5 font-semibold">ID</th>
+                <th className="px-4 py-2.5 font-semibold">{t.adminStudentTableStatus}</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50/70">
+                  <td className="border-b border-gray-100 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold ${tab === 'admin' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700'}`}>
+                        {(u.name || '?').charAt(0).toUpperCase()}
+                      </span>
+                      <span className="font-semibold text-gray-900">{u.name}</span>
+                      {tab === 'admin' ? <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[11px] font-bold text-indigo-700">{t.adminRoleBadge}</span> : null}
+                    </div>
+                  </td>
+                  <td className="border-b border-gray-100 px-4 py-3 font-mono text-[12.5px] text-gray-500">{u.id}</td>
+                  <td className="border-b border-gray-100 px-4 py-3">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-semibold ring-1 ${u.status === 'Active' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/15' : 'bg-red-50 text-red-700 ring-red-600/15'}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${u.status === 'Active' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                      {u.status === 'Active' ? t.adminStatusActive : t.adminStatusBanned}
+                    </span>
+                  </td>
+                  <td className="border-b border-gray-100 px-4 py-3 text-right whitespace-nowrap">
+                    <AdminBtn variant="ghost" size="sm" onClick={() => { setPwErr(''); setPwValue(''); setPwFor(u); }}>{t.staffChangePassword}</AdminBtn>
+                    <AdminBtn variant="red-ghost" size="sm" className="ml-2" onClick={() => setConfirmDel(u)}>{t.delete}</AdminBtn>
+                  </td>
+                </tr>
               ))}
+            </tbody>
+          </table>
+          {!loading && list.length === 0 ? <AdminEmpty title={tab === 'staff' ? t.staffListEmpty : t.adminAdminEmpty} /> : null}
+        </div>
+      </section>
+
+      <AdminModal
+        open={!!addRole}
+        onClose={() => setAddRole(null)}
+        title={addRole === 'admin' ? t.adminAddUserTitle : t.addHodimCardTitle}
+        subtitle={addRole === 'admin' ? t.adminAdminSubtitle : t.staffPortalSubtitle}
+      >
+        {addRole ? (
+          <form key={addRole} onSubmit={add} className="space-y-4" autoComplete="off">
+            {addErr ? <AdminAlert type="error">{addErr}</AdminAlert> : null}
+            <AdminField label="ID" required><AdminInput name="id" required autoComplete="off" placeholder={addRole === 'admin' ? 'admin001' : 'staff001'} /></AdminField>
+            <AdminField label={t.userFullName} required><AdminInput name="name" required placeholder={t.namePlaceholderExample} /></AdminField>
+            <AdminField label={t.password} required>
+              <AdminInput name="password" type="password" required minLength={10} autoComplete="new-password" placeholder={t.pwdMinPlaceholder} />
+            </AdminField>
+            {addRole === 'staff' ? <p className="text-[12.5px] text-gray-500">{t.addHodimHint}</p> : null}
+            <div className="flex justify-end gap-2">
+              <AdminBtn variant="ghost" onClick={() => setAddRole(null)}>{t.cancel}</AdminBtn>
+              <AdminBtn type="submit" loading={addBusy}>{addRole === 'admin' ? t.adminCreateAdmin : t.addHodimCardTitle}</AdminBtn>
             </div>
-          }
-        >
-          <div className="divide-y divide-gray-100">
-            {activeTab === 'staff' && (
-              staffList.length === 0 ? (
-                <AdminEmpty
-                  icon={<svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6a4 4 0 11-8 0 4 4 0 018 0zM12 14v7" /></svg>}
-                  title={t.staffListEmpty}
-                />
-              ) : staffPage.pageItems.map((u) => (
-                <UserRow
-                  key={u.id} u={u} lang={lang} pwdHook={staffPwd}
-                  deleteConfirmId={deleteConfirmId} deletingId={deletingId}
-                  onRequestDelete={requestDelete} onCancelDelete={() => setDeleteConfirmId(null)} onDeleteUser={deleteUser}
-                />
-              ))
-            )}
-            {activeTab === 'admin' && (
-              adminList.length === 0 ? (
-                <AdminEmpty
-                  icon={<svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
-                  title={t.adminAdminEmpty}
-                />
-              ) : adminPage.pageItems.map((u) => (
-                <UserRow
-                  key={u.id} u={u} lang={lang} pwdHook={adminPwd} isAdmin
-                  deleteConfirmId={deleteConfirmId} deletingId={deletingId}
-                  onRequestDelete={requestDelete} onCancelDelete={() => setDeleteConfirmId(null)} onDeleteUser={deleteUser}
-                />
-              ))
-            )}
+          </form>
+        ) : null}
+      </AdminModal>
+
+      <AdminModal open={!!pwFor} onClose={() => setPwFor(null)} title={t.staffChangePassword} subtitle={pwFor ? `${t.adminPasswordChangeFor} ${pwFor.name}` : undefined}>
+        {pwFor ? (
+          <form onSubmit={savePw} className="space-y-4" autoComplete="off">
+            <input type="text" name="fakeuser" autoComplete="username" tabIndex={-1} aria-hidden className="hidden" />
+            {pwErr ? <AdminAlert type="error">{pwErr}</AdminAlert> : null}
+            <AdminInput type="password" autoFocus minLength={10} autoComplete="new-password" value={pwValue} onChange={(e) => setPwValue(e.target.value)} placeholder={t.adminMinPasswordHint} />
+            <div className="flex justify-end gap-2">
+              <AdminBtn variant="ghost" onClick={() => setPwFor(null)}>{t.cancel}</AdminBtn>
+              <AdminBtn type="submit" loading={pwBusy}>{t.adminSaveShort}</AdminBtn>
+            </div>
+          </form>
+        ) : null}
+      </AdminModal>
+
+      <AdminModal open={!!confirmDel} onClose={() => setConfirmDel(null)} title={t.delete}>
+        {confirmDel ? (
+          <div className="space-y-4">
+            <p className="text-[14px] text-gray-700">{t.userDeleteConfirm.replace('{name}', confirmDel.name).replace('{id}', confirmDel.id)}</p>
+            <div className="flex justify-end gap-2">
+              <AdminBtn variant="ghost" onClick={() => setConfirmDel(null)}>{t.cancel}</AdminBtn>
+              <AdminBtn variant="red" loading={deleting} onClick={remove}>{t.adminDeleteBtn}</AdminBtn>
+            </div>
           </div>
-          {activeTab === 'staff' ? (
-            <AdminPagination
-              page={staffPage.page}
-              totalPages={staffPage.totalPages}
-              onPageChange={staffPage.setPage}
-              total={staffPage.total}
-              pageSize={staffPage.pageSize}
-            />
-          ) : (
-            <AdminPagination
-              page={adminPage.page}
-              totalPages={adminPage.totalPages}
-              onPageChange={adminPage.setPage}
-              total={adminPage.total}
-              pageSize={adminPage.pageSize}
-            />
-          )}
-        </AdminCard>
-      </div>
+        ) : null}
+      </AdminModal>
     </div>
   );
 }

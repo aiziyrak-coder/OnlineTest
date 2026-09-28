@@ -6,6 +6,7 @@ import { readJsonSafe } from '../lib/http';
 import { apiUrl } from '../lib/apiUrl';
 import { AdminAlert } from './admin/ui';
 import { isDesktopApp } from '../lib/desktop';
+import { FaceLoginPanel } from '../components/FaceLoginPanel';
 
 interface LoginProps {
   onLogin: (token: string, user: any) => void;
@@ -40,15 +41,15 @@ function EyeIcon({ open }: { open: boolean }) {
 const DESKTOP_BRAND: Record<Language, { eyebrow: string; lead: string }> = {
   uz: {
     eyebrow: 'FJSTI · Xavfsiz imtihon ilovasi',
-    lead: "Imtihonlar uchun maxsus himoyalangan ilova. Login va parolingiz bilan kiring — imtihon oldidan kompyuteringiz, kamera va mikrofon avtomatik tekshiriladi.",
+    lead: "Imtihonlar uchun maxsus himoyalangan ilova. Yuzingiz yoki login va parolingiz bilan kiring — imtihon oldidan kompyuteringiz, kamera va mikrofon avtomatik tekshiriladi.",
   },
   ru: {
     eyebrow: 'FJSTI · Защищённое приложение для экзаменов',
-    lead: 'Специально защищённое приложение для экзаменов. Войдите с логином и паролем — перед экзаменом компьютер, камера и микрофон проверяются автоматически.',
+    lead: 'Специально защищённое приложение для экзаменов. Войдите по лицу или с логином и паролем — перед экзаменом компьютер, камера и микрофон проверяются автоматически.',
   },
   en: {
     eyebrow: 'FJSTI · Secure exam app',
-    lead: 'A specially secured app for exams. Sign in with your login and password — your computer, camera and microphone are checked automatically before the exam.',
+    lead: 'A specially secured app for exams. Sign in with your face or your login and password — your computer, camera and microphone are checked automatically before the exam.',
   },
 };
 
@@ -64,6 +65,8 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
   const idRef = useRef<HTMLInputElement>(null);
   const t = translations[lang];
   const desktop = isDesktopApp();
+  /** Ilovada kirish yuz skaneridan boshlanadi; brauzerda (admin) — login va parol. */
+  const [mode, setMode] = useState<'face' | 'password'>(() => (isDesktopApp() ? 'face' : 'password'));
   const brandTitle = desktop ? 'FerMI Exam Platform' : t.appBrandTitle;
   const brandEyebrow = desktop ? (DESKTOP_BRAND[lang] || DESKTOP_BRAND.uz).eyebrow : t.loginBrandEyebrow;
   const brandLead = desktop ? (DESKTOP_BRAND[lang] || DESKTOP_BRAND.uz).lead : t.loginPanelLead;
@@ -264,6 +267,9 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
             </div>
 
             <div className="bg-white/95 backdrop-blur rounded-2xl border border-gray-200/90 shadow-[0_18px_50px_-28px_rgba(49,46,129,0.35)] p-6 sm:p-8">
+              {mode === 'face' ? (
+                <FaceLoginPanel lang={lang} onLogin={onLogin} onUsePassword={() => setMode('password')} />
+              ) : (
               <form onSubmit={handleLogin} className="space-y-5" noValidate>
                 <div className="space-y-1.5">
                   <label className="block text-[13px] font-semibold text-gray-700">
@@ -384,10 +390,21 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
                   </span>
                 </button>
 
+                {desktop ? (
+                  <button
+                    type="button"
+                    onClick={() => { setError(''); setMode('face'); }}
+                    className="w-full h-11 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-[14px] font-semibold hover:bg-indigo-100 transition-colors"
+                  >
+                    {lang === 'ru' ? 'Войти по лицу' : lang === 'en' ? 'Sign in with face' : 'Yuz orqali kirish'}
+                  </button>
+                ) : null}
+
                 <p className="text-center text-[11.5px] text-gray-400 leading-relaxed pt-1">
                   {t.loginSecureHint}
                 </p>
               </form>
+              )}
             </div>
 
             <p className="text-center lg:hidden text-[11px] text-gray-400 mt-8 leading-relaxed px-2">

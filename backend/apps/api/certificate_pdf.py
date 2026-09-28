@@ -24,7 +24,7 @@ _LOGO_CANDIDATES = [
 ]
 
 # O'tish mezoni: to'g'ri javoblar foizi (ball / jami savollar * 100).
-PASS_PERCENT_THRESHOLD = max(1, min(100, int(os.environ.get("EXAM_PASS_PERCENT", "50"))))
+PASS_PERCENT_THRESHOLD = max(56, min(100, int(os.environ.get("EXAM_PASS_PERCENT", "56"))))
 
 
 def exam_pass_threshold(exam) -> int:
@@ -37,7 +37,7 @@ def exam_pass_threshold(exam) -> int:
         v = int(getattr(exam, "pass_percent", 0) or 0)
     except (TypeError, ValueError):
         v = 0
-    return v if 1 <= v <= 100 else PASS_PERCENT_THRESHOLD
+    return max(56, v) if 1 <= v <= 100 else PASS_PERCENT_THRESHOLD
 
 # Dizayn ranglari
 C_NAVY = colors.HexColor("#1e3a5f")
@@ -122,6 +122,21 @@ for _reg_path, _bold_path in _FONT_CANDIDATES:
             pass
 
 from apps.api.pdf_i18n import PdfTexts
+
+
+def _local_time_text(iso: str) -> str:
+    """ISO (UTC) vaqtni server vaqt zonasida (Toshkent) ko'rsatadi — sertifikatda 5 soat farq bo'lmasin."""
+    try:
+        from datetime import datetime
+
+        from django.utils import timezone as _tz
+
+        dt = datetime.fromisoformat(str(iso))
+        if _tz.is_naive(dt):
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        return _tz.localtime(dt).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:  # noqa: BLE001
+        return str(iso or "")[:19].replace("T", " ")
 
 def _get_logo_path() -> str | None:
     for p in _LOGO_CANDIDATES:
@@ -597,7 +612,7 @@ def build_certificate_pdf(
         fields.append((texts.t("group"), student_group))
     fields += [
         (texts.t("exam"),              exam_title),
-        (texts.t("completed_at"), completed_at[:19].replace("T", " ")),
+        (texts.t("completed_at"), _local_time_text(completed_at)),
         (texts.t("integrity_code"),   integrity_code),
         (texts.t("verify_url"), verify_url),
     ]

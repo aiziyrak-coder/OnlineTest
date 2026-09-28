@@ -50,6 +50,8 @@ services:
 
   app:
     restart: unless-stopped
+    volumes:
+      - /home/onlinetest/.secrets/test-center-pin:/run/secrets/test_center_pin:ro
     # Faqat localhost — nginx shu manzilga uzatadi.
     ports: !override
       - "127.0.0.1:${APP_PORT:-8090}:8080"

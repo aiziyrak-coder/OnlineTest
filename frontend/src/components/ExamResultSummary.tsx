@@ -99,6 +99,9 @@ export type ExamResultPayload = {
   ai_summary_source?: string;
   /** true bo'lsa, haqiqiy AI tahlil hali hisoblanmoqda */
   ai_summary_pending?: boolean;
+  /** Yuzma-yuz tasdiqlash: "" | pending | confirmed | rejected */
+  verify_state?: string;
+  verify_notice?: string;
 };
 
 type Props = {
@@ -149,8 +152,10 @@ export function ExamResultSummary({ data, token, lang = 'uz', publicPdfUrl, onBa
   };
 
   const pct = data.percentage ?? (data.total > 0 ? Math.round((data.score / data.total) * 100) : 0);
-  const passThreshold = data.pass_threshold ?? 50;
-  const passed = data.passed ?? pct >= passThreshold;
+  const passThreshold = Math.max(56, data.pass_threshold ?? 56);
+  const verifyState = String(data.verify_state || '');
+  const certBlocked = verifyState === 'pending' || verifyState === 'rejected';
+  const passed = verifyState !== 'rejected' && pct >= passThreshold && data.passed !== false;
   const RES_L = {
     uz: { passed: 'O‘tdi', failed: 'O‘tmadi' },
     ru: { passed: 'Сдал', failed: 'Не сдал' },
@@ -240,6 +245,14 @@ export function ExamResultSummary({ data, token, lang = 'uz', publicPdfUrl, onBa
             </div>
           </div>
 
+          {verifyState ? (
+            <div className={`mt-5 rounded-xl border px-4 py-3 text-[13.5px] font-medium ${
+              verifyState === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-900'
+                : verifyState === 'rejected' ? 'border-red-200 bg-red-50 text-red-800'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+              {data.verify_notice || verifyState}
+            </div>
+          ) : null}
           {/* Score focal */}
           <div className="mt-5 flex items-center gap-4 sm:gap-6 rounded-2xl border border-slate-200 bg-white/90 p-4 sm:p-6 shadow-inner">
             <div className="relative w-24 h-24 shrink-0">
@@ -268,9 +281,11 @@ export function ExamResultSummary({ data, token, lang = 'uz', publicPdfUrl, onBa
           </div>
 
           <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <Button className="w-full sm:w-auto" onClick={downloadPdf} disabled={pdfBusy}>
-              {pdfBusy ? t.resultDownloading : t.resultDownloadPdf}
-            </Button>
+            {!certBlocked && (
+              <Button className="w-full sm:w-auto" onClick={downloadPdf} disabled={pdfBusy}>
+                {pdfBusy ? t.resultDownloading : t.resultDownloadPdf}
+              </Button>
+            )}
             {onBack && (
               <Button variant="outline" className="w-full sm:w-auto" onClick={onBack}>
                 {t.studentDash}

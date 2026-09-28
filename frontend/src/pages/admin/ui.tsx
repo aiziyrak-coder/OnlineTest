@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { ADMIN_TOAST_AUTO_MS, pushAdminToast, type AdminPageMsg } from './adminToast';
 
@@ -14,7 +15,7 @@ export { AdminToastLayer } from './adminToast';
  *   border  : gray-200   |  surface: white  |  app bg: gray-50
  */
 
-const FOCUS = 'focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-500';
+const FOCUS = 'focus:outline-none focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-500';
 
 /* ── Input ──────────────────────────────────────────────────────────────── */
 export const AdminInput = React.forwardRef<
@@ -24,7 +25,7 @@ export const AdminInput = React.forwardRef<
   <input
     ref={ref}
     {...props}
-    className={`h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-[14px] text-gray-900 placeholder:text-gray-400 ${FOCUS} transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${props.className ?? ''}`}
+    className={`h-10 w-full rounded-lg border border-gray-300/80 bg-white px-3 text-[14px] text-gray-900 placeholder:text-gray-400 hover:border-gray-400/70 shadow-[0_1px_1px_rgba(13,27,42,0.03)] ${FOCUS} transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${props.className ?? ''}`}
   />
 ));
 AdminInput.displayName = 'AdminInput';
@@ -39,7 +40,7 @@ export const AdminFileInput = React.forwardRef<HTMLInputElement, FileInputProps>
     const [fileName, setFileName] = React.useState('');
     return (
       <label
-        className={`relative flex items-center gap-3 h-10 w-full rounded-lg border border-gray-200 bg-white px-1.5 transition-colors ${
+        className={`relative flex items-center gap-3 h-10 w-full rounded-lg border border-gray-300/80 bg-white px-1.5 transition-colors ${
           disabled
             ? 'opacity-50 cursor-not-allowed'
             : 'cursor-pointer hover:border-gray-300 focus-within:ring-2 focus-within:ring-indigo-500/25 focus-within:border-indigo-500'
@@ -79,7 +80,7 @@ export const AdminTextarea = React.forwardRef<
   <textarea
     ref={ref}
     {...props}
-    className={`w-full min-h-[72px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-[14px] text-gray-900 placeholder:text-gray-400 ${FOCUS} transition-colors resize-y disabled:opacity-50 disabled:cursor-not-allowed ${props.className ?? ''}`}
+    className={`w-full min-h-[72px] rounded-lg border border-gray-300/80 bg-white hover:border-gray-400/70 px-3 py-2 text-[14px] text-gray-900 placeholder:text-gray-400 ${FOCUS} transition-colors resize-y disabled:opacity-50 disabled:cursor-not-allowed ${props.className ?? ''}`}
   />
 ));
 AdminTextarea.displayName = 'AdminTextarea';
@@ -92,7 +93,7 @@ export const AdminSelect = React.forwardRef<
   <select
     ref={ref}
     {...props}
-    className={`h-10 w-full rounded-lg border border-gray-200 bg-white px-3 pr-8 text-[14px] text-gray-900 ${FOCUS} transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${props.className ?? ''}`}
+    className={`h-10 w-full rounded-lg border border-gray-300/80 bg-white px-3 pr-8 text-[14px] text-gray-900 hover:border-gray-400/70 shadow-[0_1px_1px_rgba(13,27,42,0.03)] ${FOCUS} transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${props.className ?? ''}`}
   />
 ));
 AdminSelect.displayName = 'AdminSelect';
@@ -130,14 +131,14 @@ export const AdminField = ({ label, required, children, className }: FieldProps)
  * primary harakatlar = indigo; muvaffaqiyat = emerald; xavf = red; neytral = ghost. */
 type BtnVariant = 'blue' | 'violet' | 'emerald' | 'red' | 'amber' | 'ghost' | 'red-ghost';
 
-const PRIMARY = 'bg-indigo-600 hover:bg-indigo-700 text-white';
+const PRIMARY = 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_4px_12px_-6px_rgba(14,109,137,0.75)]';
 const VARIANT_CLS: Record<BtnVariant, string> = {
   blue:       PRIMARY,
   violet:     PRIMARY,
   amber:      'bg-amber-500 hover:bg-amber-600 text-white',
   emerald:    'bg-emerald-600 hover:bg-emerald-700 text-white',
   red:        'bg-red-600 hover:bg-red-700 text-white',
-  ghost:      'border border-gray-200 text-gray-700 hover:bg-gray-50 bg-white',
+  ghost:      'border border-gray-300/80 text-gray-800 hover:bg-gray-50 hover:border-gray-400/70 bg-white shadow-[0_1px_1px_rgba(13,27,42,0.04)]',
   'red-ghost':'border border-red-200 text-red-600 hover:bg-red-50 bg-white',
 };
 
@@ -171,7 +172,7 @@ export const AdminBtn = ({
     type="button"
     disabled={disabled || loading}
     {...rest}
-    className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap ${VARIANT_CLS[variant]} ${SIZE_CLS[size]} ${className ?? ''}`}
+    className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-all active:translate-y-px focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap ${VARIANT_CLS[variant]} ${SIZE_CLS[size]} ${className ?? ''}`}
   >
     {loading ? (
       <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
@@ -195,7 +196,7 @@ export const AdminSectionLabel = ({
   className?: string;
 }) => (
   <h2
-    className={`text-[11px] font-semibold uppercase tracking-[0.07em] text-gray-400 ${className ?? 'mb-3'}`}
+    className={`text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500 ${className ?? 'mb-3'}`}
   >
     {children}
   </h2>
@@ -244,22 +245,22 @@ export const AdminCard = ({
   headerBg = '',
   children,
 }: SectionCardProps) => (
-  <div className={`bg-white rounded-lg border ${borderColor} overflow-hidden`}>
-    <div className={`px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3 ${headerBg}`}>
+  <div className={`bg-white rounded-2xl border ${borderColor} overflow-hidden shadow-[0_1px_2px_rgba(13,27,42,0.04),0_8px_24px_-16px_rgba(13,27,42,0.10)]`}>
+    <div className={`px-5 py-3.5 border-b border-gray-100 flex items-center justify-between gap-3 ${headerBg}`}>
       <div className="flex items-center gap-2.5 min-w-0">
         {icon && (
-          <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
             {icon}
           </div>
         )}
         <div className="min-w-0">
-          <h2 className="text-[14px] font-semibold text-gray-900 leading-tight truncate">{title}</h2>
+          <h2 className="text-[15px] font-bold text-gray-900 leading-tight truncate">{title}</h2>
           {subtitle && <p className="text-[12px] text-gray-500 mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {count !== undefined && (
-          <span className="text-[13px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md tabular-nums">{count}</span>
+          <span className="text-[12.5px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full tabular-nums">{count}</span>
         )}
         {right}
       </div>
@@ -299,7 +300,7 @@ interface EmptyStateProps {
 export const AdminEmpty = ({ icon, title, subtitle }: EmptyStateProps) => (
   <div className="text-center py-14 px-6">
     {icon && (
-      <div className="w-12 h-12 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center mx-auto mb-3 text-gray-400">
+      <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-3 text-indigo-600">
         {icon}
       </div>
     )}
@@ -341,7 +342,7 @@ const ALERT_ICON: Record<AdminAlertType, React.ReactNode> = {
 
 export const AdminAlert = ({ type, children, compact }: AlertProps) => (
   <div
-    className={`flex items-start gap-2.5 text-[13.5px] font-medium rounded-lg px-3.5 py-2.5 border ${compact ? 'mb-0' : 'mb-4'} ${ALERT_CLS[type]}`}
+    className={`flex items-start gap-2.5 text-[13.5px] font-medium rounded-xl px-3.5 py-2.5 border ${compact ? 'mb-0' : 'mb-4'} ${ALERT_CLS[type]}`}
     role="alert"
   >
     {ALERT_ICON[type]}
@@ -427,7 +428,7 @@ export const AdminModal = ({
   maxWidth = 'max-w-lg',
   scroll = false,
   children,
-}: ModalProps) => (
+}: ModalProps) => createPortal(
   <AnimatePresence>
     {open && (
       <motion.div
@@ -435,7 +436,7 @@ export const AdminModal = ({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="fixed inset-0 z-50 bg-gray-900/40 flex items-center justify-center p-4"
+        className="fixed inset-0 z-[100] bg-gray-950/45 backdrop-blur-[2px] flex items-center justify-center p-4"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
@@ -445,13 +446,16 @@ export const AdminModal = ({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.98, opacity: 0, y: 8 }}
           transition={{ duration: 0.15 }}
-          className={`w-full ${maxWidth} ${scroll ? 'max-h-[85vh] overflow-y-auto' : ''} bg-white rounded-xl border border-gray-200 shadow-xl p-5`}
+          role="dialog"
+          aria-modal="true"
+          aria-label={typeof title === 'string' ? title : undefined}
+          className={`admin-modal-panel w-full ${maxWidth} ${scroll ? 'max-h-[85vh] overflow-y-auto' : ''} bg-white rounded-2xl border border-gray-200 shadow-[0_24px_64px_-16px_rgba(13,27,42,0.35)] p-6`}
         >
           {(title || subtitle) && (
             <div className="flex items-center justify-between gap-3 mb-4">
               <div className="min-w-0">
                 {title && (
-                  <h3 className={`text-[16px] font-semibold text-gray-900 truncate ${titleClassName ?? ''}`}>
+                  <h3 className={`text-[17px] font-bold text-gray-900 truncate ${titleClassName ?? ''}`}>
                     {title}
                   </h3>
                 )}
@@ -468,7 +472,7 @@ export const AdminModal = ({
         </motion.div>
       </motion.div>
     )}
-  </AnimatePresence>
+  </AnimatePresence>, document.body
 );
 
 /* ── Pagination ─────────────────────────────────────────────────────────── */

@@ -57,6 +57,49 @@ def _rf_throttle_off():
     return rf
 
 
+#: Proktor eskalatsiya sozlamalarining KOD standarti. Konteyner (prod .env)
+#: qiymatlari — masalan PROCTOR_MAX_WARNINGS_BEFORE_BAN=4, PROCTOR_HARDENED_MODE=0,
+#: PROCTOR_IDENTITY_BAN_MAX_SCORE=0 — testga o'tib, qoidani emas muhitni
+#: tekshirib qo'ymasin. Qoidaga bog'liq testlar shu qiymatlarni aniq o'rnatadi.
+PROCTOR_POLICY_DEFAULTS = {
+    "VAC_STRICT_MODE": "1",
+    "PROCTOR_MAX_WARNINGS_BEFORE_BAN": "3",
+    "PROCTOR_WARN_SUPPRESS_SECONDS": "10",
+    "PROCTOR_EVENT_MIN_INTERVAL_SECONDS": "5",
+    "PROCTOR_STARTUP_GRACE_SECONDS": "0",
+    "PROCTOR_HARDENED_MODE": "1",
+    "PROCTOR_HARD_WINDOW_MIN": "10",
+    "PROCTOR_HARD_MAX_POINTS": "22",
+    "PROCTOR_HARDENED_STARTUP_GRACE_SECONDS": "60",
+    "PROCTOR_AUTO_BAN_NON_IDENTITY": "1",
+    "PROCTOR_AUTO_BAN_IDENTITY": "1",
+    "PROCTOR_IDENTITY_BAN_MAX_SCORE": "0.10",
+    "PROCTOR_AUDIO_REVIEW_ONLY": "WHISPER_OR_CONVERSATION_SUSPECTED,SUSPICIOUS_AUDIO",
+    "PROCTOR_IGNORED_VIOLATIONS": (
+        "GAZE_AWAY_DOWN,GAZE_AWAY_UP,FACE_TURNED_AWAY,FACE_OFF_CENTER,"
+        "FACE_TOO_FAR,FACE_TOO_CLOSE,EXCESSIVE_MOVEMENT"
+    ),
+    "VAC_GLOBAL_ACCOUNT_BAN": "0",
+}
+#: Standarti ro'yxat ko'rinishida kodda yozilgan — o'zgaruvchi umuman bo'lmasin.
+PROCTOR_POLICY_UNSET = (
+    "PROCTOR_INSTANT_BAN_VIOLATIONS",
+    "PROCTOR_TECHNICAL_VIOLATIONS",
+    "PROCTOR_NO_RETAKE_VIOLATIONS",
+    "PROCTOR_REVIEW_ONLY_TYPES",
+)
+
+
+def pin_proctor_policy(testcase, **overrides):
+    """Test davomida proktor siyosatini kod standartiga qotiradi (tugagach tiklanadi)."""
+    patch = mock.patch.dict(os.environ, {**PROCTOR_POLICY_DEFAULTS, **overrides}, clear=False)
+    patch.start()
+    testcase.addCleanup(patch.stop)
+    for key in PROCTOR_POLICY_UNSET:
+        if key not in overrides:
+            os.environ.pop(key, None)
+
+
 @override_settings(REST_FRAMEWORK=_rf_throttle_off())
 class ExamFlowApiTests(TestCase):
     def setUp(self):
@@ -237,16 +280,47 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(r.json().get("code"), "VAC_PC_ONLY")
 
     def test_device_lock_blocks_mismatch_on_submit(self):
+        """Boshqa qurilma (boshqa token VA boshqa barmoq izi) — 403 DEVICE_MISMATCH.
+
+        Faqat token farq qilib, barmoq izi bir xil bo'lsa bu ataylab ruxsat
+        etilgan (kompyuter sinfida token ustidan yozilishi —
+        _helpers._enforce_bound_device_or_403 sessiyani shu mashinaga qayta
+        bog'laydi). Shuning uchun haqiqiy ikkinchi qurilma ikkala belgisi bilan ham
+        farq qiladi.
+        """
         r_start = self._post_start(self.exam_a.id)
         self.assertEqual(r_start.status_code, 200)
+        se_before = StudentExam.objects.get(student_id=self.student.id, exam_id=self.exam_a.id)
+        self.assertTrue(se_before.device_session_token)
         r_submit = self.client.post(
             f"/api/student/exams/{self.exam_a.id}/submit",
             {"answers": {"1": "4", "2": "4"}, "flaggedQuestions": []},
             format="json",
             HTTP_X_DEVICE_SESSION_TOKEN="wrong-device-token",
+            HTTP_X_DEVICE_FINGERPRINT="other-device-fp",
         )
         self.assertEqual(r_submit.status_code, 403)
         self.assertEqual(r_submit.json().get("code"), "DEVICE_MISMATCH")
+        # Rad etilgan so'rov sessiyani o'ziga qayta bog'lab ololmaydi va uni yakunlamaydi.
+        se_after = StudentExam.objects.get(pk=se_before.pk)
+        self.assertEqual(se_after.status, "In Progress")
+        self.assertEqual(se_after.device_session_token, se_before.device_session_token)
+        self.assertEqual(se_after.device_fingerprint, se_before.device_fingerprint)
+
+    def test_device_lock_same_fingerprint_rebinds_overwritten_token(self):
+        """Token ustidan yozilgan, lekin barmoq izi o'sha — bir mashina: ruxsat va qayta bog'lash."""
+        r_start = self._post_start(self.exam_a.id)
+        self.assertEqual(r_start.status_code, 200)
+        r_save = self.client.post(
+            f"/api/student/exams/{self.exam_a.id}/submit",
+            {"answers": {"1": "4", "2": "4"}, "flaggedQuestions": []},
+            format="json",
+            HTTP_X_DEVICE_SESSION_TOKEN="overwritten-token",
+            HTTP_X_DEVICE_FINGERPRINT="itest-device-fp",
+        )
+        self.assertEqual(r_save.status_code, 200, r_save.content)
+        se = StudentExam.objects.get(student_id=self.student.id, exam_id=self.exam_a.id)
+        self.assertEqual(se.status, "Completed")
 
     @mock.patch("apps.api.views.student.compare_faces", return_value={"success": True, "match": True})
     def test_identity_compare_sets_verified_at(self, _mock_faces):
@@ -529,6 +603,8 @@ class ExamFlowApiTests(TestCase):
 
     def test_violation_three_distinct_warnings_then_ban_on_third(self):
         """3 ta rasmiy ogohlantirish — 3-chi epizodda retake yoki ban."""
+        # Chegara (3) kod standarti; konteynerdagi PROCTOR_MAX_WARNINGS_BEFORE_BAN o'tmasin.
+        pin_proctor_policy(self)
         hp = bcrypt.hashpw(b"vstudent2", bcrypt.gensalt(rounds=10)).decode("ascii")
         st2 = AppUser.objects.create(
             id="itest_student_viol",
@@ -574,9 +650,11 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r3.status_code, 200)
-        self.assertTrue(r3.json().get("banned"))
+        self.assertTrue(r3.json().get("banned"), r3.json())
+        self.assertEqual(r3.json().get("banReason"), "VIOLATION_LIMIT")
         se = StudentExam.objects.get(student_id=st2.id, exam_id=eid)
         self.assertEqual(se.status, "Banned")
+        self.assertEqual(se.proctor_official_warnings, 3)
         st2.refresh_from_db()
         self.assertEqual(st2.status, "Active")
 
@@ -663,6 +741,12 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(ViolationLog.objects.filter(student_id=st12.id, exam_id=eid).count(), 1)
 
     def test_identity_substitution_instant_ban_in_strict_vac(self):
+        """Strict VAC: aniq boshqa yuz (ball < PROCTOR_IDENTITY_BAN_MAX_SCORE=0.10) — darhol ban.
+
+        11.09 dan beri chegaraviy ball (yoki ball yo'q) ban emas, faqat admin
+        ko'rib chiqishi (identityReview) — buni ham shu yerda tekshiramiz.
+        """
+        pin_proctor_policy(self)
         hp = bcrypt.hashpw(b"vstudent4", bcrypt.gensalt(rounds=10)).decode("ascii")
         st4 = AppUser.objects.create(
             id="itest_student_viol4",
@@ -686,6 +770,30 @@ class ExamFlowApiTests(TestCase):
         Exam.objects.filter(pk=self.exam_a.id).update(
             identity_retakes_allowed=0, technical_retakes_allowed=0
         )
+        se_qs = StudentExam.objects.filter(student_id=st4.id, exam_id=self.exam_a.id)
+
+        # 1) Chegaraviy ball — ban YO'Q, review sifatida qayd.
+        se_qs.update(identity_last_score=0.3)
+        r0 = self.client.post(
+            "/api/student/violations",
+            {"exam_id": self.exam_a.id, "violation_type": "IDENTITY_SUBSTITUTION", "screenshot_url": ""},
+            format="json",
+        )
+        self.assertEqual(r0.status_code, 200)
+        self.assertFalse(r0.json().get("banned"), r0.json())
+        self.assertTrue(r0.json().get("identityReview"), r0.json())
+        self.assertEqual(se_qs.get().status, "In Progress")
+        self.assertEqual(
+            list(
+                ViolationLog.objects.filter(student_id=st4.id, exam_id=self.exam_a.id).values_list(
+                    "outcome", flat=True
+                )
+            ),
+            ["review"],
+        )
+
+        # 2) Yuz butunlay boshqa — darhol ban (ogohlantirishlarsiz).
+        se_qs.update(identity_last_score=0.02)
         r = self.client.post(
             "/api/student/violations",
             {"exam_id": self.exam_a.id, "violation_type": "IDENTITY_SUBSTITUTION", "screenshot_url": ""},
@@ -693,9 +801,11 @@ class ExamFlowApiTests(TestCase):
         )
         self.assertEqual(r.status_code, 200)
         body = r.json()
-        self.assertTrue(body.get("banned"))
+        self.assertTrue(body.get("banned"), body)
+        self.assertEqual(body.get("banReason"), "IDENTITY")
         se = StudentExam.objects.get(student_id=st4.id, exam_id=self.exam_a.id)
         self.assertEqual(se.status, "Banned")
+        self.assertEqual(se.ban_reason, "IDENTITY")
         st4.refresh_from_db()
         self.assertEqual(st4.status, "Active")
 
@@ -1183,7 +1293,13 @@ class ExamFlowApiTests(TestCase):
         self.assertTrue(isinstance(body["results"], list))
 
     def test_hardened_combo_ban_faces_and_whisper(self):
-        """Hardened: faqat yuz + gapirish kombinatsiyasi darhol ban (tab+fullscreen emas)."""
+        """Hardened: faqat yuz + gapirish kombinatsiyasi darhol ban (tab+fullscreen emas).
+
+        Pichirlash yolg'iz o'zi faqat review (PROCTOR_AUDIO_REVIEW_ONLY), lekin
+        oldinroq kamerada ikkinchi yuz (MULTIPLE_FACES) ko'ringan bo'lsa u
+        tasdiqlangan hisoblanadi va hardened kombinatsiya ishlaydi.
+        """
+        pin_proctor_policy(self)
         hp = bcrypt.hashpw(b"vstudent7", bcrypt.gensalt(rounds=10)).decode("ascii")
         st7 = AppUser.objects.create(
             id="itest_student_viol7",
@@ -1218,7 +1334,9 @@ class ExamFlowApiTests(TestCase):
             format="json",
         )
         self.assertEqual(r2.status_code, 200)
-        self.assertTrue(r2.json().get("banned"))
+        self.assertTrue(r2.json().get("banned"), r2.json())
+        self.assertTrue(r2.json().get("hardenedCombo"), r2.json())
+        self.assertFalse(r2.json().get("audioReview"), r2.json())
         se = StudentExam.objects.get(student_id=st7.id, exam_id=self.exam_a.id)
         self.assertEqual(se.status, "Banned")
         st7.refresh_from_db()

@@ -29,16 +29,17 @@ logger = logging.getLogger(__name__)
 #: Bitta imtihon uchun AI ga ajratilgan eng ko'p vaqt (sekund).
 AI_TIME_BUDGET = max(30, int(os.environ.get("AI_QUESTION_TIME_BUDGET", "110")))
 #: Bitta so'rovda so'raladigan eng ko'p savol.
-MAX_PER_CALL = 15
+# Bitta so'rovda ko'p savol so'ralsa model har birini qisqa yozadi va 85% i
+# sifat filtridan o'tmay tashlanardi (22.09 o'lchov: 15 ta -> 15% qabul,
+# 6 ta -> 78% qabul). Kam so'rash = kam isrof, sifat talablari o'sha.
+MAX_PER_CALL = max(3, int(os.environ.get("AI_GEN_PER_CALL", "6")))
 
 _LANG = {"uz": "O'zbek", "ru": "Rus", "en": "Ingliz"}
 
 
 def _exam_model() -> str:
-    """Imtihon savollari uchun model (sozlanmagan bo'lsa — standart)."""
-    from django.conf import settings
-
-    return str(getattr(settings, "OPENAI_EXAM_MODEL", "") or "").strip()
+    """Instruction-following model for longer, balanced exam questions; overridable."""
+    return str(os.environ.get("OPENAI_ADVANCED_EXAM_MODEL") or "gpt-4.1").strip()
 
 
 def _norm(v) -> str:
@@ -105,7 +106,17 @@ _EXTREME_RULES = (
     "asosla (qaysi vaziyatda u to'g'ri bo'lardi). Agar asoslay olmasang, "
     "u variant bema'ni — uni almashtir. Izoh QISQA bo'lsin: har variantga "
     "6-12 so'z, jami 150-350 belgi.\n"
-    "15. Savol matni kamida 250 belgi bo'lsin.\n"
+    "15. Savol matni 100–160 so'z bo'lsin (belgi emas).\n"
+    "16. CHALG'ITUVCHILAR — ENG MUHIM: har bir noto'g'ri variant 'deyarli to'g'ri' "
+    "bo'lsin: o'sha dori guruhining boshqa vakili, to'g'ri dori lekin noto'g'ri doza yoki "
+    "navbat, to'g'ri tekshiruv lekin hozir emas, o'xshash kasallikka xos taktika. "
+    "Mavzuni yuzaki bilgan odam kamida 2 ta variant orasida ikkilansin.\n"
+    "17. Hech bir variantni grammatika, uzunlik, 'har doim/hech qachon' kabi mutlaq "
+    "so'z yoki boshqalardan ajralib turgan uslub orqali chiqarib tashlab bo'lmasin.\n"
+    "18. Holatda bitta CHALG'ITUVCHI detal bo'lsin (klassik, lekin bu yerda ahamiyatsiz "
+    "belgi) — u noto'g'ri variantlardan biriga olib boradi; to'g'ri javob esa boshqa, "
+    "kamroq ko'zga tashlanadigan, lekin hal qiluvchi ma'lumotdan kelib chiqadi.\n"
+    "19. Savolda to'g'ri javobni ochib beradigan kalit so'z yoki tashxis nomi bo'lmasin.\n"
 )
 
 
@@ -130,7 +141,63 @@ _CLINICAL_RULES = (
     "variant nega ishonarli ekanini qisqa asosla. Asoslay olmasang — "
     "u variant bema'ni, uni almashtir. Har variantga 6-12 so'z, jami "
     "120-300 belgi.\n"
-    "14. Savol matni kamida 220 belgi.\n"
+    "14. Savol matni 100–160 so'z (belgi emas).\n"
+)
+
+
+# Ekspert darajasi: odatdagi "clinical" dan bir necha barobar qiyin, lekin
+# MAVZU o'zgarmaydi — qiyinlik mavzuni almashtirish hisobiga emas, shu mavzuni
+# CHUQURROQ tekshirish hisobiga. Mo'ljal: yaxshi tayyorlangan mutaxassis
+# taxminan 40-50% ni yechadi (clinical: 60-70%).
+_EXPERT_RULES = (
+    "\n\nQO'SHIMCHA — EKSPERT DARAJASI (odatdagidan 3-4 barobar qiyin):\n"
+    "8. Javob uchun KAMIDA UCH bosqichli mulohaza shart: (a) berilgan "
+    "ma'lumotlardan asosiy va chalg'ituvchi belgilarni ajratish, (b) 2-3 "
+    "o'xshash holat yoki taktikani solishtirish, (c) shu bemor uchun "
+    "yagona eng to'g'ri xulosa.\n"
+    "9. Holatda KAMIDA BITTA muhim nozik detal bo'lsin (hamroh kasallik, "
+    "qarshi ko'rsatma, dori o'zaro ta'siri, laborator ko'rsatkich dinamikasi, "
+    "homiladorlik, yosh, buyrak/jigar funksiyasi) va aynan u to'g'ri javobni "
+    "odatdagi 'darslik javobi' dan boshqasiga o'zgartirsin.\n"
+    "10. Laborator yoki instrumental natijalarni klinik manzara bilan "
+    "SOLISHTIRISH talab etilsin; bitta belgiga qarab javob topilmasin.\n"
+    "11. Chalg'ituvchi variantlar — BOSHQA (o'xshash) vaziyatda to'g'ri "
+    "bo'ladigan haqiqiy taktikalar. Yuzaki yodlagan odam aynan shularni "
+    "tanlasin. Bema'ni yoki boshqa sohadan olingan variant YO'Q.\n"
+    "12. Navbat (nima AVVAL), doza, muddat, ko'rsatma va qarshi ko'rsatma "
+    "chegaralari kabi amaliy nozikliklarni sinovdan o'tkaz.\n"
+    "13. HALOLLIK: javob faqat berilgan ma'lumotdan va amaldagi klinik "
+    "tavsiyalardan mantiqan kelib chiqsin. Hiyla, noaniq so'z, ikki to'g'ri "
+    "javob, juda kam uchraydigan ekzotik kasallik YOKI dasturdan tashqari "
+    "bilim talab qilinmasin.\n"
+    "14. HAR BIR savolga `distractor_rationale` yoz: har bir noto'g'ri "
+    "variant qaysi vaziyatda to'g'ri bo'lardi va bu yerda nega emas — "
+    "har variantga 6-12 so'z, jami 150-350 belgi.\n"
+    "15. Savol matni 110–170 so'z (belgi emas).\n"
+    "16. CHALG'ITUVCHILAR — ENG MUHIM: har bir noto'g'ri variant 'deyarli to'g'ri' "
+    "bo'lsin: o'sha dori guruhining boshqa vakili, to'g'ri dori lekin noto'g'ri doza yoki "
+    "navbat, to'g'ri tekshiruv lekin hozir emas, o'xshash kasallikka xos taktika. "
+    "Mavzuni yuzaki bilgan odam kamida 2 ta variant orasida ikkilansin.\n"
+    "17. Hech bir variantni grammatika, uzunlik, 'har doim/hech qachon' kabi mutlaq "
+    "so'z yoki boshqalardan ajralib turgan uslub orqali chiqarib tashlab bo'lmasin.\n"
+    "18. Holatda bitta CHALG'ITUVCHI detal bo'lsin (klassik, lekin bu yerda ahamiyatsiz "
+    "belgi) — u noto'g'ri variantlardan biriga olib boradi; to'g'ri javob esa boshqa, "
+    "kamroq ko'zga tashlanadigan, lekin hal qiluvchi ma'lumotdan kelib chiqadi.\n"
+    "19. Savolda to'g'ri javobni ochib beradigan kalit so'z yoki tashxis nomi bo'lmasin.\n"
+)
+
+# Barcha darajalar uchun: yangi savol namunadagi MAVZUDAN chiqmasin.
+_TOPIC_RULES = (
+    "\n\nMAVZU QOIDASI (ENG MUHIM, qiyinlikdan ham ustun):\n"
+    "T1. Har bir yangi savol namunalardan BIRINING AYNAN o'sha mavzusida "
+    "bo'lsin: o'sha kasallik / sindrom / holat / muolaja / dori guruhi. "
+    "Mavzuni kengaytirma, qo'shni kasallikka yoki boshqa mutaxassislikka o'tma.\n"
+    "T2. Qiyinlikni mavzuni almashtirish bilan EMAS, shu mavzuni chuqurroq "
+    "tekshirish bilan oshir (tashxis nozikligi, taktika, asorat, qarshi ko'rsatma).\n"
+    "T3. Har savolga `topic_from` (namuna raqami, 1 dan boshlab) va `topic` "
+    "(o'sha mavzuning qisqa nomi, 2-6 so'z) maydonlarini yoz.\n"
+    "T4. Namunalar orasida mavzularni teng taqsimla — hammasini bitta "
+    "namunadan olma.\n"
 )
 
 
@@ -141,12 +208,14 @@ def _prompt(
     subject: str,
     difficulty: str = "hard",
 ) -> str:
+    from apps.api.text_only_questions import TEXT_ONLY_INSTRUCTION
     lang_name = _LANG.get(language, "O'zbek")
     block = json.dumps(
         [
-            {"text": s.get("text", "")[:600],
+            {"n": i + 1,
+             "text": s.get("text", "")[:600],
              "options": [str(o)[:200] for o in (s.get("options") or [])]}
-            for s in samples
+            for i, s in enumerate(samples)
         ],
         ensure_ascii=False,
     )
@@ -158,7 +227,7 @@ def _prompt(
         "Sen tibbiyot instituti ordinatura bitiruv imtihoni uchun test tuzuvchi "
         "mutaxassissan. Namuna savollar, vazifa, fan va til ushbu ko'rsatmaning "
         "OXIRIDA berilgan.\n\n"
-        "QAT'IY TALABLAR:\n"
+        "QAT'IY TALABLAR:\n" + TEXT_ONLY_INSTRUCTION +
         "0. FAQAT oxirida ko'rsatilgan fan (yo'nalish) doirasida yoz: namunalardagi "
         "mavzular va shu yo'nalishning ordinatura dasturidan chiqma, boshqa "
         "mutaxassislikka oid savol YOZMA.\n"
@@ -177,32 +246,62 @@ def _prompt(
         "5. To'g'ri javob savol matnida so'zma-so'z takrorlanmasin.\n"
         "6. Variantlar uzunligi bir-biriga yaqin bo'lsin (uzunligi bo'yicha "
         "javobni topib bo'lmasin).\n"
-        "7. Savol matni kamida 200 belgi — bemor yoshi, shikoyati, anamnezi, "
+        "7. Savol matni 100–160 so'z — bemor yoshi, shikoyati, anamnezi, "
         "ko'rik va tekshiruv natijalari bilan to'liq klinik holat.\n\n"
         + (
-            _EXTREME_RULES + _EXTREME_EXAMPLE
+            _EXTREME_RULES
             if difficulty == "extreme"
-            else (_CLINICAL_RULES + _EXTREME_EXAMPLE if difficulty == "clinical" else "")
+            else (
+                _EXPERT_RULES
+                if difficulty == "expert"
+                else (_CLINICAL_RULES if difficulty == "clinical" else "")
+            )
         )
+        + _TOPIC_RULES
+        + "\nYANGI SIFAT TALABI (yuqoridagi minimal uzunliklardan ustun): "
+        "har savol 100–160 so'zli mazmunli klinik vaziyat bo'lsin; kamida 3 bosqich "
+        "(ma'lumotlarni ajratish, muqobil tashxis/taktikani solishtirish, xulosa) talab qilsin. "
+        "Keraksiz jumla bilan cho'zma, javobni oshkor qiladigan izoh qo'shma. "
+        "Barcha variantlar bir xil turdagi va o'xshash tafsilot darajasida bo'lsin. "
+        "Eng uzun variant eng qisqasidan 1.5 baravardan oshmasin. To'g'ri variantni "
+        "doim uzunroq YOZMA: turli savollarda uning uzunlik o'rni (qisqa/o'rta/uzun) "
+        "aralashsin. Faqat to'g'ri variantga qo'shimcha asos, izoh yoki aniqlashtirish bermagin.\n"
         + "\nJAVOB FORMATI — faqat JSON massiv, boshqa hech narsa:\n"
         + (
             '[{"text":"...","options":["...","...","...","...","..."],'
-            '"correctAnswer":"...","distractor_rationale":"..."}]'
-            if difficulty in ("extreme", "clinical")
+            '"correctAnswer":"...","distractor_rationale":"...",'
+            '"topic_from":1,"topic":"..."}]'
+            if difficulty in ("extreme", "clinical", "expert")
             else '[{"text":"...","options":["...","...","...","...","..."],'
-            '"correctAnswer":"..."}]'
+            '"correctAnswer":"...","topic_from":1,"topic":"..."}]'
         )
     )
     tail = (
         "\n\n=== VAZIFA ===\n"
         "QUYIDAGI NAMUNA SAVOLLAR mavzusi va darajasini o'rgan:\n"
         f"{block}\n\n"
-        f"VAZIFA: shu mavzular bo'yicha {count} ta YANGI test savoli yoz.\n"
+        f"VAZIFA: shu mavzular bo'yicha {count} ta YANGI test savoli yoz. "
+        "Har biri namunalardan birining AYNAN o'sha mavzusida (topic_from).\n"
         f"Fan: {subject} (FAQAT «{subject}» yo'nalishi doirasida)\n"
         f"Til: {lang_name} (savol ham, variantlar ham shu tilda)\n"
-        "Javob — faqat yuqoridagi formatdagi JSON massiv.\n"
+        "FINAL VALIDATION BEFORE OUTPUT (mandatory): Each text must contain 100-160 WORDS, "
+        "not characters. Count the words; do not return a stem below 65 words. "
+        "A question is a full clinical vignette with relevant history, examination, "
+        "investigation findings and a precise question requiring 3 reasoning steps. "
+        "Do not pad with generic sentences or give away the diagnosis. "
+        "Write 5 equally plausible options with comparable detail. The longest option "
+        "must have at most 1.5 times the character count of the shortest. "
+        "Vary whether the correct option is shorter, medium or longer across the batch. "
+        "Return distractor_rationale explaining why EACH incorrect choice is wrong. "
+        "Self-check and revise noncompliant questions before returning the JSON array.\n"
     )
-    return static + tail
+    length_rule = (
+        "\nUZUNLIK (MAJBURIY): har savol matni 3 xatboshi — anamnez, ko'rik/tekshiruv "
+        "natijalari, savol — jami 90–140 so'z. Har bir variant 55–85 BELGI (harf) "
+        "oralig'ida, beshalasi deyarli bir xil uzunlikda. Yuborishdan oldin har savolning "
+        "so'zlarini va har variantning belgilarini sanab, mos kelmasa qayta yoz.\n"
+    )
+    return static + tail + length_rule
 
 
 def _parse(raw: str) -> list[dict]:
@@ -226,20 +325,89 @@ def _parse(raw: str) -> list[dict]:
         _why = str(q.get("distractor_rationale") or "").strip()
         if _why:
             row["distractor_rationale"] = _why
+        try:
+            row["topic_from"] = int(q.get("topic_from"))
+        except (TypeError, ValueError):
+            pass
+        _topic = str(q.get("topic") or "").strip()
+        if _topic:
+            row["topic"] = _topic[:80]
         out.append(row)
     return out
 
 
+def _balanced_options(opts: list[str]) -> bool:
+    """Reject conspicuous length cues without forcing the answer to a middle rank."""
+    lengths = [len(str(o).strip()) for o in opts]
+    return bool(lengths) and min(lengths) > 0 and max(lengths) <= min(lengths) * 1.6
+
+
+def preferred_bank_pool(pool: list[dict], count: int) -> list[dict]:
+    """Prefer existing longer/balanced items without editing their answer keys or exhausting a bank."""
+    balanced = [q for q in pool if _balanced_options(q.get('options') or [])]
+    eligible = balanced if len(balanced) >= count else list(pool)
+    longer = [q for q in eligible if len(str(q.get('text') or '').split()) >= 45]
+    return longer if len(longer) >= max(count * 2, count + 5) else eligible
+
+
+def _repair_candidates(questions: list[dict], language: str, subject: str) -> list[dict]:
+    """One bounded repair pass, followed by the same quality and correctness gates."""
+    from apps.api.openai_client import chat_text
+    if not questions:
+        return []
+    planned = []
+    for i, q in enumerate(questions[:5]):
+        opts = q['options']
+        ci = opts.index(q['correctAnswer'])
+        lengths = [65, 72, 79, 86, 93]
+        rank = i % 5
+        target = lengths.pop(rank)
+        random.shuffle(lengths)
+        lengths.insert(ci, target)
+        planned.append({**q, 'target_characters_per_option': lengths,
+                        'correct_option_length_rank_shortest_first': rank + 1})
+    raw = chat_text(
+        "Revise these medical examination items; return ONLY a JSON array with text, options, "
+        "correctAnswer and distractor_rationale. Preserve the subject and learning objective, "
+        "ensure exactly one clinically correct answer. Each text MUST contain 100-160 WORDS "
+        "in THREE paragraphs: history (35+ words), examination/investigations (35+ words), "
+        "and clinical decision task (20+ words). Add only relevant coherent clinical details, "
+        "never reveal the answer in the stem. Require differential reasoning plus a next-step "
+        "decision. Rewrite ALL FIVE options as parallel plausible alternatives, each 8-12 words; "
+        "equal detail, no rationale in options. Follow target_characters_per_option for EACH "
+        "option, preserving its meaning and index. The correct option MUST occupy the specified "
+        "length rank (1=shortest, 5=longest); do not systematically make it longest. "
+        "Compare character counts: max/min <= 1.5. Explain why each wrong "
+        "answer is wrong in distractor_rationale. Language: " + _LANG.get(language, "O'zbek")
+        + ". Subject: " + subject + ". Items: " + json.dumps(planned, ensure_ascii=False),
+        temperature=0.5, model=_exam_model(), timeout=75, max_retries=0,
+    )
+    return _parse(raw)
+
+
+def _answer_extreme(q: dict) -> str:
+    sizes = [len(o) for o in q['options']]
+    size = len(q['correctAnswer'])
+    if size == max(sizes) and sizes.count(size) == 1:
+        return 'longest'
+    if size == min(sizes) and sizes.count(size) == 1:
+        return 'shortest'
+    return ''
+
+
 def _acceptable(q: dict, seen: set[str], difficulty: str = "hard") -> bool:
     """Sifat filtri — oson yoki takroriy savolni o'tkazmaydi."""
+    from apps.api.text_only_questions import requires_visual
+    if requires_visual(q):
+        return False
     text, opts, ans = q["text"], q["options"], q["correctAnswer"]
     # Tanlov imtihonida qisqa savol = klinik holat yo'q = oson savol.
-    if len(text) < (250 if difficulty == "extreme" else 220 if difficulty == "clinical" else 150):
+    if len(text.split()) < 65 or len(text.split()) > 190:
         return False
-    if difficulty in ("extreme", "clinical"):
+    if difficulty in ("extreme", "clinical", "expert"):
         # Model chalg'ituvchilarni asoslay olmagan bo'lsa, ular bema'ni
         # bo'lishi ehtimoli yuqori — bunday savol o'tkazilmaydi.
-        if len(str(q.get("distractor_rationale") or "")) < (80 if difficulty == "extreme" else 60):
+        if len(str(q.get("distractor_rationale") or "")) < (80 if difficulty in ("extreme", "expert") else 60):
             return False
     key = _norm(text)[:180]
     if not key or key in seen:
@@ -251,10 +419,9 @@ def _acceptable(q: dict, seen: set[str], difficulty: str = "hard") -> bool:
     if len(na) >= 8 and na in _norm(text):
         return False
     # javob boshqa variantlardan sezilarli uzun bo'lsa — taxmin qilish oson
-    others = [len(o) for o in opts if o != ans]
-    if others and len(ans) > max(others) * 1.6:
+    if not _balanced_options(opts) or ans not in opts:
         return False
-    if len(opts) < 5:
+    if len(opts) != 5:
         return False
     return True
 
@@ -280,19 +447,36 @@ _VERIFY_PROMPT = (
     "o'z-o'zidan ochib qo'ymaydimi? Ochib qo'ysa — YO'Q.\n"
     "6. Savol klinik mulohazasiz bitta faktni yodlashni so'ramaydimi? "
     "So'rasa — YO'Q.\n"
-    "7. Savol «{s}» yo'nalishiga tegishlimi? Tegishli bo'lmasa — YO'Q.\n\n"
+    "6a. Noto'g'ri variantlardan kamida 2 tasi mavzuni yuzaki biladigan odamga "
+    "ishonarli ko'rinadimi? Hammasi bir qarashda chiqarib tashlanadigan bo'lsa — YO'Q.\n"
+    "7. Savol «{s}» yo'nalishiga tegishlimi? Tegishli bo'lmasa — YO'Q.\n"
+    "{anchor}\n"
     "Faqat JSON qaytar, boshqa hech narsa:\n"
     '{{"ok": true/false, "reason": "qisqa sabab"}}'
 )
 
 
+def _anchor_rule(q: dict) -> str:
+    """Savol yaratilgan namuna bo'lsa — tekshiruvchi mavzuni u bilan solishtiradi."""
+    anchor = str(q.get("_anchor") or "").strip()
+    if not anchor:
+        return ""
+    return (
+        "8. Savol quyidagi NAMUNA bilan AYNAN bir mavzuda (o'sha kasallik / holat / "
+        "muolaja) mi? Qo'shni kasallikka, boshqa mavzuga yoki boshqa mutaxassislikka "
+        "o'tib ketgan bo'lsa — YO'Q.\nNAMUNA: " + anchor.replace("{", "(").replace("}", ")") + "\n"
+    )
+
+
 def verify_question(q: dict, subject: str = "") -> tuple[bool, str]:
     """Savolni MUSTAQIL tekshiradi: kalit haqiqatan to'g'rimi.
 
-    `(ok, sabab)` qaytaradi. Tekshiruv o'zi yiqilsa `(True, "")` —
-    tekshira olmaslik savolni rad etish uchun asos emas, aks holda
-    OpenAI uzilganda butun bank yo'qolardi.
+    `(ok, sabab)` qaytaradi. Tekshiruv ishlamasa yangi savol qabul qilinmaydi;
+    chaqiruvchi avvalgi bank savolidan foydalanishi mumkin.
     """
+    from apps.api.text_only_questions import requires_visual
+    if requires_visual(q):
+        return False, 'visual_dependency'
     import json as _json
 
     from apps.api.openai_client import chat_text
@@ -304,22 +488,23 @@ def verify_question(q: dict, subject: str = "") -> tuple[bool, str]:
     try:
         raw = chat_text(
             _VERIFY_PROMPT.format(
-                q=body, a=str(q.get("correctAnswer") or ""), s=str(subject or "tibbiyot")
+                q=body, a=str(q.get("correctAnswer") or ""), s=str(subject or "tibbiyot"),
+                anchor=_anchor_rule(q),
             ),
             temperature=0.0,          # tekshiruv barqaror bo'lsin
             model=_exam_model(),
         )
     except Exception as ex:  # noqa: BLE001
         logger.warning("verify: so'rov yiqildi: %s", str(ex)[:140])
-        return True, ""
+        return False, "verification_unavailable"
     try:
         txt = raw.strip()
         i, j = txt.find("{"), txt.rfind("}")
         data = _json.loads(txt[i:j + 1]) if i >= 0 and j > i else {}
     except Exception:  # noqa: BLE001
-        return True, ""
-    ok = bool(data.get("ok"))
-    return ok, str(data.get("reason") or "")[:200]
+        return False, "verification_invalid"
+    ok = isinstance(data, dict) and data.get("ok") is True
+    return ok, str(data.get("reason") or "")[:200] if isinstance(data, dict) else "verification_invalid"
 
 
 def generate_harder_similar(
@@ -350,7 +535,8 @@ def generate_harder_similar(
     started = time.monotonic()
     attempt = 0
 
-    while len(out) < count and attempt < 3:
+    max_attempts = 4 if difficulty in ("expert", "extreme") else 3
+    while len(out) < count and attempt < max_attempts:
         attempt += 1
         if time.monotonic() - started > AI_TIME_BUDGET:
             logger.warning("ai_gen: vaqt chegarasi, %d/%d savol", len(out), count)
@@ -371,6 +557,14 @@ def generate_harder_similar(
                 prompt_cache_key="fjsti-qgen-%s" % difficulty,
             )
             got = _parse(raw)
+            from apps.api.text_only_questions import text_only_pool
+            got = text_only_pool(got)
+            rejected = [q for q in got if not _acceptable(q, seen, difficulty)]
+            if rejected and time.monotonic() - started < AI_TIME_BUDGET - 25:
+                try:
+                    got += _repair_candidates(rejected, language, subject or "tibbiyot")
+                except Exception:
+                    logger.warning("ai_gen: quality repair unavailable")
         except Exception as ex:
             logger.warning("ai_gen: urinish %d yiqildi: %s", attempt, str(ex)[:180])
             continue
@@ -380,8 +574,19 @@ def generate_harder_similar(
                 break
             if not _acceptable(q, seen, difficulty):
                 continue
+            # MAVZU: savol qaysi namunadan kelib chiqqanini aytmagan bo'lsa —
+            # mavzudan chiqib ketgan bo'lishi mumkin, qabul qilinmaydi.
+            _tf = q.get("topic_from")
+            if not isinstance(_tf, int) or not (1 <= _tf <= len(picked)):
+                continue
+            q["_anchor"] = str(picked[_tf - 1].get("text") or "")[:400]
+            # Avoid replacing the old "always longest" cue with "always shortest".
+            extreme = _answer_extreme(q)
+            if count >= 5 and extreme and sum(_answer_extreme(x) == extreme for x in out) >= max(1, int(count * .4)):
+                continue
             seen.add(_norm(q["text"])[:180])
             q.pop("distractor_rationale", None)
+            q.pop("topic_from", None)
             q["source"] = "ai_generated"
             out.append(q)
             added += 1
@@ -414,8 +619,13 @@ _VERIFY_BATCH_PROMPT = (
     "o'z-o'zidan ochib qo'ymaydimi? Ochib qo'ysa — YO'Q.\n"
     "6. Savol klinik mulohazasiz bitta faktni yodlashni so'ramaydimi? "
     "So'rasa — YO'Q.\n"
+    "6a. Noto'g'ri variantlardan kamida 2 tasi mavzuni yuzaki biladigan odamga "
+    "ishonarli ko'rinadimi? Hammasi bir qarashda chiqarib tashlanadigan bo'lsa — YO'Q.\n"
     "7. Savol quyida ko'rsatilgan yo'nalishga tegishlimi? Tegishli "
-    "bo'lmasa — YO'Q.\n\n"
+    "bo'lmasa — YO'Q.\n"
+    "8. Savolda «MAVZU NAMUNASI» berilgan bo'lsa: savol o'sha namuna bilan "
+    "AYNAN bir mavzuda (o'sha kasallik / holat / muolaja) mi? Boshqa mavzuga "
+    "yoki mutaxassislikka o'tib ketgan bo'lsa — YO'Q.\n\n"
     "Faqat JSON massiv qaytar — har savol uchun bitta element, boshqa hech narsa:\n"
     '[{"i": 1, "ok": true, "reason": "qisqa sabab"}]\n'
 )
@@ -425,8 +635,7 @@ def verify_batch(questions: list[dict], subject: str = "") -> list:
     """Bir necha savolni BITTA so'rovda tekshiradi (tekshiruv qoidalari bir marta yuboriladi).
 
     Har savol uchun True/False; javobda topilmagan savol — None (chaqiruvchi
-    uni alohida tekshiradi). So'rov o'zi yiqilsa — hammasi True (verify_question
-    bilan bir xil: tekshira olmaslik rad etish uchun asos emas).
+    uni alohida tekshiradi). So'rov yiqilsa yangi savollar tasdiqlanmaydi.
     """
     import json as _json
 
@@ -435,12 +644,13 @@ def verify_batch(questions: list[dict], subject: str = "") -> list:
     parts = ["Yo'nalish: %s\n" % (subject or "tibbiyot")]
     for n, q in enumerate(questions, 1):
         parts.append(
-            "=== SAVOL %d ===\n%s\nVariantlar:\n%s\nBELGILANGAN JAVOB: %s\n"
+            "=== SAVOL %d ===\n%s\nVariantlar:\n%s\nBELGILANGAN JAVOB: %s\n%s"
             % (
                 n,
                 str(q.get("text") or ""),
                 "\n".join("- %s" % o for o in (q.get("options") or [])),
                 str(q.get("correctAnswer") or ""),
+                ("MAVZU NAMUNASI: %s\n" % str(q.get("_anchor"))[:400]) if q.get("_anchor") else "",
             )
         )
     try:
@@ -451,7 +661,7 @@ def verify_batch(questions: list[dict], subject: str = "") -> list:
         )
     except Exception as ex:  # noqa: BLE001
         logger.warning("verify_batch: so'rov yiqildi: %s", str(ex)[:140])
-        return [True] * len(questions)
+        return [False] * len(questions)
     res: list = [None] * len(questions)
     try:
         txt = (raw or "").strip()
@@ -469,7 +679,7 @@ def verify_batch(questions: list[dict], subject: str = "") -> list:
     return res
 
 
-def verify_many(questions: list[dict], subject: str = "", workers: int = 8) -> list[bool]:
+def _verify_many_uncached(questions: list[dict], subject: str = "", workers: int = 8) -> list[bool]:
     """Bir nechta savolni PARALLEL tekshiradi (talabani kuttirmaslik uchun).
 
     TOKEN TEJASH: savollar AI_VERIFY_BATCH_SIZE (standart 5) tadan bitta
@@ -501,20 +711,79 @@ def verify_many(questions: list[dict], subject: str = "", workers: int = 8) -> l
     return [bool(x) for x in res]
 
 
+def verify_many(questions: list[dict], subject: str = "", workers: int = 8) -> list[bool]:
+    """Reuse exact positive verification only; changed content/model is rechecked."""
+    import hashlib
+    from django.core.cache import cache
+    from apps.api.text_only_questions import requires_visual
+    result = [False] * len(questions)
+    pending = {}
+    for i, q in enumerate(questions):
+        if requires_visual(q):
+            continue
+        payload = [subject, _exam_model(), q.get('text'), q.get('options'), q.get('correctAnswer'), q.get('_anchor') or '']
+        key = 'qverify_text_v1:' + hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()
+        try:
+            hit = cache.get(key) is True
+        except Exception:
+            hit = False
+        if hit:
+            result[i] = True
+        else:
+            pending.setdefault(key, []).append(i)
+    keys = list(pending)
+    checked = _verify_many_uncached([questions[pending[k][0]] for k in keys], subject, workers) if keys else []
+    for key, ok in zip(keys, checked):
+        for i in pending[key]:
+            result[i] = bool(ok)
+        if ok:
+            try:
+                cache.set(key, True, 7 * 24 * 3600)
+            except Exception:
+                pass
+    for q in questions:
+        if isinstance(q, dict):
+            q.pop("_anchor", None)
+    return result
+
+
 _PARAPHRASE_PROMPT = (
     "Sen tibbiyot test savollarini QAYTA YOZUVCHI mutaxassissan. Quyidagi "
     "test savollarini qayta yoz. Maqsad: savolni oldindan yodlab olgan odam "
-    "uni matnidan tanimasin, lekin MAZMUN va TO'G'RI JAVOB o'zgarmasin.\n"
+    "uni matnidan ham, variantlaridan ham tanimasin va savol ancha QIYINROQ "
+    "bo'lsin, lekin MAVZU va TO'G'RI JAVOB ma'nosi o'zgarmasin.\n"
     "Fan: {subject}. Til: {lang} (savol ham, variantlar ham shu tilda).\n\n"
     "QOIDALAR:\n"
     "1. Savol matnini boshqa so'zlar va boshqa jumla tuzilishi bilan yoz. "
-    "Javobga ta'sir qilmaydigan tafsilotlarni (bayon tartibi, so'z tanlovi) "
-    "o'zgartirishing mumkin; javobni o'zgartiradigan ma'lumotni O'ZGARTIRMA.\n"
-    "2. Variantlar SONI va TARTIBI aynan saqlansin: i-variant — asl i-variantning "
-    "boshqa so'zlar bilan yozilgan shakli (ma'nosi aynan bir xil).\n"
+    "Asl o'quv maqsadini saqlab, murakkabroq klinik vaziyat tuz: mos anamnez, "
+    "ko'rik va tekshiruvlar qo'shish mumkin, ammo ular asl to'g'ri javobga zid "
+    "bo'lmasin va yangi ikkinchi to'g'ri variant hosil qilmasin.\n"
+    "2. Variantlar SONI saqlansin. TO'G'RI variant (correct_index) ma'nosi aynan "
+    "saqlanib, boshqa so'zlar bilan yoziladi. NOTO'G'RI variantlarni esa yangidan yoz: "
+    "har biri 'deyarli to'g'ri' bo'lsin — o'sha dori guruhining boshqa vakili, to'g'ri "
+    "dori lekin noto'g'ri doza/navbat, to'g'ri tekshiruv lekin hozir emas, o'xshash "
+    "kasallikka xos taktika. Ular shu bemor uchun diqqat bilan o'qilganda aniq "
+    "noto'g'ri bo'lsin (ikkinchi to'g'ri javob YO'Q). Bema'ni yoki boshqa sohadan "
+    "variant yozma. Barcha variantlarni 8–12 so'zli to'liq klinik ibora shaklida yoz; "
+    "faqat to'g'ri variantni kengaytirma.\n"
     "3. To'g'ri javob asl savoldagi bilan bir xil tartib raqamidagi variant "
     "bo'lib qoladi (correct_index o'zgarmaydi).\n"
-    "4. Yangi xato qo'shma, ilmiy atama va raqamlarni to'g'ri qoldir.\n\n"
+    "3a. Holatga bitta CHALG'ITUVCHI detal qo'sh (klassik, lekin bu yerda ahamiyatsiz "
+    "belgi) — u noto'g'ri variantlardan biriga olib borsin; to'g'ri javob kamroq "
+    "ko'zga tashlanadigan, lekin hal qiluvchi ma'lumotdan kelib chiqsin. Tashxis "
+    "nomini yoki javobni ochib beradigan kalit so'zni matnga yozma.\n"
+    "4. Yangi xato qo'shma, ilmiy atama va raqamlarni to'g'ri qoldir.\n"
+    "5. Matnni 65–140 so'zli, tahlil talab qiladigan tushunarli vaziyatga aylantir. "
+    "Ziddiyatli yoki ilmiy asossiz klinik fakt qo'shma, javobni izohlab yoki aytib qo'yma; "
+    "mazmunni buzmay kengaytirish imkonsiz bo'lsa bu savolni qaytarma.\n"
+    "6. Variantlar tafsiloti va uzunligi o'xshash bo'lsin: eng uzun variant eng "
+    "qisqasidan 1.5 baravardan oshmasin. To'g'ri variant doim eng uzun yoki "
+    "eng qisqa bo'lmasin, uzunlik o'rni savollar orasida aralashsin.\n\n"
+    "VALIDATION: Write three paragraphs totalling 100-160 WORDS (history, findings, decision). "
+    "A stem must contain at least 65 WORDS, not characters. If preserving "
+    "the original meaning and answer makes this impossible, omit that item. "
+    "All options must have comparable detail and character counts (max/min <= 1.5). "
+    "Follow target_characters_per_option without changing option meanings or correct_index.\n"
     "SAVOLLAR:\n{block}\n\n"
     "JAVOB — faqat JSON massiv, boshqa hech narsa:\n"
     '[{{"i": N, "text": "...", "options": ["...", "..."]}}]'
@@ -543,13 +812,18 @@ def paraphrase_questions(questions: list[dict], *, language: str = "uz", subject
         ca = str(q.get("correctAnswer") or "")
         if ca not in opts:
             continue
+        lengths = [65 + 7 * n for n in range(len(opts))]
+        target = lengths.pop(i % len(opts))
+        random.shuffle(lengths)
+        lengths.insert(opts.index(ca), target)
         items.append({"i": i, "text": str(q.get("text") or "")[:900], "options": opts,
-                      "correct_index": opts.index(ca)})
+                      "correct_index": opts.index(ca), 'target_characters_per_option': lengths})
     if not items:
         return out
     try:
+        from apps.api.text_only_questions import TEXT_ONLY_INSTRUCTION
         raw = chat_text(
-            _PARAPHRASE_PROMPT.format(
+            TEXT_ONLY_INSTRUCTION + _PARAPHRASE_PROMPT.format(
                 subject=subject or "tibbiyot",
                 lang=_LANG.get(language, "O'zbek"),
                 block=_json.dumps(items, ensure_ascii=False),
@@ -574,10 +848,14 @@ def paraphrase_questions(questions: list[dict], *, language: str = "uz", subject
             continue
         text = str(row.get("text") or "").strip()
         opts = [str(o).strip() for o in (row.get("options") or [])]
-        if (len(text) < 40 or len(opts) != len(src["options"]) or any(not o for o in opts)
+        if (not 45 <= len(text.split()) <= 180 or not _balanced_options(opts)
+                or len(opts) != len(src["options"]) or any(not o for o in opts)
                 or len({_norm(o) for o in opts}) != len(opts) or _norm(text) == _norm(src["text"])):
             continue
-        out[i] = {"text": text, "options": opts, "correctAnswer": opts[src["correct_index"]]}
+        candidate = {"text": text, "options": opts, "correctAnswer": opts[src["correct_index"]]}
+        from apps.api.text_only_questions import requires_visual
+        if not requires_visual(candidate):
+            out[i] = candidate
     return out
 
 
@@ -606,7 +884,7 @@ def _para_key(exam_id, language: str, q: dict) -> str:
         [_norm(q.get("text"))] + [_norm(o) for o in (q.get("options") or [])]
         + [_norm(q.get("correctAnswer"))]
     )
-    return "para_v1:%s:%s:%s" % (exam_id, language, hashlib.sha1(sig.encode("utf-8")).hexdigest())
+    return "para_v3_hard:%s:%s:%s" % (exam_id, language, hashlib.sha1(sig.encode("utf-8")).hexdigest())
 
 
 def cached_paraphrase(exam_id, language: str, q: dict):
@@ -629,7 +907,9 @@ def cached_paraphrase(exam_id, language: str, q: dict):
         if isinstance(v, dict) and len(v.get("options") or []) == len(opts)
         and v.get("ci") == opts.index(ca) and str(v.get("text") or "").strip()
     ]
-    if len(good) < n:
+    from apps.api.text_only_questions import requires_visual
+    good = [v for v in good if not requires_visual(v)]
+    if not good:
         return None
     v = random.choice(good)
     return {"text": v["text"], "options": list(v["options"]), "correctAnswer": v["options"][v["ci"]]}

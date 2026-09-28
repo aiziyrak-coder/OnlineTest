@@ -45,6 +45,7 @@ def run_proctor_analysis(frame_b64: str, enrich_objects: bool = False) -> dict:
     """
     from apps.api.face_embedding import analyze_proctor_frame_local
     from apps.api.gemini_tools import analyze_proctor_frame
+    from apps.api.object_evidence import has_physical_evidence
 
     result = analyze_proctor_frame_local(frame_b64)
     if not result.get("ok"):
@@ -63,7 +64,7 @@ def run_proctor_analysis(frame_b64: str, enrich_objects: bool = False) -> dict:
                 vtype = _FORBIDDEN_OBJECT_MAP.get(key) or _FORBIDDEN_OBJECT_MAP.get(
                     key.replace("_", "")
                 )
-                if vtype and vtype not in violations:
+                if vtype and vtype not in violations and has_physical_evidence(ai, vtype):
                     violations.append(vtype)
             if bool(ai.get("looking_away")) and face_count == 1:
                 violations.append("GAZE_AWAY_UP")
@@ -95,7 +96,7 @@ def run_proctor_analysis(frame_b64: str, enrich_objects: bool = False) -> dict:
                 vtype = _FORBIDDEN_OBJECT_MAP.get(key) or _FORBIDDEN_OBJECT_MAP.get(
                     key.replace("_", "")
                 )
-                if vtype and vtype not in seen:
+                if vtype and vtype not in seen and has_physical_evidence(ai, vtype):
                     violations.append(vtype)
                     seen.add(vtype)
 
@@ -306,7 +307,7 @@ def run_finalize_ended_exams() -> dict:
 
     from django.utils import timezone as dj_tz
 
-    from apps.api.services import finalize_student_exam_session, safe_json_loads
+    from apps.api.services import finalize_in_progress_locked
     from apps.core.models import AppUser, Exam, ExamGroup, StudentExam
 
     # Avval: muddati tugagan HAR QANDAY sessiyani yopamiz (guruhga
@@ -355,18 +356,16 @@ def run_finalize_ended_exams() -> dict:
                 continue
             status = (se.status or "").strip()
             if status == "In Progress":
-                answers = safe_json_loads(se.draft_answers_json, {})
-                flagged = safe_json_loads(se.draft_flagged_json, [])
                 try:
-                    finalize_student_exam_session(se, exam, answers, flagged)
-                    finalized += 1
+                    # Qulf ostida qayta tekshiriladi — talaba shu lahzada topshirgan bo'lsa tegilmaydi.
+                    if finalize_in_progress_locked(se.pk, exam):
+                        finalized += 1
                 except Exception:  # noqa: BLE001 — bitta sessiya xatosi butun taskni buzmasin
                     continue
             elif status == "Pending":
                 # Retake berilgan, lekin imtihon vaqti tugaguncha qaytmadi — yiqilgan.
-                se.status = "Failed"
-                se.save(update_fields=["status"])
-                finalized += 1
+                if StudentExam.objects.filter(pk=se.pk, status="Pending").update(status="Failed"):
+                    finalized += 1
             # Completed / Banned / Failed → yakuniy, tegilmaydi.
 
     return {"finalized": finalized, "absent": absent, **expired}
@@ -513,6 +512,9 @@ def ai_review_violation_task(self, log_id: int, image: str) -> dict:
 def random_identity_check_task(self, student_exam_id: int, image: str) -> dict:
     """Kamera kadri profil rasmi bilan solishtiriladi; ketma-ket 2 marta mos kelmasa —
     adminga dalil bilan qayd (avtomatik ban emas: yorug'lik/burchak sabab xato bo'lishi mumkin)."""
+    from apps.api.test_center_policy import PERSON_MONITORING_ENABLED
+    if not PERSON_MONITORING_ENABLED:
+        return {'skipped': True, 'code': 'IDENTITY_MONITORING_DISABLED'}
     from django.core.cache import cache
     from django.utils import timezone as dj_tz
 

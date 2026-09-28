@@ -4,7 +4,8 @@ import { RealtimeProctor, type RealtimeViolation, type FaceStatusLive, type Live
 interface UseRealtimeProctoringOpts {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   /** Real-time signal — odatda ExamRoom dagi logViolation ga ulanadi. */
-  onViolation: (type: RealtimeViolation) => void;
+  onViolation: (type: RealtimeViolation, detail?: string) => void;
+  testCenter?: boolean;
   /** Person-swap shubhasi — darhol server identity-compare ishga tushiriladi. */
   onRecheckIdentity?: () => void;
   /** Har kadrda real-time yuz holati — kamera overlay uchun. */
@@ -13,6 +14,8 @@ interface UseRealtimeProctoringOpts {
   onLiveSignal?: (type: LiveSignalType | null, elapsedMs: number) => void;
   /** Og'iz qimirlashi (Silero nutqini o'zi/boshqa deb ajratish). */
   onMouthActivity?: (active: boolean) => void;
+  /** Har kadrda chetga qarash holati (javobdan oldin qarash naqshi uchun). */
+  onSideGaze?: (dir: 'L' | 'R' | null) => void;
   /** Kichik ogohlantirish bosqichidagi barcha signallar — "3 kichik → rasmiy" qonuni uchun. */
   onSmallWarningStage?: (types: LiveSignalType[]) => void;
   /** Stream tayyor bo'lgani: shu o'zgarganda engine qayta ishga tushadi. */
@@ -36,9 +39,11 @@ export function useRealtimeProctoring({
   onFaceStatus,
   onLiveSignal,
   onMouthActivity,
+  onSideGaze,
   onSmallWarningStage,
   streamRevision = 0,
   eyeBaseline = null,
+  testCenter = false,
   disabled = false,
   onReady,
 }: UseRealtimeProctoringOpts): void {
@@ -54,10 +59,11 @@ export function useRealtimeProctoring({
       onFaceStatus,
       onLiveSignal,
       onMouthActivity,
+      onSideGaze,
       onSmallWarningStage,
       onReady,
       onStatus: (m) => console.info('[realtime-proctor]', m),
-    }, eyeBaseline);
+    }, eyeBaseline, testCenter);
 
     void proctor.init().then((ok) => {
       if (cancelled) {
@@ -72,5 +78,5 @@ export function useRealtimeProctoring({
       proctor.dispose();
     };
     // streamRevision o'zgarsa (kamera qayta ishga tushsa) engine qayta yaratiladi.
-  }, [disabled, streamRevision]);
+  }, [disabled, streamRevision, testCenter]);
 }

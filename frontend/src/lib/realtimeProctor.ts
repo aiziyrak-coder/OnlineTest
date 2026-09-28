@@ -16,6 +16,9 @@
 
 import { createWithDelegateFallback, formatDelegateErrors } from './mediapipeDelegate';
 import { mediapipeAssetSources } from './mediapipeAssets';
+import { CenterObserverTracker, CENTER_OBSERVER_MS, primaryFaceIndex } from './testCenterFaces';
+import { CENTER_IGNORED } from './testCenterPolicy';
+import { rhythmicSpeech } from './speechMotion';
 
 export type RealtimeViolation =
   | 'FACE_NOT_VISIBLE'
@@ -28,6 +31,7 @@ export type RealtimeViolation =
   | 'EXCESSIVE_MOVEMENT'
   | 'HAND_GESTURE_SUSPECTED'
   | 'MOUTH_MOVEMENT_TALKING'
+  | 'SIDE_CONVERSATION_SUSPECTED'
   | 'FACE_TOO_FAR'
   | 'FACE_TOO_CLOSE'
   | 'FACE_OFF_CENTER'
@@ -330,7 +334,7 @@ export function isIrisGazeAway(iris: { dx: number; dy: number } | null): boolean
 }
 
 export interface RealtimeProctorCallbacks {
-  onViolation: (type: RealtimeViolation) => void;
+  onViolation: (type: RealtimeViolation, detail?: string) => void;
   /** Yuz almashishi shubhasi (yo'qolib qayta paydo bo'ldi yoki ko'p yuz) —
    *  ExamRoom darhol server identity-compare ishga tushiradi (person-swap'ni tez ushlash). */
   onRecheckIdentity?: () => void;
@@ -342,6 +346,9 @@ export interface RealtimeProctorCallbacks {
   /** Talaba og'zi qimirlayaptimi (Silero nutqini o'zi/boshqa deb ajratish uchun).
    *  Bu o'zi ogohlantirish bermaydi — faqat audio VAD bilan birga ishlatiladi. */
   onMouthActivity?: (active: boolean) => void;
+  /** Har kadrda: hozir chetga (chap/o'ng) qarayaptimi yoki bosh burilganmi. Ogohlantirish
+   *  emas — javobdan oldin chetga qarash naqshini (tashqi yordam) hisoblash uchun. */
+  onSideGaze?: (dir: 'L' | 'R' | null) => void;
   /** Hozir "kichik ogohlantirish" bosqichidagi BARCHA signallar (chipsizlari ham).
    *  `SmallWarningLedger` shular asosida "3 kichik → 4-si rasmiy" qonunini qo'llaydi. */
   onSmallWarningStage?: (types: LiveSignalType[]) => void;
@@ -409,11 +416,14 @@ export class RealtimeProctor {
    *  Nigoh ("pastga qaradi") nazorati shunga NISBATAN ishlaydi — mutlaq
    *  chegara odamlar orasida soxta ogohlantirish berardi. */
   private eyeBaseline: number | null = null;
+  private centerObserver = new CenterObserverTracker();
+  private lastCenterVideoTime = -1;
 
   constructor(
     video: HTMLVideoElement,
     cb: RealtimeProctorCallbacks,
     eyeBaseline?: number | null,
+    private testCenter = false,
   ) {
     this.video = video;
     this.cb = cb;
@@ -439,7 +449,7 @@ export class RealtimeProctor {
           runningMode: 'VIDEO',
           // Performance: 2 ta yuz yetarli (ko'p yuz = >=2 ni aniqlash uchun). 3 ta yuz
           // izlash har kadrda ortiqcha yuk edi.
-          numFaces: 2,
+          numFaces: this.testCenter ? 4 : 2,
           outputFaceBlendshapes: true,
           outputFacialTransformationMatrixes: false,
         });
@@ -533,13 +543,14 @@ export class RealtimeProctor {
     this.handLandmarker = null;
   }
 
-  private emit(type: RealtimeViolation): void {
+  private emit(type: RealtimeViolation, detail?: string): void {
+    if (this.testCenter && CENTER_IGNORED.has(type)) return;
     const now = Date.now();
     const cooldown =
       type === 'MOUTH_MOVEMENT_TALKING' ? 2200 : PER_TYPE_COOLDOWN_MS;
     if (now - (this.lastEmit[type] || 0) < cooldown) return;
     this.lastEmit[type] = now;
-    this.cb.onViolation(type);
+    this.cb.onViolation(type, detail);
   }
 
   /** Identity qayta-tekshiruv so'rovi (person-swap), ortiqcha chaqirmaslik uchun cooldown. */
@@ -575,6 +586,12 @@ export class RealtimeProctor {
     const v = this.video;
     if (!v || v.readyState < 2 || v.videoWidth === 0) return;
     const ts = performance.now();
+    if (this.testCenter && v.currentTime === this.lastCenterVideoTime) {
+      this.centerObserver.update([], ts);
+      this.trackContinuous('sideConversation', false, 0);
+      return;
+    }
+    this.lastCenterVideoTime = v.currentTime;
 
     // 0) Qo'l/imo-ishora — YUZDAN OLDIN tekshiramiz: qo'l yuzga yaqin/ustida bo'lsa,
     // FaceLandmarker og'iz nuqtalarini noto'g'ri o'qib, soxta "gapiryapti" signali
@@ -597,7 +614,7 @@ export class RealtimeProctor {
     // (README.md "Proctoring eskalatsiya qoidasi"): 1.5s kichik, 3s rasmiy.
     // Oldin darhol (~0.4s) rasmiy ogohlantirish berardi — qo'lni bir zum ko'tarish
     // ham darhol blokka olib kelardi, bu qonunga zid edi.
-    this.liveMs.HAND = this.trackContinuous('hand', handsPresent);
+    this.liveMs.HAND = this.trackContinuous('hand', handsPresent && !this.testCenter);
     if (this.liveMs.HAND >= LIVE_SIGNAL_ESCALATE_MS) this.emit('HAND_GESTURE_SUSPECTED');
 
     let faces: FaceLandmark[][] = [];
@@ -605,7 +622,9 @@ export class RealtimeProctor {
     try {
       const res = this.faceLandmarker.detectForVideo(v, ts);
       faces = res?.faceLandmarks || [];
-      faceBlendshapes = res?.faceBlendshapes?.[0]?.categories;
+      const primary = this.testCenter ? primaryFaceIndex(faces) : 0;
+      faceBlendshapes = res?.faceBlendshapes?.[Math.max(0, primary)]?.categories;
+      if (primary > 0) faces = [faces[primary], ...faces.filter((_, i) => i !== primary)];
     } catch {
       return;
     }
@@ -617,8 +636,14 @@ export class RealtimeProctor {
     // berish mantig'i shart emas — darhol ushlash kerak. "recheck" ham darhol ishlaydi.
     this.liveMs.NO_FACE = this.trackContinuous('noFace', faceCount === 0);
     if (this.liveMs.NO_FACE >= LIVE_SIGNAL_ESCALATE_FAST_MS) this.emit('FACE_NOT_VISIBLE');
-    this.liveMs.MULTI_FACE = this.trackContinuous('multiFace', faceCount >= 2);
-    if (this.liveMs.MULTI_FACE >= LIVE_SIGNAL_ESCALATE_FAST_MS) this.emit('MULTIPLE_FACES');
+    const observerMs = this.testCenter ? this.centerObserver.update(faces, ts) : 0;
+    // Do not feed short shared-room appearances to the small-warning ledger.
+    this.liveMs.MULTI_FACE = this.testCenter ? 0 : this.trackContinuous('multiFace', faceCount >= 2);
+    if (this.testCenter && observerMs >= CENTER_OBSERVER_MS) {
+      this.emit('MULTIPLE_FACES', JSON.stringify({ policy: 'center_observer_v1', continuous_ms: Math.floor(observerMs) }));
+    } else if (!this.testCenter && this.liveMs.MULTI_FACE >= LIVE_SIGNAL_ESCALATE_FAST_MS) {
+      this.emit('MULTIPLE_FACES');
+    }
 
     // Person-swap: yuz yo'qolib qayta paydo bo'lsa — kim qaytganini tekshir (darhol).
     if (faceCount === 0) {
@@ -629,7 +654,7 @@ export class RealtimeProctor {
       this.requestRecheck();
     }
 
-    if (faceCount >= 2) {
+    if (faceCount >= 2 && !this.testCenter) {
       this.cb.onFaceStatus?.('MULTIPLE_FACES');
       this.requestRecheck(); // ko'p yuz — kim o'tirganini darhol tekshir
     }
@@ -672,6 +697,7 @@ export class RealtimeProctor {
       this.mouthHistory = [];
       this.jawOpenHistory = [];
       this.cb.onMouthActivity?.(false);
+      this.trackContinuous('sideConversation', false, 0);
     }
 
     // Kichik chip (onLiveSignal) — FAQAT badge'siz signallar uchun. Pozitsiya/gaze/yuz
@@ -769,6 +795,13 @@ export class RealtimeProctor {
     const gazeRActive = (headGazeR || irisRight) && absYaw < YAW_HARD;
     const gazeLMs = this.trackContinuous('gazeL', gazeLActive);
     const gazeRMs = this.trackContinuous('gazeR', gazeRActive);
+    this.cb.onSideGaze?.(
+      gazeLActive || (absYaw >= YAW_HARD && noseRelX >= 0)
+        ? 'L'
+        : gazeRActive || (absYaw >= YAW_HARD && noseRelX < 0)
+          ? 'R'
+          : null,
+    );
     if (gazeLMs >= GAZE_SIDE_ESCALATE_MS) this.emit('GAZE_AWAY_LEFT');
     if (gazeRMs >= GAZE_SIDE_ESCALATE_MS) this.emit('GAZE_AWAY_RIGHT');
     // Jami yon qarash vaqti (qisqa, ko'p takrorlangan qarashlar ham qo'shiladi).
@@ -811,14 +844,18 @@ export class RealtimeProctor {
     this.prevNose = { x: nose.x, y: nose.y };
 
     // 4) Og'iz qimirlashi (gapirish): blendshape jawOpen + lab landmark tebranishi.
-    this.detectMouthMovement(lm, blendshapes, handsPresent);
+    const visibleSpeech = this.detectMouthMovement(lm, blendshapes, handsPresent);
+    const sideConversationMs = this.trackContinuous('sideConversation',
+      this.testCenter && absYaw >= YAW_TURN && visibleSpeech, 350);
+    if (sideConversationMs >= 6000) this.emit('SIDE_CONVERSATION_SUSPECTED',
+      JSON.stringify({policy:'side_conversation_v1',continuous_ms:Math.floor(sideConversationMs)}));
   }
 
   private detectMouthMovement(
     lm: FaceLandmark[],
     blendshapes?: Array<{ categoryName: string; score: number }>,
     handsPresent = false,
-  ): void {
+  ): boolean {
     let talking = false;
 
     // MediaPipe blendshape — eng ishonchli yo'l. Tarix oynasi ATAYLAB qisqa (8 kadr
@@ -887,5 +924,6 @@ export class RealtimeProctor {
     const talkMs = this.trackContinuous('mouth', talking2, 350);
     this.liveMs.TALKING = talkMs;
     this.cb.onMouthActivity?.(talkMs >= TALK_SIGNAL_CONFIRM_MS);
+    return talking2 && (rhythmicSpeech(this.jawOpenHistory) || rhythmicSpeech(this.mouthHistory,.025));
   }
 }

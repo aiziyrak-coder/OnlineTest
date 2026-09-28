@@ -162,6 +162,7 @@ import {
   VIRTUAL_CAMERA_BLOCKED_MESSAGE,
 } from '../lib/preferredCameraStream';
 import { prewarmProctorStream, discardPrewarmedProctorStream } from '../lib/proctorStreamPrewarm';
+import { noteServerDate, serverNow } from '../lib/serverClock';
 
 const PASSIVE_LIVE_SAMPLES = 12;
 const PASSIVE_LIVE_GAP_MS = 260;
@@ -225,6 +226,12 @@ export function PreExamCheck({
   const [micReady, setMicReady] = useState(false);
   /** Mikrofon HAQIQATAN eshitdimi (shunchaki ulangani emas). */
   const [micHeard, setMicHeard] = useState(false);
+  /** Test markazi rejimi (tekshiruvchi PIN kiritgan): mikrofon talab qilinmaydi. */
+  const [centerMode, setCenterMode] = useState(Boolean(exam?.test_center_mode));
+  const centerRoom = Boolean(exam?.test_center_enabled || centerMode);
+  const [centerPin, setCenterPin] = useState('');
+  const [centerBusy, setCenterBusy] = useState(false);
+  const [centerErr, setCenterErr] = useState('');
   /** Jonli daraja — ko'rsatkich chizig'i uchun (0..1). */
   const [micLevel, setMicLevel] = useState(0);
   /** Sinovda O'LCHANGAN eng yuqori daraja — rozilik bilan birga
@@ -402,7 +409,7 @@ export function PreExamCheck({
     return Number.isFinite(ms) ? ms : null;
   })();
   const [examOver, setExamOver] = useState(
-    () => accessUntilMs != null && Date.now() > accessUntilMs,
+    () => accessUntilMs != null && serverNow() > accessUntilMs,
   );
   /** Server "tugagan" deb javob berdi — soat farqidan qat'i nazar qulflaymiz. */
   const [serverSaysOver, setServerSaysOver] = useState(false);
@@ -576,7 +583,7 @@ export function PreExamCheck({
       // 1) Avval faqat kamera, keyin mikrofon — Windows/Chrome da bir vaqtda olish ko'pincha yiqiladi.
       try {
         const v = await openPreferredCameraStream(false, true);
-        const micOk = await attachDefaultMicrophone(v);
+        const micOk = centerRoom || await attachDefaultMicrophone(v);
         attachStream(v);
         if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
         return;
@@ -614,7 +621,7 @@ export function PreExamCheck({
       }
 
       try {
-        const s = await openPreferredCameraStream(true, true);
+        const s = await openPreferredCameraStream(!centerRoom, true);
         attachStream(s);
         if (s.getAudioTracks().length === 0) setMediaHint(t.preExamMicOnlyFailed);
       } catch (e1: unknown) {
@@ -625,7 +632,7 @@ export function PreExamCheck({
           let vOnly: MediaStream | null = null;
           try {
             vOnly = await openPreferredCameraStream(false, true);
-            const micOk = await attachDefaultMicrophone(vOnly);
+            const micOk = centerRoom || await attachDefaultMicrophone(vOnly);
             attachStream(vOnly);
             if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
             setError('');
@@ -657,7 +664,7 @@ export function PreExamCheck({
                     video: true,
                     audio: false,
                   });
-                  const micOk = await attachDefaultMicrophone(raw);
+                  const micOk = centerRoom || await attachDefaultMicrophone(raw);
                   attachStream(raw);
                   if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
                   setError('');
@@ -696,7 +703,7 @@ export function PreExamCheck({
               video: true,
               audio: false,
             });
-            const micOk = await attachDefaultMicrophone(raw);
+            const micOk = centerRoom || await attachDefaultMicrophone(raw);
             attachStream(raw);
             if (!micOk) setMediaHint(t.preExamMicOnlyFailed);
             setError('');
@@ -748,6 +755,7 @@ export function PreExamCheck({
           if (arr.length > 60) arr.shift();
         }
       },
+      centerRoom,
     );
     void checker.init().then((ok) => {
       if (cancelled) {
@@ -766,7 +774,7 @@ export function PreExamCheck({
       cancelled = true;
       checker.dispose();
     };
-  }, [cameraReady, verified]);
+  }, [cameraReady, verified, centerRoom]);
 
   /** Shaxs tasdiqlandi — tugmasiz: kamera kadrlarida yengil harakat qidiriladi
    *  (statik foto/video-replay'ga qarshi arzon birinchi qatlam). O'tsa, active
@@ -847,6 +855,7 @@ export function PreExamCheck({
           const res = await fetch(apiUrl(`/api/health?probe=${Date.now()}-${i}`), {
             cache: 'no-store',
           });
+          noteServerDate(res);
           samples.push({ ms: res.ok ? Math.round(performance.now() - t0) : null });
         } catch {
           samples.push({ ms: null });
@@ -1051,6 +1060,45 @@ export function PreExamCheck({
 
   const isVacancy = String((user as any)?.role || '').toLowerCase() === 'vacancy';
 
+  /** Tekshiruvchi test markazi PIN'ini kiritadi — sessiya mikrofonsiz rejimga o'tadi. */
+  const submitCenterPin = async () => {
+    const pin = centerPin.replace(/\D/g, '');
+    if (pin.length < 4 || pin.length > 8 || centerBusy) return;
+    setCenterBusy(true);
+    setCenterErr('');
+    try {
+      const res = await fetch(apiUrl(`/api/student/exams/${exam.id}/test-center`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...examAuthHeaders(token) },
+        body: JSON.stringify({ pin }),
+      });
+      const data = await readJsonSafe<{ error?: string }>(res);
+      if (!res.ok) {
+        setCenterErr(String(data?.error || 'PIN'));
+        return;
+      }
+      const src = videoRef.current?.srcObject;
+      if (src instanceof MediaStream) {
+        for (const tr of src.getAudioTracks()) {
+          tr.stop();
+          src.removeTrack(tr);
+        }
+      }
+      setCenterMode(true);
+      setMicReady(true);
+      setMicHeard(true);
+      setCenterPin('');
+      // Qoidalar matni test markazi rejimiga o'zgaradi — qayta olinadi va tasdiqlanadi.
+      setConsentSaved(false);
+      setRulesChecked(false);
+      setRulesReload((n) => n + 1);
+    } catch {
+      setCenterErr(t.preExamNetworkError);
+    } finally {
+      setCenterBusy(false);
+    }
+  };
+
   const handleEnter = async () => {
     setError('');
     // Ilovada: boshlashdan oldin kompyuter yana bir bor tekshiriladi.
@@ -1076,6 +1124,7 @@ export function PreExamCheck({
         },
         body: JSON.stringify({ student_lang: lang, client_features: ['question_lock'] }),
       });
+      noteServerDate(res);
       const data = await readJsonSafe<{
         error?: string;
         code?: string;
@@ -1138,7 +1187,7 @@ export function PreExamCheck({
   useEffect(() => {
     if (accessUntilMs == null || examOver) return;
     const tick = () => {
-      if (Date.now() > accessUntilMs) setExamOver(true);
+      if (serverNow() > accessUntilMs) setExamOver(true);
     };
     tick();
     const id = window.setInterval(tick, 5_000);
@@ -1273,7 +1322,7 @@ export function PreExamCheck({
   // eshitilmaydi. Nomzod gapiradi — daraja fon shovqinidan sezilarli
   // baland bo'lishi shart.
   useEffect(() => {
-    if (!micReady || micHeard) return;
+    if (centerRoom || !micReady || micHeard) return;
     const src = videoRef.current?.srcObject;
     if (!(src instanceof MediaStream) || src.getAudioTracks().length === 0) return;
 
@@ -1333,7 +1382,7 @@ export function PreExamCheck({
       window.clearTimeout(raf);
       void ctx?.close?.().catch(() => {});
     };
-  }, [micReady, micHeard]);
+  }, [micReady, micHeard, centerRoom]);
 
   // Progress qadamlari — qoidalar oxirgi "Boshlash" modali orqali tasdiqlanadi.
   const steps = [
@@ -1348,9 +1397,18 @@ export function PreExamCheck({
   const activeStepIdx = steps.findIndex((s) => !s.done);
 
   const blocked: string[] = [];
+  if (exam?.test_center_enabled && !centerMode) {
+    blocked.push(
+      lang === 'ru'
+        ? 'Сотрудник тестового центра должен ввести PIN-код'
+        : lang === 'en'
+          ? 'A test-centre staff member must enter the PIN'
+          : 'Test markazi xodimi PIN kodni kiritishi kerak',
+    );
+  }
   if (!cameraReady) blocked.push(t.preExamBlockedCamera);
-  if (!micReady) blocked.push(t.preExamBlockedMic);
-  if (micReady && !micHeard) blocked.push(t.preExamBlockedMicHeard);
+    if (!centerRoom && !micReady) blocked.push(t.preExamBlockedMic);
+    if (!centerRoom && micReady && !micHeard) blocked.push(t.preExamBlockedMicHeard);
   if (!consentSaved) blocked.push(t.preExamBlockedConsent);
   if (screenRequired && !screenShared) blocked.push(PRE_L[lang].preExamBlockedScreen);
   if (!sysOk) blocked.push(PRE_L[lang].preExamBlockedComputer);
@@ -1438,6 +1496,38 @@ export function PreExamCheck({
               </span>
             </div>
           </div>
+          {exam?.test_center_enabled ? (
+            <div className={`rounded-xl border px-3.5 py-3 ${centerMode ? 'border-emerald-200 bg-emerald-50' : 'border-indigo-100 bg-indigo-50/60'}`}>
+              {centerMode ? (
+                <p className="text-[13px] font-semibold text-emerald-800">
+                  ✓ {lang === 'ru' ? 'Режим тестового центра: микрофон не используется, камера контролируется полностью.' : lang === 'en' ? 'Test-centre mode: the microphone is not used; the camera is fully monitored.' : "Test markazi rejimi: mikrofon ishlatilmaydi, kamera to'liq nazorat qilinadi."}
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="min-w-[200px] flex-1">
+                    <p className="text-[13px] font-bold text-gray-900">{lang === 'ru' ? 'Тестовый центр' : lang === 'en' ? 'Test centre' : 'Test markazi'}</p>
+                    <p className="text-[12px] text-gray-600">{lang === 'ru' ? 'Если вы сдаёте в тестовом центре, проверяющий вводит PIN-код.' : lang === 'en' ? 'Taking the exam at the test centre? The proctor enters the PIN.' : "Test markazida topshiryapsizmi? PIN kodni tekshiruvchi kiritadi."}</p>
+                  </div>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={8}
+                    value={centerPin}
+                    onChange={(e) => setCenterPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void submitCenterPin(); }}
+                    placeholder="PIN"
+                    aria-label="PIN"
+                    className="h-10 w-24 rounded-lg border border-gray-300 bg-white px-3 text-center text-[16px] tracking-[0.4em] focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15"
+                  />
+                  <AdminBtn variant="blue" size="sm" loading={centerBusy} disabled={centerPin.length < 4 || centerPin.length > 8} onClick={() => void submitCenterPin()}>
+                    {lang === 'ru' ? 'Подтвердить' : lang === 'en' ? 'Confirm' : 'Tasdiqlash'}
+                  </AdminBtn>
+                  {centerErr ? <p className="w-full text-[12.5px] font-medium text-red-600">{centerErr}</p> : null}
+                </div>
+              )}
+            </div>
+          ) : null}
           {/* Stepper */}
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
             {steps.map((s, i) => {
@@ -1470,7 +1560,7 @@ export function PreExamCheck({
         {(error || mediaHint) && (
           <div className="shrink-0 space-y-2 max-h-[min(28dvh,140px)] overflow-y-auto overscroll-y-contain">
             {error && <AdminAlert type="error" compact>{error}</AdminAlert>}
-            {mediaHint && !error && <AdminAlert type="warning" compact>{mediaHint}</AdminAlert>}
+            {mediaHint && !error && !centerMode && <AdminAlert type="warning" compact>{mediaHint}</AdminAlert>}
           </div>
         )}
 
@@ -1509,7 +1599,7 @@ export function PreExamCheck({
                   <span className={`w-1.5 h-1.5 rounded-full ${cameraReady ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
                   <span className="text-white text-[10.5px] font-medium">{cameraReady ? t.preExamCameraActive : t.preExamWaitCamera}</span>
                 </div>
-                <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/55 backdrop-blur-sm rounded-full px-2 py-1">
+                {!centerRoom && <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/55 backdrop-blur-sm rounded-full px-2 py-1">
                   <span className={`w-1.5 h-1.5 rounded-full ${micHeard ? 'bg-emerald-400' : micReady ? 'bg-amber-400' : 'bg-red-400'}`} />
                   <span className="text-white text-[10.5px] font-medium">
                     {!micReady
@@ -1528,7 +1618,7 @@ export function PreExamCheck({
                       />
                     </span>
                   )}
-                </div>
+                </div>}
               </div>
             </div>
 

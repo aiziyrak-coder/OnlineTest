@@ -98,6 +98,8 @@ export function ImtixonTab({
    *  o'tkaziladigan imtihonda o'chiriladi (atrofdagi tabiiy shovqin soxta
    *  ogohlantirish bermasin). Talabaning o'zi gapirishi bunga bog'liq emas. */
   const [ambientAudioEnabled, setAmbientAudioEnabled] = useState(true);
+  /** Test markazi PIN (4 raqam) — bo'sh bo'lsa rejim yo'q. */
+  const [testCenterPin, setTestCenterPin] = useState('');
   const [language, setLanguage] = useState('auto');
   const [customRules, setCustomRules] = useState('');
   const [responsibleStaffId, setResponsibleStaffId] = useState('');
@@ -408,6 +410,7 @@ export function ImtixonTab({
         duration_minutes: duration,
         language,
         ambient_audio_enabled: ambientAudioEnabled,
+        test_center_pin: testCenterPin,
         custom_rules: customRules,
         group_ids: audience !== 'student' ? [] : selGroups,
         exam_exceptions: audience !== 'student' ? [] : exceptionsPayload,
@@ -966,6 +969,23 @@ export function ImtixonTab({
                     </span>
                   </span>
                 </label>
+              </AdminField>
+              <AdminField label={lang === 'ru' ? 'PIN тестового центра (4 цифры)' : lang === 'en' ? 'Test-centre PIN (4 digits)' : 'Test markazi PIN (4 raqam)'}>
+                <AdminInput
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={testCenterPin}
+                  onChange={(e) => setTestCenterPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="—"
+                  className="max-w-[140px] tracking-[0.3em]"
+                />
+                <p className="text-[12px] text-gray-400 mt-1.5 leading-snug">
+                  {lang === 'ru'
+                    ? 'Проверяющий вводит этот PIN на компьютере в тестовом центре: микрофон не контролируется, камера — полностью. Пусто — режим выключен.'
+                    : lang === 'en'
+                      ? 'The proctor enters this PIN on test-centre computers: the microphone is not monitored, the camera fully is. Empty — mode off.'
+                      : "Tekshiruvchi test markazidagi kompyuterda kiritadi: mikrofon nazorat qilinmaydi, kamera to'liq ishlaydi. Bo'sh — rejim o'chiq."}
+                </p>
               </AdminField>
               <AdminField label={`${t.customRules} (opt.)`}>
                 <AdminTextarea value={customRules} onChange={(e) => setCustomRules(e.target.value)} />

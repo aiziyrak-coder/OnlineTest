@@ -143,6 +143,17 @@ def student_identity_compare(request):
         profile_b64_len=len(p),
         live_b64_len=len(l),
     )
+    from apps.api.test_center_policy import PERSON_MONITORING_ENABLED
+    if (se and se.status == 'In Progress' and not PERSON_MONITORING_ENABLED
+            and bool(getattr(se, 'test_center_mode', False))):
+        # Existing clients treat a retry as neutral, never as an identity mismatch.
+        # Pre-exam identity verification is intentionally unchanged.
+        return Response({'code': 'IDENTITY_MONITORING_DISABLED', 'skipped': True, 'retry': True}, status=503)
+    if se and (se.test_center_mode or se.exam.test_center_pin):
+        from apps.api.face_embedding import center_identity_ambiguous
+        if center_identity_ambiguous(l):
+            # A retry is not a mismatch; never store a bystander's identity score.
+            return Response({"code": "CENTER_IDENTITY_AMBIGUOUS", "retry": True}, status=503)
     result = compare_faces(p_raw, l_raw)
     if not result.get("success"):
         code = result.get("code") or "GEMINI_ERROR"
@@ -303,7 +314,15 @@ def student_exams_list(request):
             # imtihonlar o'qituvchi kabinetidan yashiriladi. Hisobotlar (admin)
             # StudentExam yozuvlaridan o'qiladi va saqlanadi.
             if role == "faculty":
-                exams_qs = exams_qs.filter(end_time__gte=dj_tz.now())
+                # Shaxsiy qayta oynasi OCHILGAN o'qituvchi tugagan imtihonni ham ko'radi
+                # (masalan kirmaganlar uchun alohida kun).
+                _now_f = dj_tz.now()
+                _rw_ids = list(
+                    ExamRetakeWindow.objects.filter(
+                        student_id=u.id, window_start__lte=_now_f, window_end__gte=_now_f
+                    ).values_list("exam_id", flat=True)
+                )
+                exams_qs = exams_qs.filter(Q(end_time__gte=_now_f) | Q(id__in=_rw_ids))
         assigned_ids = list(exams_qs.values_list("id", flat=True))
         if role == "vacancy" and not assigned_ids and uid_kaf:
             # Nomzod kabineti BO'SH qolmasin: kafedra uchun vakansiya imtihoni
@@ -446,6 +465,9 @@ def student_exams_list(request):
                 "questions_count": bank_n,
                 "in_progress": in_progress,
                 "started_at": se.started_at.isoformat() if in_progress and se.started_at else None,
+                # Ishga kiruvchilar test markazisiz (PINsiz) topshiradi.
+                "test_center_enabled": str(getattr(e, "audience", "") or "") != "vacancy",
+                "test_center_mode": bool(se is not None and getattr(se, "test_center_mode", False)),
                 "student_exam_id": se.id if se else None,
                 "access": (
                     {
@@ -502,10 +524,83 @@ def student_vac_rules(request, pk: int):
     from apps.api.vac_rules import build_vac_rules
 
     lang = resolve_ui_language(request) or "uz"
-    doc = build_vac_rules(exam, lang, str(u.id))
     se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
+    doc = build_vac_rules(
+        exam, lang, str(u.id), test_center=bool(se and getattr(se, "test_center_mode", False))
+    )
     doc["already_accepted"] = bool(se and se.vac_consent_at)
     return Response(doc)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def student_exam_test_center(request, pk: int):
+    """Test markazi rejimini yoqadi — tekshiruvchi PIN kiritadi.
+
+    PIN imtihonga admin tomonidan qo'yiladi va faqat test markazidagi
+    tekshiruvchilarga beriladi. To'g'ri PIN bilan sessiyada mikrofonga oid
+    nazorat o'chadi (bitta xonada ko'p odam, kompyuterlarda mikrofon yo'q),
+    kamera nazorati to'liq qoladi. Faqat imtihon BOSHLANMASDAN oldin yoqiladi:
+    uyda boshlab, keyin PIN bilan mikrofonni o'chirib bo'lmaydi.
+    """
+    import hmac
+
+    from django.core.cache import cache
+
+    u = request.user
+    if not _is_student_user(u):
+        return Response({"error": student_api_msg("forbidden", resolve_ui_language(request))}, status=403)
+    exam = Exam.objects.filter(pk=pk).first()
+    if not exam:
+        return Response({"error": student_api_msg("exam_not_found", resolve_ui_language(request))}, status=404)
+    if not _student_assigned_to_exam(u, pk):
+        return Response({"error": student_api_msg("forbidden", resolve_ui_language(request))}, status=403)
+    from apps.api.test_center_pin import configured_center_pin
+    expected = configured_center_pin()
+    if not expected:
+        return Response(
+            {"error": "Test markazi PIN sozlamasi mavjud emas. Nazoratchiga murojaat qiling.", "code": "TEST_CENTER_PIN_UNAVAILABLE"}, status=503
+        )
+    key = "tcpin:%s:%s" % (u.id, pk)
+    # Staffed centre: a mistyped PIN must not lock a candidate out for 15 minutes.
+    # Authentication and the endpoint's normal request throttles still apply.
+    cache.delete(key)
+    pin = "".join(ch for ch in str((request.data or {}).get("pin") or "") if ch.isdigit())
+    if not hmac.compare_digest(pin.encode("utf-8"), expected.encode("utf-8")):
+        logger.warning("[TEST-CENTER] noto'g'ri PIN user=%s exam=%s", u.id, pk)
+        return Response(
+            {"error": "PIN noto'g'ri.", "code": "WRONG_PIN"},
+            status=403,
+        )
+    cache.delete(key)
+    with transaction.atomic():
+        se = StudentExam.objects.select_for_update().filter(student_id=u.id, exam_id=pk).first()
+        if se is None:
+            se = StudentExam.objects.create(student_id=u.id, exam_id=pk, status="Pending")
+        status = (se.status or "").strip()
+        if status in ("Completed", "Banned", "Failed"):
+            return Response(
+                {"error": student_api_msg("exam_already_status", resolve_ui_language(request), status=status)},
+                status=409,
+            )
+        if status == "In Progress" and se.started_at and not se.test_center_mode:
+            return Response(
+                {
+                    "error": "Imtihon allaqachon boshlangan — test markazi rejimini endi yoqib bo'lmaydi.",
+                    "code": "ALREADY_STARTED",
+                },
+                status=409,
+            )
+        fields = []
+        if not se.test_center_mode:
+            se.test_center_mode = True
+            se.test_center_at = dj_tz.now()
+            # Qoidalar matni o'zgaradi (mikrofon bandi) — rozilik qaytadan olinadi.
+            se.vac_consent_at = None
+            fields = ["test_center_mode", "test_center_at", "vac_consent_at"]
+            se.save(update_fields=fields)
+    logger.info("[TEST-CENTER] yoqildi user=%s exam=%s se=%s", u.id, pk, se.id)
+    return Response({"ok": True, "test_center_mode": True})
 
 
 @api_view(["POST"])
@@ -544,7 +639,12 @@ def student_vac_consent(request, pk: int):
     from apps.api.vac_rules import build_vac_rules
 
     lang = resolve_ui_language(request) or "uz"
-    expected = str(build_vac_rules(exam, lang, str(u.id)).get("version") or "")
+    _tc = bool(
+        StudentExam.objects.filter(student_id=u.id, exam_id=pk)
+        .values_list("test_center_mode", flat=True)
+        .first()
+    )
+    expected = str(build_vac_rules(exam, lang, str(u.id), test_center=_tc).get("version") or "")
     got = str(d.get("version") or "")
     # Klient ko'rsatgan matn serverdagi bilan bir xilmi. Mos kelmasa —
     # qoidalar shu orada o'zgargan; eski matnga berilgan rozilik
@@ -947,7 +1047,11 @@ def _student_exams_start_impl(request, pk: int):
     # Boshlab bo'lingan sessiyani (resume) to'smaymiz: odam imtihon
     # o'rtasida sahifani yangilaganda qulflanib qolmasligi kerak.
     _consent_se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).first()
-    if not resuming and not (_consent_se and _consent_se.vac_consent_at):
+    # VAC_CONSENT_REQUIRED=0 faqat testlar uchun (test_runner.py); prod'da doim yoqilgan.
+    import os as _os_env
+
+    _consent_required = _os_env.environ.get("VAC_CONSENT_REQUIRED", "1").strip() != "0"
+    if _consent_required and not resuming and not (_consent_se and _consent_se.vac_consent_at):
         return Response(
             {
                 "error": student_api_msg("vac_consent_required", resolve_ui_language(request)),
@@ -1062,7 +1166,11 @@ def _student_exams_start_impl(request, pk: int):
             )
 
         retake_only = in_retake and not in_general
-        if retake_only:
+        # Faqat YANGI boshlanishda tozalanadi. Ilgari davom ettirish (resume) va
+        # parallel start so'rovlari ham savollar ro'yxatini va started_at ni
+        # tozalardi: qayta ochilgan ordinatorlarda (14.09.2026) har start AI
+        # savollarini qaytadan yaratib, ilova ko'rgan ro'yxatdan boshqasini yozdi.
+        if retake_only and not resuming:
             # Retake oynasi — yangi sessiya sifatida boshlansin (eski ogohlantirishlar qoldig’i o’tmasin).
             se.started_at = now
             se.proctor_official_warnings = 0
@@ -1076,13 +1184,9 @@ def _student_exams_start_impl(request, pk: int):
                 "draft_answers_json",
                 "draft_flagged_json",
             ]
-            if exam.exam_mode in (
-                "bank_mixed",
-                "imentor_mixed",
-                "faculty_ai_books",
-                "static",
-                "",
-            ):
+            from apps.api.proctor_exam_retake import REGENERATE_QUESTION_MODES
+
+            if (exam.exam_mode or "") in REGENERATE_QUESTION_MODES:
                 se.session_questions_json = None
                 retake_update_fields.append("session_questions_json")
             se.save(update_fields=retake_update_fields)
@@ -1197,7 +1301,8 @@ def _student_exams_start_impl(request, pk: int):
             # savollar to'plami (barcha talaba uchun bir xil, admin tanlovi bo'yicha
             # — tezlik uchun). Talaba kirganda iMentor'ga qayta murojaat qilinmaydi,
             # AI chaqiruvi ham kerak emas — darhol boshlanadi.
-            full_questions = safe_json_loads(exam.questions_json, [])
+            from apps.api.text_only_questions import text_only_pool
+            full_questions = text_only_pool(safe_json_loads(exam.questions_json, []))
             if is_auto_exam:
                 full_questions = fill_missing_exam_translations(full_questions)
             se.session_questions_json = json.dumps(full_questions)
@@ -1288,7 +1393,15 @@ def _student_exams_start_impl(request, pk: int):
                     exam.id,
                     exc_info=True,
                 )
-    elif role == "vacancy":
+    elif role == "vacancy" or (
+        # O'qituvchilarni baholash (qayta oyna, 19.09.2026): savollar ishga qabul
+        # testidagidek — kafedra ordinatura DAK bankidan + AI yozgan qiyinroq savollar
+        # (bank_question_count / ai_question_count imtihondan). Faqat YANGI sessiyalar
+        # shunday yaratiladi; topshirilganlar o'zgarmaydi. FACULTY_DAK_BANK=0 — eski usul.
+        role == "faculty"
+        and exam.exam_mode == "faculty_ai_books"
+        and os.environ.get("FACULTY_DAK_BANK", "1").strip() != "0"
+    ):
         # Ishga kiruvchi nomzod: savollar HAR NOMZODGA ALOHIDA, uning
         # ro'yxatdan o'tishda tanlagan FANI bo'yicha o'sha zahoti yaratiladi.
         # Umumiy bank ishlatilmaydi — savollar nomzodlar orasida tarqalmasin.
@@ -1678,7 +1791,8 @@ def _student_exams_start_impl(request, pk: int):
                     se.session_questions_json = json.dumps(full_questions)
                     se.save(update_fields=["session_questions_json"])
         else:
-            full_questions = safe_json_loads(exam.questions_json, [])
+            from apps.api.text_only_questions import text_only_pool
+            full_questions = text_only_pool(safe_json_loads(exam.questions_json, []))
             if is_auto_exam:
                 full_questions = fill_missing_exam_translations(full_questions)
             # Ko'p fanli tarkib: har fandan belgilangan miqdorda savol.
@@ -1715,15 +1829,45 @@ def _student_exams_start_impl(request, pk: int):
                     if not _q.get("source_id"):
                         _q["source_id"] = _q.get("id")
                 _pool_st = list(full_questions)
+                from apps.api.ai_question_gen import preferred_bank_pool
+                _selection_pool_st = preferred_bank_pool(_pool_st, _bank_n) if _ai_n else _pool_st
                 if is_paid_role(role):
                     from apps.api.views.ordinator import pick_unseen, remember_served
 
-                    picked_st = pick_unseen(_pool_st, se, _bank_n)
+                    picked_st = pick_unseen(_selection_pool_st, se, _bank_n)
                     remember_served(se, picked_st)
-                elif len(_pool_st) > _bank_n:
-                    picked_st = _rnd_st.sample(_pool_st, _bank_n)
+                elif len(_selection_pool_st) > _bank_n:
+                    picked_st = _rnd_st.sample(_selection_pool_st, _bank_n)
                 else:
-                    picked_st = list(_pool_st)
+                    picked_st = list(_selection_pool_st)
+
+                # Reuse verified, balanced clinical items before paying to generate more.
+                from apps.api.text_only_questions import reusable_clinical
+                from apps.api.views.ordinator import served_ids
+                _seen_ai = {str(x) for x in served_ids(se)}
+                _picked_texts = {q.get('text') for q in picked_st}
+                _reuse_pool = [q for q in _pool_st if reusable_clinical(q)
+                               and q.get('text') not in _picked_texts
+                               and str(q.get('bank_id') or q.get('source_id') or q.get('id')) not in _seen_ai]
+                # Ordinator: eng YANGI tekshirilgan AI savollardan ko'pi bilan
+                # ORDINATOR_REUSE_AI_MAX (standart 10) tasi qayta beriladi, qolgani
+                # yangi yaratiladi. Yangilari bankning oxiriga qo'shiladi — shuning
+                # uchun ro'yxat oxiridan olinadi (eskilari yodlangan bo'lishi mumkin).
+                _reuse_cap = _ai_n
+                if role == "ordinator":
+                    try:
+                        _reuse_cap = max(0, int(os.environ.get("ORDINATOR_REUSE_AI_MAX", "10")))
+                    except ValueError:
+                        _reuse_cap = 10
+                    _reuse_pool = list(reversed(_reuse_pool))[: max(30, _reuse_cap * 3)]
+                _reused_ai = _rnd_st.sample(_reuse_pool, min(_ai_n, _reuse_cap, len(_reuse_pool)))
+                if _reused_ai:
+                    picked_st += _reused_ai
+                    _ai_n -= len(_reused_ai)
+                    if is_paid_role(role):
+                        remember_served(se, _reused_ai)
+                    _rnd_st.shuffle(picked_st)
+                    logger.info('[AI-SAVINGS] exam=%s reused_verified=%s remaining_generate=%s', exam.id, len(_reused_ai), _ai_n)
 
                 # --- AI qismi ---
                 if _ai_n > 0:
@@ -1786,19 +1930,30 @@ def _student_exams_start_impl(request, pk: int):
                     _para_idx = []
                     if _para_on:
                         for _ix_p, _q_p in enumerate(picked_st):
+                            if reusable_clinical(_q_p):
+                                continue
                             _cv = cached_paraphrase(exam.id, _gen_lang, _q_p)
                             if _cv:
                                 _para_cached[_ix_p] = _cv
                             else:
                                 _para_idx.append(_ix_p)
-                    with _TPE(max_workers=2) as _ex_ai:
-                        _f_gen = _ex_ai.submit(_gen_more, _ai_n, [])
+                    with _TPE(max_workers=3) as _ex_ai:
+                        _h1 = (_ai_n + 1) // 2 if _ai_n > 10 else _ai_n
+                        _f_gen = _ex_ai.submit(_gen_more, _h1, [])
+                        _f_gen2 = _ex_ai.submit(_gen_more, _ai_n - _h1, []) if _ai_n - _h1 > 0 else None
                         _f_par = (
                             _ex_ai.submit(paraphrase_questions, [picked_st[_ix_p] for _ix_p in _para_idx],
                                           language=_gen_lang, subject=_subject)
                             if _para_on and _para_idx else None
                         )
                         _gen = list(_f_gen.result() or [])
+                        if _f_gen2 is not None:
+                            _seen_g = {_ai_norm(g.get("text"))[:180] for g in _gen}
+                            for _g2 in list(_f_gen2.result() or []):
+                                _k2 = _ai_norm(_g2.get("text"))[:180]
+                                if _k2 not in _seen_g:
+                                    _seen_g.add(_k2)
+                                    _gen.append(_g2)
                         try:
                             _para = list((_f_par.result() if _f_par else None) or [])
                         except Exception:
@@ -1872,8 +2027,29 @@ def _student_exams_start_impl(request, pk: int):
                     # hech qachon kam savol bilan boshlanmasin.
                     _short = _need_st - len(picked_st)
                     if _short > 0:
+                        _used_t = {q.get("text") for q in picked_st}
+                        _fresh_fb = [q for q in reversed(_pool_st)
+                                     if reusable_clinical(q) and q.get("text") not in _used_t
+                                     and str(q.get("bank_id") or q.get("source_id") or q.get("id")) not in _seen_ai]
+                        _fresh_fb = _fresh_fb[: max(_short * 3, 30)]
+                        if _fresh_fb:
+                            _fb = _rnd_st.sample(_fresh_fb, min(_short, len(_fresh_fb)))
+                            if is_paid_role(role):
+                                remember_served(se, _fb)
+                            picked_st += _fb
+                            _rnd_st.shuffle(picked_st)
+                            logger.warning(
+                                "ordinator: AI yetmadi, eng yangi AI savollardan %d ta qo'shildi exam=%s",
+                                len(_fb), exam.id,
+                            )
+                        _short = _need_st - len(picked_st)
+                    if _short > 0:
                         _used = {q.get("text") for q in picked_st}
-                        _rest = [q for q in _pool_st if q.get("text") not in _used]
+                        _used_ids = {str(q.get("source_id") or q.get("id")) for q in picked_st
+                                     if q.get("source_id") or q.get("id")}
+                        _rest = [q for q in _pool_st if q.get("text") not in _used
+                                 and str(q.get("source_id") or q.get("id")) not in _used_ids]
+                        _rest = preferred_bank_pool(_rest, _short)
                         if _rest:
                             _extra = _rnd_st.sample(_rest, min(_short, len(_rest)))
                             if is_paid_role(role):
@@ -1894,6 +2070,19 @@ def _student_exams_start_impl(request, pk: int):
     full_questions = apply_exam_language_to_questions(
         full_questions, exam.language or "uz", student_lang
     )
+    # Final policy gate covers every generation/import route and every language.
+    # Never silently remove questions from an already answered session.
+    from apps.api.text_only_questions import text_only_pool
+    _safe_questions = text_only_pool(full_questions)
+    if (len(_safe_questions) != len(full_questions) or not full_questions
+            or (role == 'ordinator' and len(full_questions) < int(exam.bank_question_count or 0))):
+        if not resuming:
+            se.status = 'Pending'
+            se.started_at = None
+            se.session_questions_json = ''
+            se.save(update_fields=['status', 'started_at', 'session_questions_json'])
+        return Response({'error': "Rasmsiz savollar to‘plami yetarli emas. Administratorga murojaat qiling.",
+                         'code': 'TEXT_ONLY_QUESTIONS_REQUIRED'}, status=409)
     shuffled = build_student_question_list(full_questions)
 
     # Savollar tayyor — vaqt hisobi ANA ENDI boshlanadi. Bank tanlash va AI
@@ -1924,7 +2113,10 @@ def _student_exams_start_impl(request, pk: int):
         "custom_rules": exam.custom_rules,
         # Tashqi shovqin nazorati shu imtihonda yoqilganmi (talaba tomonida
         # faqat SUSPICIOUS_AUDIO ga ta'sir qiladi; gapirish har doim ishlaydi).
-        "ambient_audio_enabled": bool(getattr(exam, "ambient_audio_enabled", True)),
+        "ambient_audio_enabled": bool(getattr(exam, "ambient_audio_enabled", True))
+        and not bool(getattr(se, "test_center_mode", False)),
+        # Test markazi: mikrofon ishlatilmaydi, ovoz nazorati o'chiq, kamera to'liq.
+        "test_center_mode": bool(getattr(se, "test_center_mode", False)),
         "exam_mode": exam.exam_mode,
         "questions": shuffled,
         # Savol matni <canvas> ga chiziladi (DOM'ni o'qiydigan kengaytmalardan himoya).
@@ -2020,7 +2212,8 @@ def student_exams_submit(request, pk: int):
                     },
                     status=403,
                 )
-        if identity_verify_required() and not _identity_verification_fresh(se, now_submit):
+        from apps.api.test_center_policy import PERSON_MONITORING_ENABLED
+        if PERSON_MONITORING_ENABLED and identity_verify_required() and not _identity_verification_fresh(se, now_submit):
             return Response(
                 {
                     "error": student_api_msg("identity_verify_expired", resolve_ui_language(request)),
@@ -2077,6 +2270,10 @@ def student_exams_submit(request, pk: int):
         if _tm:
             se.answer_timings_json = json.dumps(_tm)
         se.save()
+        # 80%+ natija: shubhali belgi bo'lsa (yoki tasodifiy 20%) — yuzma-yuz tasdiqlash navbati.
+        from apps.api.result_verification import maybe_mark_for_verification as _v_mark, notice as _v_notice
+
+        _vstate = _v_mark(se, exam, questions, norm, _tm or {}, percentage)
 
     completed_iso = completed_at.isoformat()
     icode = integrity_code(result_public_id, completed_iso, score, total, verify_secret)
@@ -2132,6 +2329,8 @@ def student_exams_submit(request, pk: int):
                 "ai_summary_pending": needs_ai_summary_upgrade(ai_summary),
                 "questions": per_q,
                 "questions_hidden": _hidden,
+                "verify_state": _vstate,
+                "verify_notice": _v_notice(_vstate, resolve_ui_language(request) or "uz"),
                 "questions_visible_from": (
                     exam.end_time.isoformat() if (_hidden and exam.end_time) else None
                 ),
@@ -2370,6 +2569,7 @@ def student_violations(request):
             "EXCESSIVE_MOVEMENT",
             "HAND_GESTURE_SUSPECTED",
             "MOUTH_MOVEMENT_TALKING",
+            "SIDE_CONVERSATION_SUSPECTED",
             # Yuz pozitsiyasi (masofа va markaz)
             "FACE_TOO_FAR",
             "FACE_TOO_CLOSE",
@@ -2390,6 +2590,9 @@ def student_violations(request):
             "HAND_NEAR_EAR",
             # Imtihon davomida jami uzoq chetga (yon) qarash — yonidagi kishi/qog'oz
             "GAZE_SIDE_TOTAL",
+            # Javobni belgilashdan oldin muntazam chetga qarash — kadrdan tashqaridagi
+            # odam ekranni ko'rib, imo-ishora bilan javob ko'rsatmoqda.
+            "GAZE_ANSWER_PATTERN",
         }
     )
     if vtype not in instant_ban_types and vtype not in warn_types:
@@ -2464,6 +2667,92 @@ def student_violations(request):
                 "officialWarnings": int(se_for_device.proctor_official_warnings or 0),
             }
         )
+
+    # TEST MARKAZI: to'g'ri PIN bilan boshlangan sessiyada mikrofonga oid turlar
+    # yozilmaydi va ogohlantirish bermaydi (bitta xonada 60 kishi, mikrofon yo'q).
+    # Xonadagi noaniq harakatlarni nazoratchi baholaydi; tasdiqlangan buyum va shaxs himoyasi qoladi.
+    from apps.api.test_center_policy import suppress_center_signal, DISABLED_PERSON_SIGNALS, PROCTOR_ONLY
+    _center_session = bool(se_for_device.test_center_mode or exam_row.test_center_pin)
+    if bool(se_for_device.test_center_mode) and PROCTOR_ONLY and vtype not in DISABLED_PERSON_SIGNALS:
+        # Xonada nazoratchi bor: hodisa faqat QAYD etiladi (dalil), ogohlantirish
+        # berilmaydi va imtihon to'xtatilmaydi.
+        if not suppress_center_signal(vtype, detail):
+            _last = (
+                ViolationLog.objects.filter(
+                    student_id=u.id, exam_id=exam_id_int, violation_type=vtype
+                )
+                .order_by("-timestamp")
+                .values_list("timestamp", flat=True)
+                .first()
+            )
+            if _last is None or (dj_tz.now() - _last).total_seconds() >= 25:
+                ViolationLog.objects.create(
+                    student_id=u.id,
+                    exam_id=exam_id_int,
+                    violation_type=vtype,
+                    timestamp=dj_tz.now(),
+                    screenshot_url=screenshot,
+                    detail=detail,
+                    outcome="review",
+                )
+        return _guard(
+            {
+                "banned": False,
+                "warningSuppressed": True,
+                "testCenter": True,
+                "violationsCount": ViolationLog.objects.filter(
+                    student_id=u.id, exam_id=exam_id_int
+                ).count(),
+                "warningNumber": 0,
+                "violationReason": "",
+                "isFinalWarning": False,
+                "officialWarnings": int(se_for_device.proctor_official_warnings or 0),
+            }
+        )
+    _person_off = bool(se_for_device.test_center_mode) and vtype in DISABLED_PERSON_SIGNALS
+    if _person_off or (_center_session and suppress_center_signal(vtype, detail)):
+        return _guard(
+            {
+                "banned": False,
+                "warningSuppressed": True,
+                "testCenter": True,
+                "violationsCount": ViolationLog.objects.filter(
+                    student_id=u.id, exam_id=exam_id_int
+                ).count(),
+                "warningNumber": 0,
+                "violationReason": "",
+                "isFinalWarning": False,
+                "officialWarnings": int(se_for_device.proctor_official_warnings or 0),
+            }
+        )
+
+    from apps.api.object_evidence import OBJECT_TYPES, browser_object_evidence, has_physical_evidence, side_conversation_evidence
+    if vtype == 'SIDE_CONVERSATION_SUSPECTED' and not side_conversation_evidence(detail):
+        return _guard({'banned':False,'warningSuppressed':True,'warningNumber':0,
+                       'officialWarnings':int(se_for_device.proctor_official_warnings or 0)})
+    if vtype in OBJECT_TYPES:
+        from django.core.cache import cache as evidence_cache
+        from apps.api.gemini_tools import analyze_proctor_frame
+        verified_object = False
+        evidence_key = 'object-check:%s:%s:%s' % (se_for_device.pk, se_for_device.started_at.isoformat() if se_for_device.started_at else 'none', vtype)
+        if (browser_object_evidence(detail) and screenshot.startswith('data:image/')
+                and len(screenshot) <= 2_000_000 and evidence_cache.add(evidence_key, True, 15)):
+            verified_object = has_physical_evidence(analyze_proctor_frame(screenshot), vtype)
+        if not verified_object:
+            # A suspect image is available for review, but never contributes to a ban.
+            now_review = dj_tz.now()
+            with transaction.atomic():
+                active = StudentExam.objects.select_for_update().filter(pk=se_for_device.pk,status='In Progress').first()
+                if active is None:
+                    return _guard({'error':'No active session'},status=409)
+                if not ViolationLog.objects.filter(student_id=u.id,exam_id=exam_id_int,
+                        violation_type=vtype,outcome='review',timestamp__gte=now_review-timedelta(seconds=60)).exists():
+                    ViolationLog.objects.create(student_id=u.id,exam_id=exam_id_int,
+                        violation_type=vtype,timestamp=now_review,screenshot_url=screenshot,
+                        detail='Object not independently confirmed; '+detail[:700],outcome='review')
+            return _guard({'banned':False,'warningSuppressed':True,'reviewOnly':True,
+                'officialWarnings':int(se_for_device.proctor_official_warnings or 0),
+                'warningNumber':0,'violationReason':'','isFinalWarning':False})
 
     WARN_SUPPRESS_SECONDS = warn_suppress_seconds()
     EVENT_MIN_INTERVAL_SECONDS = max(1, int(os.environ.get("PROCTOR_EVENT_MIN_INTERVAL_SECONDS", "5")))
@@ -2550,7 +2839,7 @@ def student_violations(request):
             # tushgan dastur oddiy talabani 10-60 soniyada chetlatib yuborardi.
             STATE_TYPES = frozenset({
                 "DESKTOP_FORBIDDEN_APP", "MULTI_MONITOR_DETECTED", "GAZE_DOWN_TOTAL", "SCREEN_SHARE_STOPPED",
-                "BLUETOOTH_AUDIO_DEVICE", "GAZE_SIDE_TOTAL",
+                "BLUETOOTH_AUDIO_DEVICE", "GAZE_SIDE_TOTAL", "GAZE_ANSWER_PATTERN",
             })
             # Ikkinchi monitor ulangan paytda ilova butunlay to'sib qo'yiladi — ulab o'tirish
             # har 2 daqiqada yangi ogohlantirish (3 tadan keyin ban).
@@ -2559,6 +2848,8 @@ def student_violations(request):
                 "BLUETOOTH_AUDIO_DEVICE": 2,
                 # Imtihon oldidan hamma dastur yopilgan: qayta ochish tezroq qayta sanaladi.
                 "DESKTOP_FORBIDDEN_APP": 3,
+                # Naqsh kuchaysa (yana 4 savol) klient qayta yuboradi.
+                "GAZE_ANSWER_PATTERN": 4,
             }.get(vtype, 10)
             if vtype in STATE_TYPES and logs_qs.filter(
                 violation_type=vtype, timestamp__gte=now - timedelta(minutes=_state_cooldown_min)
@@ -2819,7 +3110,7 @@ def student_violations(request):
                 if se.started_at and se.started_at > win_from:
                     win_from = se.started_at
                 recent = list(
-                    logs_qs.filter(timestamp__gte=win_from).values(
+                    logs_qs.filter(timestamp__gte=win_from).exclude(outcome='review').values(
                         "violation_type", "timestamp"
                     )
                 )
@@ -3080,7 +3371,11 @@ def student_proctor_frame(request, pk: int):
     if task.ready():
         # Eager yoki natija darhol tayyor — sync javob (eski xulq).
         try:
-            return Response(_proctor_result_payload(task.result))
+            payload = _proctor_result_payload(task.result)
+            if se.test_center_mode or se.exam.test_center_pin:
+                from apps.api.test_center_policy import center_frame_payload
+                payload = center_frame_payload(payload)
+            return Response(payload)
         except Exception:
             return Response({"status": "done", "violations": [], "skipped": True, "code": "TASK_FAILED"}, status=200)
 
@@ -3105,7 +3400,12 @@ def student_proctor_frame_result(request, pk: int, task_id: str):
     if res.failed():
         return Response({"status": "done", "violations": [], "skipped": True, "code": "TASK_FAILED"}, status=200)
     try:
-        return Response(_proctor_result_payload(res.result))
+        payload = _proctor_result_payload(res.result)
+        se = StudentExam.objects.filter(student_id=u.id, exam_id=pk).select_related('exam').first()
+        if se and (se.test_center_mode or se.exam.test_center_pin):
+            from apps.api.test_center_policy import center_frame_payload
+            payload = center_frame_payload(payload)
+        return Response(payload)
     except Exception:
         return Response({"status": "done", "violations": [], "skipped": True, "code": "TASK_FAILED"}, status=200)
 
@@ -3156,24 +3456,108 @@ def _revert_failed_start(user_id: str, exam_id: int, before: str | None) -> None
     )
 
 
+#: Bir start so'rovi savollarni tayyorlayotganda (AI bilan 1-3 daqiqa) keyingilari
+#: shuncha soniyagacha navbat kutadi.
+START_LOCK_WAIT_SECONDS = 330
+
+
+def _start_lock_key(uid: str, pk: int) -> tuple[int, int]:
+    import zlib
+
+    h = zlib.crc32(("exam-start:" + uid).encode("utf-8")) & 0xFFFFFFFF
+    if h >= 2 ** 31:
+        h -= 2 ** 32
+    return h, int(pk) % (2 ** 31)
+
+
+def _try_start_lock(key: tuple[int, int]) -> bool:
+    from django.db import connection
+
+    with connection.cursor() as cur:
+        cur.execute("SELECT pg_try_advisory_lock(%s, %s)", [key[0], key[1]])
+        return bool(cur.fetchone()[0])
+
+
+def _release_start_lock(key: tuple[int, int]) -> None:
+    from django.db import connection
+
+    try:
+        with connection.cursor() as cur:
+            cur.execute("SELECT pg_advisory_unlock(%s, %s)", [key[0], key[1]])
+    except Exception:
+        logger.warning("start lock bo'shatilmadi key=%s", key, exc_info=True)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def student_exams_start(request, pk: int):
-    """Imtihonni boshlash — muvaffaqiyatsiz boshlash sessiyani buzib qo'ymasin."""
+    """Imtihonni boshlash — muvaffaqiyatsiz boshlash sessiyani buzib qo'ymasin.
+
+    Bir talaba + imtihon uchun start so'rovlari KETMA-KET bajariladi. 14.09.2026
+    da ilova startni 3 daqiqada ~20 marta yubordi: har so'rov AI savollarini
+    qaytadan yaratib `session_questions_json` ni ustidan yozdi, ilova esa
+    boshqa ro'yxatni ko'rsatdi — javoblar yangi savollarga mos kelmay 0 ball
+    chiqdi, qulfsiz javob olgan ilova savolni serverda qulflamadi. Endi
+    ikkinchi so'rov birinchisi tugashini kutadi va tayyor sessiyani (resume)
+    oladi: savollar ham, qulf holati ham bitta.
+    """
+    import time as _time_lock
+
     uid = str(getattr(request.user, "id", "") or "")
-    before = (
-        StudentExam.objects.filter(student_id=uid, exam_id=pk)
-        .values_list("status", flat=True)
-        .first()
+    from apps.api.proctor_exam_retake import exam_is_remote
+    from apps.api.test_center_pin import center_start_allowed
+    _se_pin = StudentExam.objects.filter(student_id=uid, exam_id=pk).values('test_center_mode').first()
+    # PIN — test markazi imtihonlarining qoidasi. Uydan topshiriladigan imtihon
+    # (custom_rules {"remote": true} yoki ishga kiruvchilar) uchun u talab
+    # qilinmaydi, aks holda odam imtihonni umuman boshlay olmasdi.
+    # PIN talabi imtihonning O'ZIDA belgilanadi: test markazi imtihonlarida
+    # `test_center_pin` to'ldirilgan bo'ladi. Uydan topshiriladigan imtihon
+    # (remote yoki ishga kiruvchilar) va oddiy o'quv imtihonlari PINsiz ishlaydi.
+    _exam_for_pin = Exam.objects.filter(pk=pk).only("audience", "custom_rules", "test_center_pin").first()
+    _pin_required = bool(
+        _exam_for_pin
+        and str(getattr(_exam_for_pin, "test_center_pin", "") or "").strip()
+        and not exam_is_remote(_exam_for_pin)
     )
+    if _pin_required and not center_start_allowed(_se_pin):
+        return Response(
+            {"error": "Avval test markazi xodimi PIN kodni kiritsin.",
+             "code": "TEST_CENTER_PIN_REQUIRED"}, status=403,
+        )
+    key = _start_lock_key(uid, pk)
+    got = _try_start_lock(key)
+    if not got:
+        logger.warning("[START-LOCK] parallel start kutmoqda user=%s exam=%s", uid, pk)
+        until = _time_lock.monotonic() + START_LOCK_WAIT_SECONDS
+        while _time_lock.monotonic() < until:
+            _time_lock.sleep(1.5)
+            if _try_start_lock(key):
+                got = True
+                break
+        if not got:
+            return Response(
+                {
+                    "error": "Imtihon savollari hali tayyorlanmoqda. Bir daqiqadan so'ng qayta urinib ko'ring.",
+                    "code": "START_IN_PROGRESS",
+                },
+                status=409,
+            )
     try:
-        resp = _student_exams_start_impl(request._request, pk=pk)
-    except Exception:
-        _revert_failed_start(uid, pk, before)
-        raise
-    if int(getattr(resp, "status_code", 200) or 200) >= 400:
-        _revert_failed_start(uid, pk, before)
-    return resp
+        before = (
+            StudentExam.objects.filter(student_id=uid, exam_id=pk)
+            .values_list("status", flat=True)
+            .first()
+        )
+        try:
+            resp = _student_exams_start_impl(request._request, pk=pk)
+        except Exception:
+            _revert_failed_start(uid, pk, before)
+            raise
+        if int(getattr(resp, "status_code", 200) or 200) >= 400:
+            _revert_failed_start(uid, pk, before)
+        return resp
+    finally:
+        _release_start_lock(key)
 
 
 @api_view(["POST"])
@@ -3365,6 +3749,13 @@ def _enqueue_ai_review(log_id: int, image: str, student_id, exam_id: int) -> Non
 
 
 def _maybe_random_identity_check(student_exam_id: int, image: str) -> None:
+    from apps.api.test_center_policy import PERSON_MONITORING_ENABLED
+    if not PERSON_MONITORING_ENABLED and StudentExam.objects.filter(
+        pk=student_exam_id, test_center_mode=True
+    ).exists():
+        # Test markazida xonadagi nazoratchi tekshiradi; uydan topshirishda esa
+        # tasodifiy yuz solishtiruvi ishlashda davom etadi.
+        return
     """Kamera kadrlarining tasodifiy qismi serverda yuz bo'yicha tekshiriladi."""
     try:
         if not _env_on("RANDOM_IDENTITY_CHECK"):

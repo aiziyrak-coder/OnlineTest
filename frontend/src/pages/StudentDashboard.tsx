@@ -11,6 +11,7 @@ import { examAuthHeaders } from '../lib/deviceFingerprint';
 import { formatCountdown, formatExamDateTime, msUntil } from '../lib/datetimeLocal';
 import { AdminBtn, AdminAlert, AdminInput, AdminSelect } from './admin/ui';
 import { ExamFacts, ExamReadiness, StartExamConfirm } from '../components/ExamReadiness';
+import { noteServerDate } from '../lib/serverClock';
 
 /* Ordinator/magistr uchun to'lov matnlari — imtihon to'lovdan keyin ochiladi. */
 const PAY: Record<Language, Record<string, string>> = {
@@ -173,9 +174,9 @@ const LOCAL: Record<Language, Record<string, string>> = {
   },
 };
 
-/* Ball rangi — 50%+ yashil, 40–49 amber, past qizil. */
+/* Ball rangi — 56%+ yashil, 40–55 amber, past qizil. */
 function scoreTone(pct: number): { text: string; bar: string } {
-  if (pct >= 50) return { text: 'text-emerald-600', bar: 'bg-emerald-500' };
+  if (pct >= 56) return { text: 'text-emerald-600', bar: 'bg-emerald-500' };
   if (pct >= 40) return { text: 'text-amber-600', bar: 'bg-amber-500' };
   return { text: 'text-red-600', bar: 'bg-red-500' };
 }
@@ -345,6 +346,7 @@ export function StudentDashboard({
       headers: { ...authHeaders(token, lang), 'X-Student-Lang': lang },
     });
 
+    noteServerDate(examsRes);
     const dateHdr = examsRes.headers.get('Date');
     if (dateHdr) {
       const serverMs = new Date(dateHdr).getTime();
@@ -1374,6 +1376,14 @@ export function StudentDashboard({
                           >
                             {t.studentResultCertificateBtn}
                           </AdminBtn>
+                          {r.verify_state === 'pending' || r.verify_state === 'rejected' ? (
+                            <span className={`shrink-0 self-center rounded-lg px-2.5 py-1.5 text-[12px] font-semibold ${
+                              r.verify_state === 'pending' ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-700'}`}>
+                              {r.verify_state === 'pending'
+                                ? (lang === 'ru' ? 'Подтверждается' : lang === 'en' ? 'Being verified' : 'Tasdiqlanmoqda')
+                                : (lang === 'ru' ? 'Аннулирован' : lang === 'en' ? 'Annulled' : 'Bekor qilingan')}
+                            </span>
+                          ) : (
                           <AdminBtn
                             variant="blue"
                             size="md"
@@ -1389,6 +1399,7 @@ export function StudentDashboard({
                           >
                             PDF
                           </AdminBtn>
+                          )}
                         </div>
                       )}
                     </motion.div>

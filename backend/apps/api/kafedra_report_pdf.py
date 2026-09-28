@@ -358,6 +358,9 @@ def build_absent_report_pdf(data: dict, generated_label: str, start_page: int = 
             if p.get("state") == "unfinished":
                 c.setFillColor(C_AMBER)
                 c.drawRightString(x + col_w, y, "boshlagan")
+            elif p.get("state") == "retake_granted":
+                c.setFillColor(C_MUTED)
+                c.drawRightString(x + col_w, y, "qayta ruxsat")
             y -= 13
         y -= 8
 

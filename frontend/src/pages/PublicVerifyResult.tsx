@@ -55,6 +55,7 @@ export function PublicVerifyResult() {
           total?: number;
           integrity_code?: string;
           percentage?: number;
+          pass_threshold?: number;
           completed_at?: string;
           exam_title?: string;
           student_name?: string;
@@ -78,6 +79,7 @@ export function PublicVerifyResult() {
             total: json.total ?? 0,
             integrity_code: json.integrity_code ?? '',
             percentage: json.percentage ?? 0,
+            pass_threshold: json.pass_threshold,
             completed_at: json.completed_at ?? '',
             exam_title: json.exam_title ?? '',
             student_name: json.student_name ?? '',

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { useNavigate as useRRNavigate, useLocation } from 'react-router-dom';
 import { translations, Language } from '../i18n';
@@ -22,6 +23,8 @@ import { FacultyPage } from './admin/FacultyPage';
 import { BannedPage } from './admin/BannedPage';
 import { StaffPage } from './admin/StaffPage';
 import { AuditPage } from './admin/AuditPage';
+import { TestCenterPage } from './admin/TestCenterPage';
+import { BulkAccessPage } from './admin/BulkAccessPage';
 import { AdminToastLayer } from './admin/ui';
 import type { Level, Group } from './admin/types';
 
@@ -37,6 +40,8 @@ type AdminPage =
   | 'banned'
   | 'staff'
   | 'audit'
+  | 'test_center'
+  | 'bulk_access'
   | 'exam_create'
   | 'exam_list'
   | 'reports'
@@ -163,6 +168,8 @@ const PAGE_PATHS: Record<AdminPage, string> = {
   banned:       '/admin/banned',
   staff:        '/admin/staff',
   audit:        '/admin/audit',
+  test_center:  '/admin/test-markazi',
+  bulk_access:  '/admin/ruxsat-berish',
   exam_create:  '/admin/exam/create',
   exam_list:    '/admin/exam/list',
   reports:      '/admin/reports',
@@ -199,7 +206,42 @@ export function AdminDashboard({
   const rrNavigate = useRRNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const drawerRef = useRef<HTMLElement>(null);
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const drawer = drawerRef.current;
+    drawer?.querySelector<HTMLButtonElement>('button')?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSidebarOpen(false);
+      if (event.key !== 'Tab') return;
+      const buttons = Array.from(drawer?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input') || []);
+      const first = buttons[0], last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const onResize = () => { if (desktop.matches) setSidebarOpen(false); };
+    desktop.addEventListener('change', onResize);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener('keydown', onKey);
+      desktop.removeEventListener('change', onResize);
+      previous?.focus();
+    };
+  }, [sidebarOpen]);
   const [bannedCount, setBannedCount] = useState(0);
+
+  // Admin mavzusi (index.css `.fermi-admin`) — <html> ga qo'yiladi, shunda
+  // header, portal/modal va toastlar ham yangi palitrani oladi.
+  useEffect(() => {
+    document.documentElement.classList.add('fermi-admin');
+    return () => document.documentElement.classList.remove('fermi-admin');
+  }, []);
 
   const knownPath = isKnownAdminPath(location.pathname);
   const page = knownPath ? pathToPage(location.pathname) : 'overview';
@@ -247,7 +289,11 @@ export function AdminDashboard({
     },
     {
       label: L2('Test topshiruvchilar', 'Ekzamenuemye', 'Exam takers'),
-      items: [{ id: 'examinees', label: L2('Test topshiruvchilar', 'Ekzamenuemye', 'Exam takers') }],
+      items: [
+        { id: 'examinees', label: L2('Test topshiruvchilar', 'Ekzamenuemye', 'Exam takers') },
+        { id: 'test_center', label: L2('Test markazi', 'Тест-центр', 'Test centre') },
+        { id: 'bulk_access', label: L2('Ruxsat berish', 'Выдача доступа', 'Grant access') },
+      ],
     },
     {
       label: L2('Imtihonlar', 'Ekzameny', 'Exams'),
@@ -284,7 +330,7 @@ export function AdminDashboard({
       {navGroups.map((group, gi) => (
         <div key={gi} className={gi > 0 ? 'mt-5' : ''}>
           {group.label && (
-            <p className="px-2.5 text-[11px] font-extrabold uppercase tracking-[0.1em] text-gray-400 mb-2">
+            <p className="px-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-gray-400 mb-1.5">
               {group.label}
             </p>
           )}
@@ -296,15 +342,15 @@ export function AdminDashboard({
                   key={item.id}
                   type="button"
                   onClick={() => navigateSidebar(item.id)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 h-10 rounded-xl text-left transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/20 ${
                     isActive
-                      ? 'bg-indigo-50 text-indigo-700'
+                      ? 'bg-indigo-600 text-white shadow-[0_8px_18px_-10px_rgba(14,109,137,0.8)]'
                       : item.color === 'red'
                         ? 'text-red-500 hover:bg-red-50 hover:text-red-700'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  <span className="shrink-0">{IC[item.id]}</span>
+                  <span className={`shrink-0 [&_svg]:w-[18px] [&_svg]:h-[18px] ${isActive ? 'text-white' : 'text-gray-400'}`}>{IC[item.id]}</span>
                   <span className={`truncate text-[13.5px] leading-snug ${isActive ? 'font-semibold' : 'font-medium'}`}>
                     {item.label}
                   </span>
@@ -323,31 +369,37 @@ export function AdminDashboard({
   );
 
   return (
-    <div className="flex min-h-[calc(100vh-var(--admin-header-h,62px))] relative">
+    <div className="admin-shell flex min-h-[calc(100vh-var(--admin-header-h,62px))] relative">
       <AdminToastLayer />
       {/* ── Desktop sidebar (fixed, header ostidan boshlanadi) ─────────────── */}
-      <aside className="hidden lg:flex flex-col w-60 fixed left-0 top-[62px] sm:top-[66px] z-30 h-[calc(100vh-62px)] sm:h-[calc(100vh-66px)] border-r border-gray-200 bg-white overflow-y-auto overscroll-contain">
+      <aside className="hidden lg:flex flex-col w-64 pt-5 fixed left-0 top-[62px] sm:top-[66px] z-30 h-[calc(100vh-62px)] sm:h-[calc(100vh-66px)] border-r border-gray-200 bg-white overflow-y-auto overscroll-contain">
         <SidebarContent />
       </aside>
-      <div className="hidden lg:block w-60 shrink-0" aria-hidden />
+      <div className="hidden lg:block w-64 shrink-0" aria-hidden />
 
       {/* ── Mobile sidebar drawer ──────────────────────────────────────────── */}
-      <AnimatePresence>
+      {createPortal(<AnimatePresence>
         {sidebarOpen && (
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm lg:hidden"
               onClick={() => setSidebarOpen(false)}
             />
             <motion.aside
+              ref={drawerRef}
+              id="admin-mobile-menu"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t.adminDash}
               initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
               transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-              className="fixed top-0 left-0 z-50 h-full w-64 bg-white shadow-2xl lg:hidden overflow-y-auto"
+              className="admin-mobile-drawer fixed top-0 left-0 z-[70] h-full w-64 bg-white shadow-2xl lg:hidden overflow-y-auto"
             >
               <div className="flex items-center justify-between px-4 h-[62px] sm:h-[66px] border-b border-gray-100">
                 <p className="font-bold text-gray-800 text-[15px]">{t.adminDash}</p>
                 <button onClick={() => setSidebarOpen(false)}
+                  aria-label={L2('Menyuni yopish', 'Закрыть меню', 'Close menu')}
                   className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -358,24 +410,40 @@ export function AdminDashboard({
             </motion.aside>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, document.body)}
 
       {/* ── Main content ───────────────────────────────────────────────────── */}
-      <main className="flex-1 min-w-0 pl-0 lg:pl-6 pr-4 lg:pr-6 py-6 overflow-x-hidden text-[15px]">
+      <nav className="admin-mobile-nav lg:hidden" aria-label={L2('Tezkor menyu', 'Быстрая навигация', 'Quick navigation')}>
+        {([
+          ['overview', L2('Bosh sahifa', 'Главная', 'Home')],
+          ['examinees', L2('Ishtirokchilar', 'Участники', 'People')],
+          ['exam_list', L2('Imtihonlar', 'Экзамены', 'Exams')],
+          ['reports', L2('Hisobotlar', 'Отчёты', 'Reports')],
+        ] as [AdminPage, string][]).map(([id, label]) => (
+          <button key={id} type="button" aria-current={page === id ? 'page' : undefined}
+            onClick={() => navigateSidebar(id)}>{IC[id]}<span>{label}</span></button>
+        ))}
+        <button type="button" aria-expanded={sidebarOpen} aria-controls="admin-mobile-menu"
+          onClick={() => setSidebarOpen(true)}><span aria-hidden="true" className="text-xl">☰</span><span>{L2('Menyu', 'Меню', 'Menu')}</span></button>
+      </nav>
+      <main className="admin-main flex-1 min-w-0 px-4 lg:px-8 py-6 lg:py-7 overflow-x-hidden text-[14.5px]">
         {/* Page header */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-end gap-3 mb-6">
           <button
             type="button"
             className="lg:hidden w-9 h-9 rounded-xl border border-gray-200 bg-white flex items-center justify-center shrink-0 hover:bg-gray-50 transition"
             onClick={() => setSidebarOpen(true)}
+            aria-label={L2('Menyuni ochish', 'Открыть меню', 'Open menu')}
+            aria-expanded={sidebarOpen}
+            aria-controls="admin-mobile-menu"
           >
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 leading-tight">{pageTitle}</h1>
-            <p className="text-xs font-medium text-gray-400 mt-0.5 tracking-wide">{pageSubtitle}</p>
+            <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-700 mb-1">{pageSubtitle}</p>
+            <h1 className="text-[24px] sm:text-[28px] font-extrabold tracking-tight text-gray-900 leading-none">{pageTitle}</h1>
           </div>
         </div>
 
@@ -446,6 +514,12 @@ export function AdminDashboard({
           )}
           {page === 'audit' && (
             <AuditPage token={token} lang={lang} />
+          )}
+          {page === 'test_center' && (
+            <TestCenterPage token={token} lang={lang} />
+          )}
+          {page === 'bulk_access' && (
+            <BulkAccessPage token={token} lang={lang} />
           )}
           {page === 'exam_create' && (
             <ImtixonTab token={token} lang={lang} adminUserId={adminUserId} />

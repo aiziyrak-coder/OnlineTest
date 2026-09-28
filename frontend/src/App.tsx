@@ -608,7 +608,7 @@ function AppContent() {
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
             {user.role === 'admin' && location.pathname.startsWith('/admin') && (
-              <div className="min-h-[calc(100vh-62px)] sm:min-h-[calc(100vh-66px)] bg-white [--admin-header-h:62px] sm:[--admin-header-h:66px]">
+              <div className="min-h-[calc(100vh-62px)] sm:min-h-[calc(100vh-66px)] bg-[var(--admin-ground)] [--admin-header-h:62px] sm:[--admin-header-h:66px]">
                 <AdminDashboard token={token} lang={lang} adminUserId={user?.id ? String(user.id) : undefined} />
               </div>
             )}

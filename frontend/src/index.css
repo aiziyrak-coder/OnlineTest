@@ -1,8 +1,82 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+  --font-display: "Manrope", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/*
+ * O'z serverimizdagi shriftlar. CSP `font-src 'self'` — Google Fonts @import
+ * brauzerda baribir bloklanardi, shuning uchun fayllar /fonts/ dan beriladi.
+ * Faqat lotin + kirill to'plamlari (uz/ru/en).
+ */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans-400-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans-400-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans-400-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-sans-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('/fonts/manrope-500-800-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('/fonts/manrope-500-800-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('/fonts/manrope-500-800-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url('/fonts/manrope-500-800-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @layer base {
@@ -10,6 +84,71 @@
     /* Tekis enterprise fon — admin bilan bir xil (gradient/mesh yo'q) */
     @apply bg-gray-50 text-gray-900 font-sans antialiased overflow-x-hidden;
   }
+}
+
+/*
+ * ADMIN PANEL MAVZUSI.
+ * Tailwind v4 utilitalari CSS o'zgaruvchilarni o'qiydi (bg-indigo-600 ->
+ * var(--color-indigo-600)). AdminDashboard <html> ga `fermi-admin` klassini
+ * qo'yadi va shu yerda palitra/radius/shrift qayta belgilanadi — natijada
+ * BARCHA admin sahifalar (va ularning modallari) bir yo'la yangi dizaynga
+ * o'tadi, talaba/imtihon ekranlariga esa tegilmaydi.
+ *   urg'u   : klinik ko'k-feruza (indigo shkalasi o'rniga)
+ *   neytral : sovuq, ozgina ko'kish kulrang
+ *   shrift  : IBM Plex Sans (matn) + Manrope (sarlavha/raqam)
+ */
+.fermi-admin {
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --color-gray-50: #f7f9fb;
+  --color-gray-100: #eef2f6;
+  --color-gray-200: #e1e7ee;
+  --color-gray-300: #cbd4de;
+  --color-gray-400: #97a3b3;
+  --color-gray-500: #6a778a;
+  --color-gray-600: #4d5a6c;
+  --color-gray-700: #3a4555;
+  --color-gray-800: #242d3a;
+  --color-gray-900: #131b26;
+  --color-gray-950: #0a1119;
+
+  --color-indigo-50: #ecf7fa;
+  --color-indigo-100: #d3edf3;
+  --color-indigo-200: #a9dbe7;
+  --color-indigo-300: #72c1d5;
+  --color-indigo-400: #3aa3be;
+  --color-indigo-500: #1a87a4;
+  --color-indigo-600: #0e6d89;
+  --color-indigo-700: #0c5a72;
+  --color-indigo-800: #0d4a5d;
+  --color-indigo-900: #0e3d4d;
+  --color-indigo-950: #062631;
+
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  --admin-ground: #eff3f7;
+
+  font-family: var(--font-sans);
+  color: var(--color-gray-900);
+}
+
+.fermi-admin h1,
+.fermi-admin h2,
+.fermi-admin h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.012em;
+}
+
+.fermi-admin table {
+  font-variant-numeric: tabular-nums;
+}
+
+.fermi-admin ::selection {
+  background: var(--color-indigo-100);
+  color: var(--color-indigo-900);
 }
 
 /* Custom scrollbar for webkit */
@@ -32,3 +171,77 @@
   @apply bg-white border border-gray-200 rounded-xl;
 }
 
+/* Phone ergonomics are scoped to administrators; exam screens are unchanged. */
+@media (max-width: 1023px) {
+  .fermi-admin .admin-main {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  }
+  .fermi-admin .admin-mobile-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 35;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    background: #fff;
+    border-top: 1px solid var(--color-gray-200);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -4px 18px rgb(0 0 0 / 5%);
+  }
+  .fermi-admin .admin-mobile-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 52px;
+    font-size: 10px;
+    color: var(--color-gray-600);
+    border-radius: 10px;
+  }
+  .fermi-admin .admin-mobile-nav button[aria-current="page"] {
+    background: var(--color-indigo-50);
+    color: var(--color-indigo-700);
+    font-weight: 700;
+  }
+  .fermi-admin .admin-mobile-drawer {
+    width: min(320px, 90vw);
+    height: 100dvh;
+    overscroll-behavior: contain;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .fermi-admin .admin-shell button,
+  .fermi-admin .admin-mobile-drawer button,
+  .fermi-admin .admin-modal-panel button {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+  }
+  .fermi-admin input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .fermi-admin select,
+  .fermi-admin textarea {
+    font-size: 16px;
+    min-height: 44px;
+    max-width: 100%;
+  }
+  .fermi-admin .admin-modal-panel {
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px;
+  }
+  .fermi-admin .admin-main .overflow-x-auto {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fermi-admin .admin-main table th,
+  .fermi-admin .admin-main table td {
+    padding: 12px;
+  }
+  .fermi-admin .admin-main table th { white-space: nowrap; }
+}
+@media (max-width: 479px) {
+  .fermi-admin .admin-main { padding-left: 12px; padding-right: 12px; }
+  .fermi-admin .admin-modal-panel h3 { white-space: normal; }
+}

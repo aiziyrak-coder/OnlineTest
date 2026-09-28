@@ -818,6 +818,10 @@ def _exam_row_dict(e: Exam, teacher_name: str | None = None):
         "identity_retakes_allowed": exam_identity_retakes_allowed(e),
         "proctor_profile": str(getattr(e, "proctor_profile", "") or "standard"),
         "ambient_audio_enabled": bool(getattr(e, "ambient_audio_enabled", True)),
+        # Test markazi PIN — admin va kuzatuvchi (test markazidagi tekshiruvchi) ko'radi.
+        "test_center_pin": str(getattr(e, "test_center_pin", "") or ""),
+        "test_center_enabled": bool(getattr(e, "test_center_pin", "") or "")
+        and str(getattr(e, "audience", "") or "") != "vacancy",
         "audience": str(getattr(e, "audience", None) or "student"),
         "languages_ready": _exam_languages_ready(e),
         # Hisobot oynasi uchun: qaysi kafedra va qaysi fan. Nomni frontend
@@ -845,6 +849,12 @@ def _course_arg(raw) -> int:
     except (TypeError, ValueError):
         return 0
     return v if 0 <= v <= 6 else 0
+
+
+def _test_center_pin_arg(raw) -> str:
+    """Test markazi PIN: faqat raqamlar, aniq 4 ta. Aks holda bo'sh (rejim o'chiq)."""
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    return digits if len(digits) == 4 else ""
 
 
 def _bool_arg(raw, default: bool) -> bool:
@@ -1162,6 +1172,7 @@ def _admin_exams_create_impl(request):
             proctor_profile=profile,
             # Tashqi shovqin nazorati — default YOQILGAN.
             ambient_audio_enabled=_bool_arg(d.get("ambient_audio_enabled"), True),
+            test_center_pin=_test_center_pin_arg(d.get("test_center_pin")),
         )
         if gids:
             ExamGroup.objects.bulk_create([ExamGroup(exam_id=ex.id, group_id=gid) for gid in gids])
@@ -1223,6 +1234,9 @@ def _result_details_bundle(se: StudentExam, request, for_pdf: bool = False, lang
                 exc_info=True,
             )
     answers = norm_answers(safe_json_loads(se.answers_json, {}))
+    from apps.api.services import result_display_language as _rdl
+
+    lang = _rdl(exam, answers, questions, lang)
     ai = safe_json_loads(se.ai_summary_json, {})
     if not ai.get("items"):
         # Fallback: eski yoki buzilgan summary — hisoblash
@@ -1281,6 +1295,10 @@ def _result_details_bundle(se: StudentExam, request, for_pdf: bool = False, lang
         "student_name": se.student.name,
         "student_group": se.student.group.name if se.student.group_id else "",
         "questions": per_q,
+        "verify_state": str(getattr(se, "verify_state", "") or ""),
+        "verify_notice": __import__("apps.api.result_verification", fromlist=["notice"]).notice(
+            str(getattr(se, "verify_state", "") or ""), lang or "uz"
+        ),
     }
 
 _FORBIDDEN_OBJECT_MAP = {

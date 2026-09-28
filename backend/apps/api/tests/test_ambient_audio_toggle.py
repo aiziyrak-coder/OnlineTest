@@ -198,7 +198,35 @@ class AmbientAudioToggleTests(TestCase):
         self.assertFalse(rv.json().get("warningSuppressed"), rv.json())
         self.assertEqual(rv.json().get("warningNumber"), 1, rv.json())
 
-    def test_ambient_violation_counted_when_enabled(self):
+    def _start_ambient_exam(self, *, audio_review_only: str) -> int:
+        """Ovoz siyosatini aniq belgilab, sozlama YOQILGAN imtihonni boshlaydi.
+
+        Konteyner muhitidagi PROCTOR_AUDIO_REVIEW_ONLY / PROCTOR_MAX_WARNINGS_*
+        testga o'tmasin — test qoidani tekshirsin, muhitni emas.
+        """
+        env = mock.patch.dict(
+            os.environ,
+            {
+                "PROCTOR_AUDIO_REVIEW_ONLY": audio_review_only,
+                "PROCTOR_STARTUP_GRACE_SECONDS": "0",
+                "PROCTOR_HARDENED_MODE": "1",
+                "PROCTOR_HARDENED_STARTUP_GRACE_SECONDS": "60",
+                "PROCTOR_MAX_WARNINGS_BEFORE_BAN": "3",
+                "PROCTOR_WARN_SUPPRESS_SECONDS": "10",
+                "PROCTOR_EVENT_MIN_INTERVAL_SECONDS": "5",
+                "PROCTOR_AUTO_BAN_NON_IDENTITY": "1",
+                "PROCTOR_IGNORED_VIOLATIONS": (
+                    "GAZE_AWAY_DOWN,GAZE_AWAY_UP,FACE_TURNED_AWAY,FACE_OFF_CENTER,"
+                    "FACE_TOO_FAR,FACE_TOO_CLOSE,EXCESSIVE_MOVEMENT"
+                ),
+            },
+            clear=False,
+        )
+        env.start()
+        self.addCleanup(env.stop)
+        for key in ("PROCTOR_TECHNICAL_VIOLATIONS", "PROCTOR_REVIEW_ONLY_TYPES"):
+            os.environ.pop(key, None)
+
         exam_id = self._create_exam_via_api(ambient=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.student_token}")
         rs = self.client.post(f"/api/student/exams/{exam_id}/start", {"pin": ""}, format="json")
@@ -206,12 +234,71 @@ class AmbientAudioToggleTests(TestCase):
         tok = rs.json().get("deviceToken")
         if tok:
             self.client.defaults["HTTP_X_DEVICE_SESSION_TOKEN"] = tok
+        return exam_id
 
+    def _post_audio(self, exam_id: int, vtype: str = "SUSPICIOUS_AUDIO"):
         rv = self.client.post(
             "/api/student/violations",
-            {"exam_id": exam_id, "violation_type": "SUSPICIOUS_AUDIO"},
+            {"exam_id": exam_id, "violation_type": vtype},
             format="json",
         )
         self.assertEqual(rv.status_code, 200, rv.content)
-        self.assertFalse(rv.json().get("warningSuppressed"), rv.json())
-        self.assertEqual(rv.json().get("warningNumber"), 1, rv.json())
+        return rv.json()
+
+    def test_ambient_violation_review_only_when_enabled_without_camera_evidence(self):
+        """Standart siyosat (11.09): sozlama yoqilgan, lekin ovoz signali YOLG'IZ —
+        jazo emas: qayd (outcome=review), talabaga ogohlantirish matni, rasmiy
+        ogohlantirish yo'q. O'chirilgan sozlamadan farqi — hodisa YOZILADI."""
+        from apps.core.models import StudentExam, ViolationLog
+
+        exam_id = self._start_ambient_exam(
+            audio_review_only="WHISPER_OR_CONVERSATION_SUSPECTED,SUSPICIOUS_AUDIO"
+        )
+        for vtype in ("SUSPICIOUS_AUDIO", "WHISPER_OR_CONVERSATION_SUSPECTED"):
+            body = self._post_audio(exam_id, vtype)
+            self.assertTrue(body.get("audioReview"), (vtype, body))
+            self.assertTrue(body.get("warningSuppressed"), (vtype, body))
+            self.assertFalse(body.get("ambientDisabled"), (vtype, body))
+            self.assertFalse(body.get("banned"), (vtype, body))
+            self.assertEqual(body.get("warningNumber"), 0, (vtype, body))
+            self.assertTrue(body.get("violationReason"), (vtype, body))
+
+        se = StudentExam.objects.get(student_id=self.student.id, exam_id=exam_id)
+        self.assertEqual(se.status, "In Progress")
+        self.assertEqual(int(se.proctor_official_warnings or 0), 0)
+        logs = ViolationLog.objects.filter(student_id=self.student.id, exam_id=exam_id)
+        self.assertEqual(
+            sorted(logs.values_list("violation_type", "outcome")),
+            [("SUSPICIOUS_AUDIO", "review"), ("WHISPER_OR_CONVERSATION_SUSPECTED", "review")],
+        )
+
+    def test_ambient_violation_counted_when_enabled(self):
+        """Sozlama yoqilgan va so'nggi 2 daqiqada KAMERADA dalil bor (masalan, ikkinchi
+        yuz) — ovoz signali odatdagi rasmiy ogohlantirish oqimiga tushadi."""
+        from apps.core.models import StudentExam, ViolationLog
+
+        exam_id = self._start_ambient_exam(
+            audio_review_only="WHISPER_OR_CONVERSATION_SUSPECTED,SUSPICIOUS_AUDIO"
+        )
+        ViolationLog.objects.create(
+            student_id=self.student.id,
+            exam_id=exam_id,
+            violation_type="MULTIPLE_FACES",
+            timestamp=dj_tz.now(),
+            screenshot_url="",
+        )
+        body = self._post_audio(exam_id)
+        self.assertFalse(body.get("audioReview"), body)
+        self.assertFalse(body.get("warningSuppressed"), body)
+        self.assertEqual(body.get("warningNumber"), 1, body)
+        se = StudentExam.objects.get(student_id=self.student.id, exam_id=exam_id)
+        self.assertEqual(int(se.proctor_official_warnings or 0), 1)
+
+    def test_ambient_violation_counted_when_audio_review_policy_disabled(self):
+        """Operator PROCTOR_AUDIO_REVIEW_ONLY ni bo'shatsa — yolg'iz ovoz signali ham
+        (sozlama yoqilgan imtihonda) darhol rasmiy ogohlantirish beradi."""
+        exam_id = self._start_ambient_exam(audio_review_only="")
+        body = self._post_audio(exam_id)
+        self.assertFalse(body.get("audioReview"), body)
+        self.assertFalse(body.get("warningSuppressed"), body)
+        self.assertEqual(body.get("warningNumber"), 1, body)

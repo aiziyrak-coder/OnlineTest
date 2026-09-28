@@ -186,6 +186,7 @@ def student_results(request):
                     else []
                 ),
                 "absent": is_absent,
+                "verify_state": str(getattr(se, "verify_state", "") or ""),
             }
         )
     return Response(out)
@@ -239,6 +240,13 @@ def student_certificate_pdf(request, exam_id: int):
     )
     if not se or se.status != "Completed":
         return HttpResponse("Not found", status=404)
+    from apps.api.result_verification import certificate_blocked, notice
+
+    if certificate_blocked(se):
+        return Response(
+            {"error": notice(se.verify_state, resolve_ui_language(request) or "uz"), "code": "VERIFICATION_" + se.verify_state.upper()},
+            status=409,
+        )
     lang = resolve_pdf_language(request, se.exam)
     b = _result_details_bundle(se, request, lang=lang)
     if not b:

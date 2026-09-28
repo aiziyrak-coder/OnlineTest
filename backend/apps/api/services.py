@@ -308,11 +308,14 @@ def finalize_student_exam_session(
         _lk = _ql_load(se)
     except Exception:  # noqa: BLE001
         _lk = None
+    done_at = completed_at or dj_tz.now()
     if _lk:
-        raw_answers = {
-            **{str(k): v for k, v in raw_answers.items()},
-            **{str(k): v for k, v in (_lk.get("locked") or {}).items() if v},
-        }
+        # Submit bilan BIR XIL qoida: faqat o'z vaqtida qulflangan javoblar + joriy
+        # savolning vaqti ichidagi javobi. Ilgari barcha qoralama javoblar qo'shilardi —
+        # vaqti o'tgan savollarga yozilgan javoblar avto-yakunda ball berardi.
+        from apps.api.question_lock import final_answers as _ql_final
+
+        raw_answers = _ql_final(_lk, raw_questions, {str(k): v for k, v in raw_answers.items()}, done_at)
     questions = prepare_questions_for_grading(questions, exam, raw_answers)
     # Bardoshli rejim: ilgari bitta nomuvofiq javob `norm = {}` ga olib kelardi —
     # ya'ni talabaning BARCHA javoblari yo'qolib, ball 0 bo'lardi. Endi faqat
@@ -320,7 +323,6 @@ def finalize_student_exam_session(
     norm = validate_exam_answers(questions, raw_answers, strict=False)
     score = sum(1 for q in questions if norm.get(str(q["id"])) == q.get("correctAnswer"))
     flagged_json = json.dumps(flagged) if flagged else "[]"
-    done_at = completed_at or dj_tz.now()
     result_public_id = next_result_public_id()
     verify_secret = secrets.token_hex(32)
     # Tezkor shablon — haqiqiy AI tushuntirish natija birinchi ochilganda hisoblanadi
@@ -341,19 +343,57 @@ def finalize_student_exam_session(
     se.draft_flagged_json = "[]"
     se.draft_updated_at = None
     se.save()
+    # Avto-yakunlangan 80%+ natija ham yuzma-yuz tasdiqlash qoidasidan o'tadi.
+    try:
+        from apps.api.result_verification import maybe_mark_for_verification
+
+        total = len(questions)
+        pct = round((score / total) * 100) if total else 0
+        maybe_mark_for_verification(
+            se, exam, questions, norm, safe_json_loads(se.answer_timings_json or "", {}) or {}, pct
+        )
+    except Exception:  # noqa: BLE001 — tasdiqlash belgisi yakunlashni buzmasin
+        import logging
+
+        logging.getLogger("apps.api").exception("[VERIFY] avto-yakunda belgilash xatosi se=%s", se.pk)
     return score, len(questions)
 
 
+def finalize_in_progress_locked(se_id: int, exam, *, only_if_expired_for: str | None = None) -> bool:
+    """Sessiyani QATOR QULFI ostida, faqat hali «In Progress» bo'lsa yakunlaydi.
+
+    Beat vazifasi va talaba submit'i bir vaqtda kelsa, ilgari beat eski nusxadagi
+    qoralama javoblar bilan haqiqiy topshirilgan natijani (ball, javoblar,
+    result_public_id) ustidan yozib yuborardi. Endi qator qulflanadi, holat va
+    qoralama javoblar qulf ostida qayta o'qiladi.
+    """
+    from apps.core.models import StudentExam
+
+    with transaction.atomic():
+        fresh = StudentExam.objects.select_for_update().filter(pk=se_id, status="In Progress").first()
+        if fresh is None:
+            return False
+        if only_if_expired_for is not None:
+            from apps.api.exam_time import is_student_exam_expired
+
+            if not is_student_exam_expired(exam, fresh, only_if_expired_for):
+                return False
+        answers = safe_json_loads(fresh.draft_answers_json, {})
+        flagged = safe_json_loads(fresh.draft_flagged_json, [])
+        finalize_student_exam_session(fresh, exam, answers, flagged)
+    return True
+
+
 def auto_finalize_student_exam_if_expired(se, exam, student_id: str) -> bool:
-    """Vaqt tugagan In Progress sessiyani draft javoblar bilan yakunlaydi."""
+    """Vaqt tugagan In Progress sessiyani draft javoblar bilan yakunlaydi (qator qulfi bilan)."""
     from apps.api.exam_time import is_student_exam_expired
 
     if not is_student_exam_expired(exam, se, student_id):
         return False
-    answers = safe_json_loads(se.draft_answers_json, {})
-    flagged = safe_json_loads(se.draft_flagged_json, [])
-    finalize_student_exam_session(se, exam, answers, flagged)
-    return True
+    done = finalize_in_progress_locked(se.pk, exam, only_if_expired_for=student_id)
+    if done:
+        se.refresh_from_db()
+    return done
 
 
 def next_result_public_id() -> str:
@@ -794,6 +834,38 @@ def prepare_questions_for_grading(
             best_score = filled
             best_lang = lang
     return [localize_exam_question(q, best_lang) for q in questions]
+
+
+def graded_session_questions(se, exam=None) -> tuple[list[dict], dict]:
+    """Sessiya savollari BAHOLASHDAGI tilda + talaba javoblari.
+
+    `auto` imtihonda ball talaba javob bergan tildagi variantlar bilan hisoblanadi,
+    sessiyada esa savollar manba tilida saqlanadi. Natija ko'rinishi, hisobotlar va
+    ball tahriri shu funksiya orqali solishtirsa, ball va savol belgilari mos keladi.
+    """
+    exam = exam or se.exam
+    raw = safe_json_loads(se.session_questions_json or "", []) or safe_json_loads(
+        getattr(exam, "questions_json", None) or "[]", []
+    ) or []
+    raw = [q for q in raw if isinstance(q, dict)]
+    ans = safe_json_loads(se.answers_json or "", {}) or {}
+    if not isinstance(ans, dict):
+        ans = {}
+    ans = {str(k): v for k, v in ans.items()}
+    try:
+        return prepare_questions_for_grading(raw, exam, ans), ans
+    except Exception:  # noqa: BLE001
+        return raw, ans
+
+
+def result_display_language(exam, answers: dict, questions: list[dict], default: str) -> str:
+    """`auto` imtihonda natijani talaba javob bergan tilda ko'rsatamiz (aks holda ✓/✗ ball bilan mos kelmaydi)."""
+    if (getattr(exam, "language", None) or "").lower() != "auto":
+        return default
+    try:
+        return detect_grading_language(exam, answers, raw_questions=questions) or default
+    except Exception:  # noqa: BLE001
+        return default
 
 
 def detect_grading_language(
