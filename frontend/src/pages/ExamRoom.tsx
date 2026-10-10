@@ -599,6 +599,11 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
   const [warningQueue, setWarningQueue] = useState<{ id: number; text: string; duration: number }[]>([]);
   const warningIdRef = useRef(0);
   const showWarningMsg = useCallback((text: string, duration = 5000) => {
+    // TEST MARKAZIDA TOPSHIRUVCHIGA HECH QANDAY OGOHLANTIRISH CHIQMAYDI.
+    // Xonada nazoratchi bor; qalqib chiquvchi xabarlar diqqatni bo'lardi va
+    // savolga qaytganda vaqt yo'qolardi. Hodisalar admin paneliga yoziladi —
+    // chetlatish yoki qayta ruxsat faqat adminning qo'lida.
+    if (testCenterRef.current) return;
     const id = ++warningIdRef.current;
     setWarningQueue((q) => [...q, { id, text, duration }]);
   }, []);

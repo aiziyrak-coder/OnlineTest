@@ -7,6 +7,7 @@ import { apiUrl } from '../lib/apiUrl';
 import { AdminAlert } from './admin/ui';
 import { isDesktopApp } from '../lib/desktop';
 import { FaceLoginPanel } from '../components/FaceLoginPanel';
+import { CenterLoginPanel } from '../components/CenterLoginPanel';
 
 interface LoginProps {
   onLogin: (token: string, user: any) => void;
@@ -66,7 +67,11 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
   const t = translations[lang];
   const desktop = isDesktopApp();
   /** Ilovada kirish yuz skaneridan boshlanadi; brauzerda (admin) — login va parol. */
-  const [mode, setMode] = useState<'face' | 'password'>(() => (isDesktopApp() ? 'face' : 'password'));
+  /** Markaz kompyuterida (ilovada) kirish PASPORT + PIN bilan boshlanadi:
+   *  12 xonali ID va parol yozish markazda eng ko'p xato chiqadigan qadam edi. */
+  const [mode, setMode] = useState<'face' | 'password' | 'center'>(
+    () => (isDesktopApp() ? 'center' : 'password'),
+  );
   const brandTitle = desktop ? 'FerMI Exam Platform' : t.appBrandTitle;
   const brandEyebrow = desktop ? (DESKTOP_BRAND[lang] || DESKTOP_BRAND.uz).eyebrow : t.loginBrandEyebrow;
   const brandLead = desktop ? (DESKTOP_BRAND[lang] || DESKTOP_BRAND.uz).lead : t.loginPanelLead;
@@ -267,7 +272,9 @@ export function Login({ onLogin, lang, setLang }: LoginProps) {
             </div>
 
             <div className="bg-white/95 backdrop-blur rounded-2xl border border-gray-200/90 shadow-[0_18px_50px_-28px_rgba(49,46,129,0.35)] p-6 sm:p-8">
-              {mode === 'face' ? (
+              {mode === 'center' ? (
+                <CenterLoginPanel lang={lang} onLogin={onLogin} onUsePassword={() => setMode('face')} />
+              ) : mode === 'face' ? (
                 <FaceLoginPanel lang={lang} onLogin={onLogin} onUsePassword={() => setMode('password')} />
               ) : (
               <form onSubmit={handleLogin} className="space-y-5" noValidate>

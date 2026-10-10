@@ -196,3 +196,117 @@ def auth_face_login(request):
             "method": "face",
         }
     )
+
+
+# ------------------------------------------------- test markazida kirish --
+class CenterLoginThrottle(AnonRateThrottle):
+    """Markazda o'nlab kompyuter bitta IP dan chiqadi — cheklov keng, lekin bor."""
+
+    scope = "center_login"
+
+    def get_rate(self):
+        import os as _os
+
+        return _os.environ.get("CENTER_LOGIN_RATE", "600/min")
+
+
+@api_view(["POST"])
+@throttle_classes([CenterLoginThrottle])
+@permission_classes([AllowAny])
+def auth_center_login(request):
+    """Pasport raqami + markaz PIN kodi bilan kirish (parol yo'q).
+
+    Topshiruvchi 12 xonali talaba ID va alohida parolni yodlamaydi: pasportini
+    yozadi, nazoratchi aytgan PIN ni kiritadi. Faqat markaz kompyuterlaridan
+    ishlaydi va noto'g'ri urinishlar sanaladi.
+    """
+    from django.core.cache import cache
+
+    from apps.api.center_login import (
+        CENTER_ROLES, center_pin, client_ip, ip_allowed, normalize_passport, valid_passport,
+    )
+
+    ip = client_ip(request)
+    if not ip_allowed(ip):
+        logger.warning("[CENTER-LOGIN] ruxsatsiz IP: %s", ip)
+        return Response(
+            {"error": "Bu kompyuterdan imtihonga kirib bo'lmaydi. Test markazidagi "
+                      "kompyuterdan foydalaning.", "code": "CENTER_IP_DENIED"},
+            status=403,
+        )
+    expected = center_pin()
+    if not expected:
+        return Response(
+            {"error": "Markaz PIN kodi sozlanmagan. Administratorga murojaat qiling.",
+             "code": "CENTER_PIN_UNSET"},
+            status=503,
+        )
+
+    d = request.data or {}
+    passport = normalize_passport(d.get("passport") or d.get("login"))
+    pin = "".join(ch for ch in str(d.get("pin") or "") if ch.isdigit())
+
+    key = "centerlogin:%s" % ip
+    tries = int(cache.get(key) or 0)
+    if tries >= int(os.environ.get("CENTER_LOGIN_MAX_WRONG", "40") or 40):
+        return Response(
+            {"error": "Juda ko'p noto'g'ri urinish. Nazoratchiga murojaat qiling.",
+             "code": "CENTER_LOCKED"},
+            status=429,
+        )
+
+    if not valid_passport(passport):
+        cache.set(key, tries + 1, 10 * 60)
+        return Response(
+            {"error": "Pasport raqami noto'g'ri yozilgan. Namuna: AB1234567.",
+             "code": "PASSPORT_INVALID"},
+            status=400,
+        )
+    import hmac as _hmac
+
+    if not _hmac.compare_digest(pin.encode(), expected.encode()):
+        cache.set(key, tries + 1, 10 * 60)
+        logger.warning("[CENTER-LOGIN] noto'g'ri PIN ip=%s pasport=%s***", ip, passport[:4])
+        return Response({"error": "PIN kod noto'g'ri.", "code": "WRONG_PIN"}, status=403)
+
+    matches = list(
+        AppUser.objects.select_related("group", "kafedra").filter(passport=passport)[:2]
+    )
+    if not matches:
+        cache.set(key, tries + 1, 10 * 60)
+        return Response(
+            {"error": "Bu pasport raqami ro'yxatda topilmadi. Nazoratchiga murojaat qiling.",
+             "code": "PASSPORT_NOT_FOUND"},
+            status=404,
+        )
+    if len(matches) > 1:
+        logger.error("[CENTER-LOGIN] bitta pasport ikki hisobda: %s", passport)
+        return Response(
+            {"error": "Bu pasport raqami bir nechta hisobga biriktirilgan. "
+                      "Nazoratchiga murojaat qiling.", "code": "PASSPORT_AMBIGUOUS"},
+            status=409,
+        )
+
+    user = matches[0]
+    role_out = (user.role or "").strip().lower().replace("\ufeff", "").strip()
+    if role_out not in CENTER_ROLES:
+        return Response(
+            {"error": "Bu hisob bilan imtihonga kirib bo'lmaydi.", "code": "ROLE_DENIED"},
+            status=403,
+        )
+    if user.status == "Banned":
+        return Response(
+            {"error": "Hisobingiz bloklangan. Administratorga murojaat qiling.",
+             "code": "BANNED"},
+            status=403,
+        )
+    cache.delete(key)
+    _remember_login(request, user)
+    logger.info("[CENTER-LOGIN] kirdi user=%s ip=%s", user.pk, ip)
+    return Response(
+        {
+            "token": issue_token(user),
+            "user": _auth_user_payload(user, role_out),
+            "method": "center",
+        }
+    )

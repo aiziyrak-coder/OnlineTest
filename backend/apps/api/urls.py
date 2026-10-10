@@ -10,6 +10,8 @@ urlpatterns = [
     path("ready", views.health_ready),
     path("auth/login", views.auth_login),
     path("auth/face-login", views.auth_face_login),
+    # Test markazida: pasport raqami + markaz PIN kodi (parolsiz kirish).
+    path("auth/center-login", views.auth_center_login),
     path("student/exams/<int:pk>/vac-rules", views.student_vac_rules),
     path("student/exams/<int:pk>/vac-consent", views.student_vac_consent),
     path("student/exams/<int:pk>/test-center", views.student_exam_test_center),

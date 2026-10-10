@@ -482,6 +482,21 @@ def admin_student_exams_score(request, pk: int):
     if _request_user_role_norm(request.user) != "admin":
         return Response({"error": "Forbidden"}, status=403)
 
+    # Ball o'zgarishi eng nozik amal — alohida parol so'raladi. Tekshiruv
+    # SERVERDA: brauzerdagi oyna chetlab o'tilsa ham ball o'zgarmaydi.
+    import hmac as _hmac
+
+    _need_pw = str(getattr(settings, "SCORE_EDIT_PASSWORD", "") or "")
+    if _need_pw:
+        _got_pw = str(request.headers.get("X-Score-Password")
+                      or (request.data or {}).get("edit_password") or "")
+        if not _hmac.compare_digest(_got_pw, _need_pw):
+            return Response(
+                {"error": "Ballni tahrirlash paroli noto'g'ri.",
+                 "code": "SCORE_PASSWORD_REQUIRED"},
+                status=423,
+            )
+
     se = StudentExam.objects.select_related("student", "exam").filter(pk=pk).first()
     if not se:
         return Response({"error": "Not found"}, status=404)

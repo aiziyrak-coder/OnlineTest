@@ -124,6 +124,11 @@ class AppUser(models.Model):
     # o'chadi — "u kirganmi, qachon, qayerdan" degan savolga javob bo'lsin.
     last_login_at = models.DateTimeField(null=True, blank=True)
     last_login_ip = models.CharField(max_length=64, blank=True, default="")
+    # Pasport raqami (HEMIS dagi "Pasport raqami" ustuni, masalan AB1234567).
+    # Test markazida KIRISH SHU RAQAM bilan bo'ladi: 12 xonali talaba ID va
+    # alohida parolni yodlash qiyin edi, pasport esa odamning o'zida turadi.
+    # Katta harfga keltirilgan holda, bo'shliqsiz saqlanadi.
+    passport = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     class Meta:
         app_label = "core"

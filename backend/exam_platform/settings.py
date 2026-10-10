@@ -356,6 +356,9 @@ OPENAI_EXAM_MODEL = os.environ.get("OPENAI_EXAM_MODEL", "").strip()
 # Audit jurnalini ochish uchun qo'shimcha parol. Bo'sh bo'lsa —
 # qo'shimcha parol so'ralmaydi (admin roli yetarli).
 AUDIT_PASSWORD = os.environ.get("AUDIT_PASSWORD", "").strip()
+# Natija ballini qo'lda tuzatish uchun alohida parol: baho o'zgarishi eng
+# nozik amal, admin roli yetarli emas deb belgilandi (10.10.2026).
+SCORE_EDIT_PASSWORD = os.environ.get("SCORE_EDIT_PASSWORD", "").strip()
 OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o").strip()
 OPENAI_MODEL_FALLBACKS = os.environ.get("OPENAI_MODEL_FALLBACKS", "gpt-4o-mini").strip()
 # Eski nomlar (kod va deploy skriptlari bilan moslik)
