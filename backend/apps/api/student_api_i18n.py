@@ -139,6 +139,14 @@ _MSG: dict[str, dict[str, str]] = {
         "Вы уже начали или сдали оценочный экзамен по другому предмету. Можно выбрать только один предмет.",
         "You already started or completed an assessment exam for another subject. Only one subject is allowed.",
     ),
+    "another_exam_in_progress": _tri(
+        "Sizda boshqa imtihon ochiq: «{title}». Avval uni yakunlang — bir vaqtda "
+        "faqat bitta imtihon topshiriladi.",
+        "У вас уже идёт другой экзамен: «{title}». Сначала завершите его — "
+        "одновременно можно сдавать только один экзамен.",
+        "Another exam is already running: “{title}”. Finish it first — only one exam "
+        "can be taken at a time.",
+    ),
     "faculty_questions_not_ready": _tri(
         "Bu fan uchun savollar hali tayyorlanmoqda. Birozdan keyin qayta urinib ko'ring.",
         "Вопросы по этому предмету ещё готовятся. Попробуйте позже.",

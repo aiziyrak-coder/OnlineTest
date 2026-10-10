@@ -8,6 +8,7 @@ Himoyalarning o'zini tekshiradigan testlar kerakli o'zgaruvchini o'zi yoqadi
 import os
 
 from django.test.runner import DiscoverRunner
+from django.test.utils import override_settings
 
 TEST_ENV = {
     "DESKTOP_APP_REQUIRED": "0",
@@ -33,9 +34,43 @@ UNSET = (
 )
 
 
+#: Testlar TASHQI xizmatlarga ulanmaydi. Sozlamalarda REDIS_URL bo'lsa, kesh va
+#: WebSocket qatlami Redis'ga qarab turadi; Redis o'chiq bo'lsa (CI, yangi
+#: dasturchi kompyuteri, yarim ko'tarilgan stek) har bir so'rov nom aniqlash
+#: xatosi bilan yiqilardi — bitta sababdan 137 ta test "ERROR" bo'lib chiqardi
+#: va asl muammo ko'rinmay ketardi.
+ISOLATED_SETTINGS = {
+    "CACHES": {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "test-isolated",
+        }
+    },
+    "CHANNEL_LAYERS": {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+    # Fon vazifalari broker kutmasin — darhol shu yerda bajariladi.
+    "CELERY_TASK_ALWAYS_EAGER": True,
+    "CELERY_TASK_EAGER_PROPAGATES": True,
+}
+
+
 class IsolatedEnvRunner(DiscoverRunner):
     def setup_test_environment(self, **kwargs):
         for k in UNSET:
             os.environ.pop(k, None)
         os.environ.update(TEST_ENV)
         super().setup_test_environment(**kwargs)
+        self._isolation = override_settings(**ISOLATED_SETTINGS)
+        self._isolation.enable()
+        # Channels qatlam nusxasini keshlab qo'yadi — eski (Redis) qatlam qolmasin.
+        try:
+            from channels.layers import channel_layers
+
+            channel_layers.backends = {}
+        except Exception:  # noqa: BLE001 — qatlam bo'lmasa ham testlar ishlayversin
+            pass
+
+    def teardown_test_environment(self, **kwargs):
+        iso = getattr(self, "_isolation", None)
+        if iso is not None:
+            iso.disable()
+        super().teardown_test_environment(**kwargs)

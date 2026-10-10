@@ -996,6 +996,33 @@ def _student_exams_start_impl(request, pk: int):
                 status=503,
             )
 
+    # BIR VAQTDA FAQAT BITTA IMTIHON. Ilgari bir kishi ikki imtihonni birdan
+    # ochib qo'ya olardi (28.09.2026: bir kuni ikki fan ochiq edi) — kamera va
+    # nazorat bitta sessiyaga qaraydi, ikkinchisi nazoratsiz qolardi, taymer
+    # esa ikkalasida ham ketaverardi.
+    _other = (
+        StudentExam.objects.filter(student_id=u.id, status="In Progress")
+        .exclude(exam_id=pk)
+        .select_related("exam")
+        .first()
+    )
+    if _other is not None:
+        # Muddati o'tib ketgan tashlandiq sessiya yangi imtihonni to'smasin.
+        if auto_finalize_student_exam_if_expired(_other, _other.exam, str(u.id)):
+            _other = None
+    if _other is not None:
+        return Response(
+            {
+                "error": student_api_msg(
+                    "another_exam_in_progress", resolve_ui_language(request),
+                    title=str(_other.exam.title or "")[:80],
+                ),
+                "code": "ANOTHER_EXAM_IN_PROGRESS",
+                "exam_id": _other.exam_id,
+            },
+            status=409,
+        )
+
     if vac_pc_only_enabled():
         pc_err = _reject_non_desktop_or_none(request)
         if pc_err is not None:

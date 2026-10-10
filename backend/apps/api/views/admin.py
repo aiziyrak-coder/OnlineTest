@@ -2160,6 +2160,41 @@ def admin_exam_detail(request, pk: int):
             status=400,
         )
 
+    # HOZIR IMTIHONDA TURGANLARNI HIMOYA QILISH. Ilgari admin imtihon davom
+    # etayotganda tugash vaqtini yoki davomiylikni qisqartirsa, yozib
+    # o'tirganlar o'sha zahoti uzilib qolardi; auditoriya yoki kafedra
+    # o'zgartirilsa esa imtihon ularga "begona" bo'lib, keyingi so'rovda
+    # ichkariga kira olmay qolishardi. Endi bunday o'zgarish to'xtatiladi
+    # (ataylab qilinayotgan bo'lsa — "force" bilan).
+    from apps.api.views._helpers import _bool_arg as _bool_flag
+
+    _running = StudentExam.objects.filter(exam_id=pk, status="In Progress").count()
+    if _running and not _bool_flag(d.get("force"), False):
+        _risky = []
+        if et < (e.end_time or et):
+            _risky.append("tugash vaqti qisqartirilyapti")
+        if dur < int(e.duration_minutes or 0):
+            _risky.append("imtihon davomiyligi qisqartirilyapti")
+        if "audience" in d and str(d["audience"] or "").strip().lower() != (e.audience or ""):
+            _risky.append("auditoriya o'zgartirilyapti")
+        if "kafedra_id" in d and str(d["kafedra_id"] or "") not in ("", str(e.kafedra_id or "")):
+            _risky.append("kafedra o'zgartirilyapti")
+        if "course" in d and str(d["course"] or "") not in ("", str(e.course or 0)):
+            _risky.append("kurs o'zgartirilyapti")
+        if _risky:
+            return Response(
+                {
+                    "error": "Hozir %d kishi shu imtihonni topshirmoqda, lekin %s. "
+                             "Ular uzilib qolishi mumkin. Imtihon tugashini kuting yoki "
+                             "ataylab qilayotgan bo'lsangiz tasdiqlang."
+                             % (_running, ", ".join(_risky)),
+                    "code": "EXAM_IN_PROGRESS",
+                    "running": _running,
+                    "requires_force": True,
+                },
+                status=409,
+            )
+
     try:
         with transaction.atomic():
             e.title = title

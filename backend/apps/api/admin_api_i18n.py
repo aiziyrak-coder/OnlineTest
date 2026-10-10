@@ -164,6 +164,14 @@ _MSG: dict[str, dict[str, str]] = {
         "В тестовой базе недостаточно вопросов ({have}/{need}). Добавьте вопросы в категории или уменьшите число.",
         "Not enough questions in the test bank ({have}/{need} needed). Add questions or lower the count.",
     ),
+    "questions_invalid": _tri(
+        "Savollarda xatolik bor — birortasi ham saqlanmadi. Har bir savolda matn, "
+        "kamida 2 ta har xil variant va shu variantlar ichidagi to'g'ri javob bo'lishi kerak.",
+        "В вопросах есть ошибки — ни один не сохранён. В каждом вопросе нужен текст, "
+        "минимум 2 разных варианта и правильный ответ из этих вариантов.",
+        "The questions have errors — none were saved. Each question needs text, at least "
+        "2 distinct options and a correct answer among them.",
+    ),
     "bank_category_required": _tri(
         "Kamida bitta test bank kategoriyasini tanlang",
         "Выберите хотя бы одну категорию тестового банка",

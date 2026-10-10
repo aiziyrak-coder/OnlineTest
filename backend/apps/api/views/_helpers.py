@@ -1048,6 +1048,22 @@ def _admin_exams_create_impl(request):
     else:
         return Response({"error": "No questions provided"}, status=400)
 
+    # Savollar saqlashdan OLDIN tekshiriladi. Ilgari qo'lda yozilgan ro'yxat va
+    # PDF dan o'qilgan savollar tekshirilmasdan bankka tushardi: raqamsiz savol
+    # baholashni buzardi, to'g'ri javobi variantlar ichida yo'q savolda talaba
+    # nima tanlasa ham "xato" bo'lardi, bir xil ikkita variant esa apellyatsiyaga
+    # sabab bo'lardi. Endi "savol banki" oynasi bilan bir xil qoida ishlaydi.
+    if questions:
+        from apps.api.question_sanitize import sanitize_questions
+
+        questions, _q_problems = sanitize_questions(questions)
+        if not questions:
+            return Response(
+                {"error": admin_api_msg("questions_invalid", resolve_ui_language(request)),
+                 "problems": _q_problems[:20]},
+                status=400,
+            )
+
     if lang == "auto" and mode == "static" and questions:
         questions = exam_questions_add_translations(questions)
 

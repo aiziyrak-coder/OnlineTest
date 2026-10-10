@@ -362,43 +362,14 @@ def _parse_bank(text: str, language: str = "auto") -> list[dict]:
 
 
 def _clean_questions(raw: list) -> tuple[list[dict], list[str]]:
-    """Savollarni normallashtiradi va yaroqsizlarini sabab bilan qaytaradi."""
-    out: list[dict] = []
-    problems: list[str] = []
-    for i, q in enumerate(raw or [], start=1):
-        if not isinstance(q, dict):
-            continue
-        text = str(q.get("text") or q.get("question") or "").strip()
-        opts_raw = q.get("options") or q.get("variants") or []
-        opts = [str(o).strip() for o in opts_raw if str(o).strip()]
-        ans = str(q.get("correctAnswer") or q.get("answer") or "").strip()
-        if not text or len(opts) < 2:
-            problems.append(f"{i}-savol: matn yoki variantlar yetarli emas")
-            continue
-        if ans not in opts:
-            # Javob "A" / "1" ko'rinishida bo'lishi mumkin.
-            key = ans.strip().rstrip(").:").upper()
-            idx = None
-            if len(key) == 1 and key.isalpha():
-                idx = ord(key) - ord("A")
-            elif key.isdigit():
-                idx = int(key) - 1
-            if idx is not None and 0 <= idx < len(opts):
-                ans = opts[idx]
-            else:
-                problems.append(f"{i}-savol: to'g'ri javob aniqlanmadi")
-                continue
-        item = {
-            "id": len(out) + 1,
-            "text": text,
-            "options": opts,
-            "correctAnswer": ans,
-        }
-        for extra in ("text_ru", "text_en", "options_ru", "options_en", "explanation"):
-            if q.get(extra):
-                item[extra] = q[extra]
-        out.append(item)
-    return out, problems
+    """Savollarni normallashtiradi va yaroqsizlarini sabab bilan qaytaradi.
+
+    Qoidalar imtihon yaratish bilan BIR XIL bo'lishi uchun umumiy modulda
+    (`question_sanitize`) turadi — ilgari ikki joyda ikki xil edi.
+    """
+    from apps.api.question_sanitize import sanitize_questions
+
+    return sanitize_questions(raw)
 
 
 @api_view(["GET", "POST"])
