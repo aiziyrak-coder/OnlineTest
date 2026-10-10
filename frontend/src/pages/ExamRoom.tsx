@@ -2272,7 +2272,10 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
   const mouthActiveRef = useRef(false);
   /** Ovoz manbali kichik yorliq — kamera panelida video signalidan ALOHIDA qatorda
    *  ko'rsatiladi (shovqin va gapirish matni farqlanishi uchun). */
-  const [audioLiveLabel, setAudioLiveLabel] = useState<string | null>(null);
+  const [audioLiveLabel, _setAudioLiveLabel] = useState<string | null>(null);
+  /** Markazda ovoz belgisi ham ko'rsatilmaydi (mikrofon nazorati o'chiq). */
+  const setAudioLiveLabel = useCallback(
+    (v: string | null) => _setAudioLiveLabel(testCenterRef.current ? null : v), []);
 
   useEffect(() => {
     // `examArmed`: fullscreen'da + media tayyor + engine yuklangan. Ilgari bu
@@ -2764,6 +2767,9 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
           : Math.max(1, official);
       const reasonText = data.violationReason || t.violationReasonFallback;
       pushWarningHistory(reasonText, shownNumber);
+      // Markazda rasmiy ogohlantirish oynasi ochilmaydi — server javobida
+      // kutilmagan holat bo'lsa ham topshiruvchi bo'linmasin.
+      if (testCenterRef.current) return;
       setStrikeLevel(official > 0 ? official : shownNumber);
       fullscreenSuppressRef.current = true;
       warningModalShowingRef.current = true;
@@ -3217,7 +3223,14 @@ export function ExamRoom({ exam: initialExam, studentExamId: initialStudentExamI
       // Gapirish chip/modal — faqat Silero audio (pastdagi interval).
       if (type === 'TALKING') return;
       const violationType = liveSignalViolationType(type);
-      if (DISABLED_PERSON_SIGNALS.has(violationType) || (testCenterRef.current && CENTER_IGNORED.has(violationType))) {
+      // Test markazida ekranda HECH QANDAY belgi chiqmaydi: hodisa serverda
+      // qayd etiladi va nazoratchining ekraniga boradi. Topshiruvchi faqat
+      // testni ko'radi.
+      if (testCenterRef.current) {
+        setLiveSignalLabel(null);
+        return;
+      }
+      if (DISABLED_PERSON_SIGNALS.has(violationType)) {
         setLiveSignalLabel(null);
         return;
       }
