@@ -4,6 +4,12 @@ Uchchalasi bitta parol bilan SPA (/api/auth/login) orqali kira oladi.
 Talabaga profil maydoni uzunligi tekshiruvidan o'tadigan placeholder beriladi.
 
 Parol: DEMO_SEED_PASSWORD muhitda berilsa o'sha, aks holda `DemoFJSTI2026!`.
+
+FAQAT DEV. Konteyner entrypointi har ishga tushganda shu buyruqni chaqiradi,
+shuning uchun prodda (DJANGO_DEBUG=0) buyruq hech narsa qilmaydi: aks holda
+har restartda demo_admin hisobi ochiq hujjatdagi parol bilan qayta tiklanib,
+prod admin paneli hammaga ochilib qolardi. Ataylab kerak bo'lsa —
+ALLOW_DEMO_USERS=1 va o'z DEMO_SEED_PASSWORD bilan.
 """
 
 from __future__ import annotations
@@ -11,6 +17,7 @@ from __future__ import annotations
 import os
 
 import bcrypt
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.core.models import AppUser, Group, Level, ResultIdCounter
@@ -30,9 +37,17 @@ class Command(BaseCommand):
     help = "3 ta demo user: demo_admin, demo_staff, demo_student (bitta parol)."
 
     def handle(self, *args, **options):
+        allowed = os.environ.get("ALLOW_DEMO_USERS", "").strip().lower() in ("1", "true", "yes")
+        if not settings.DEBUG and not allowed:
+            self.stdout.write("Prod rejimi: demo foydalanuvchilar yaratilmaydi.")
+            return
         raw = (os.environ.get("DEMO_SEED_PASSWORD") or "").strip() or DEFAULT_PASSWORD
         if len(raw) < 10:
             raise CommandError("DEMO_SEED_PASSWORD kamida 10 belgi bo'lsin.")
+        if not settings.DEBUG and raw == DEFAULT_PASSWORD:
+            raise CommandError(
+                "Prodda demo parol standart qiymatda bo'lmaydi — DEMO_SEED_PASSWORD bering."
+            )
 
         ResultIdCounter.objects.get_or_create(pk=1, defaults={"next_num": 37923423})
         level, _ = Level.objects.get_or_create(name="Asosiy")

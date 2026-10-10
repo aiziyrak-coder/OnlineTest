@@ -33,6 +33,9 @@ UNSET = (
     "PROCTOR_NO_RETAKE_VIOLATIONS",
     # Nazoratchi vakolatlari: testlar ikki rejimni ham o'zi aniq belgilaydi.
     "STAFF_FULL_POWERS",
+    # Demo hisoblar: prod .env qiymati seed testiga o'tmasin.
+    "ALLOW_DEMO_USERS",
+    "DEMO_SEED_PASSWORD",
     # Test markazi sozlamalari: prod .env dagi qiymat testlarga o'tsa, "PIN
     # so'ralsinmi" degan testlar serverda boshqacha natija berardi.
     "TEST_CENTER_IPS",

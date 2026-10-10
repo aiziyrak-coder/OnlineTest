@@ -39,16 +39,19 @@ fi
 cd /app/backend
 python manage.py migrate --noinput
 python manage.py bootstrap_exam 2>/dev/null || true
+# Demo hisoblar faqat dev uchun: buyruq o'zi prodda hech narsa qilmaydi.
 python manage.py seed_demo_users 2>/dev/null || true
 
 echo ""
 echo "=== FJSTI Online Exam ==="
 echo "  Brauzer:  http://127.0.0.1:8080"
-echo "  Login (parol hammasiga: DemoFJSTI2026!):"
-echo "     demo_admin    (admin)"
-echo "     demo_staff    (staff/kuzatuvchi)"
-echo "     demo_student  (talaba)"
-echo "  Django admin: http://127.0.0.1:8080/admin/  (admin / AdminLocal123)"
+if [ "${DJANGO_DEBUG}" = "1" ]; then
+    echo "  Login (parol hammasiga: ${DEMO_SEED_PASSWORD:-DemoFJSTI2026!}):"
+    echo "     demo_admin    (admin)"
+    echo "     demo_staff    (staff/kuzatuvchi)"
+    echo "     demo_student  (talaba)"
+    echo "  Django admin: http://127.0.0.1:8080/admin/  (admin / AdminLocal123)"
+fi
 echo ""
 
 gunicorn exam_platform.asgi:application --config gunicorn.conf.py &
