@@ -1378,6 +1378,11 @@ class ExamFlowApiTests(TestCase):
         self.assertEqual(r.status_code, 403)
 
     def test_staff_sees_only_assigned_exams_and_results(self):
+        """STAFF_FULL_POWERS o'chirilgan rejim: hodim faqat o'z imtihonini ko'radi.
+
+        Yoqilgan rejim (markazdagi nazoratchi hammasini ko'radi) alohida
+        test_center_login.StaffPowersTests da tekshiriladi.
+        """
         hs = bcrypt.hashpw(b"staff-pass-10", bcrypt.gensalt(rounds=10)).decode("ascii")
         staff = AppUser.objects.create(
             id="itest_staff",
@@ -1414,16 +1419,21 @@ class ExamFlowApiTests(TestCase):
         staff_token = r_login.json()["token"]
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {staff_token}")
-        r_list = self.client.get("/api/staff/exams")
-        self.assertEqual(r_list.status_code, 200)
-        ids = {row["id"] for row in r_list.json()}
-        self.assertIn(e_staff.id, ids)
-        self.assertNotIn(self.exam_a.id, ids)
+        from unittest import mock
 
-        r_other = self.client.get(f"/api/staff/exams/{self.exam_a.id}/results")
-        self.assertEqual(r_other.status_code, 404)
+        from apps.api.views import admin as admin_views
 
-        r_own = self.client.get(f"/api/staff/exams/{e_staff.id}/results")
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", False):
+            r_list = self.client.get("/api/staff/exams")
+            self.assertEqual(r_list.status_code, 200)
+            ids = {row["id"] for row in r_list.json()}
+            self.assertIn(e_staff.id, ids)
+            self.assertNotIn(self.exam_a.id, ids)
+
+            r_other = self.client.get(f"/api/staff/exams/{self.exam_a.id}/results")
+            self.assertEqual(r_other.status_code, 404)
+
+            r_own = self.client.get(f"/api/staff/exams/{e_staff.id}/results")
         self.assertEqual(r_own.status_code, 200)
         body = r_own.json()
         self.assertIn("results", body)

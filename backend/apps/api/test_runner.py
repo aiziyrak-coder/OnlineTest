@@ -31,6 +31,8 @@ UNSET = (
     "PROCTOR_HARDENED_MODE",
     "PROCTOR_AUDIO_REVIEW_ONLY",
     "PROCTOR_NO_RETAKE_VIOLATIONS",
+    # Nazoratchi vakolatlari: testlar ikki rejimni ham o'zi aniq belgilaydi.
+    "STAFF_FULL_POWERS",
     # Test markazi sozlamalari: prod .env dagi qiymat testlarga o'tsa, "PIN
     # so'ralsinmi" degan testlar serverda boshqacha natija berardi.
     "TEST_CENTER_IPS",
