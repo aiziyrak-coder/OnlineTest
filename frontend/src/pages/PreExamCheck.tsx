@@ -43,6 +43,7 @@ const PRE_L: Record<Language, Record<string, string>> = {
   uz: {
     stepCamera: 'Kamera', stepIdentity: 'Shaxs', stepLiveness: 'Jonlilik',
     stepConsent: 'Rozilik',
+    preExamReadyHint: 'Hammasi tayyor — pastdagi tugmani bosib imtihonni boshlang.',
     preExamConsentButton: 'Roziligimni tasdiqlayman',
     preExamConsentSaved: 'Rozilik qayd etildi',
     preExamConsentFailed: "Rozilikni saqlab bo'lmadi — qayta urinib ko'ring",
@@ -81,6 +82,7 @@ const PRE_L: Record<Language, Record<string, string>> = {
   ru: {
     stepCamera: 'Камера', stepIdentity: 'Личность', stepLiveness: 'Живость',
     stepConsent: 'Согласие',
+    preExamReadyHint: 'Всё готово — нажмите кнопку внизу, чтобы начать экзамен.',
     preExamConsentButton: 'Подтверждаю согласие',
     preExamConsentSaved: 'Согласие зафиксировано',
     preExamConsentFailed: 'Не удалось сохранить согласие — попробуйте снова',
@@ -119,6 +121,7 @@ const PRE_L: Record<Language, Record<string, string>> = {
   en: {
     stepCamera: 'Camera', stepIdentity: 'Identity', stepLiveness: 'Liveness',
     stepConsent: 'Consent',
+    preExamReadyHint: 'All set — press the button below to start the exam.',
     preExamConsentButton: 'I accept the rules',
     preExamConsentSaved: 'Consent recorded',
     preExamConsentFailed: 'Could not save consent — please try again',
@@ -1395,6 +1398,10 @@ export function PreExamCheck({
     ...(roomScanRequired ? [{ label: PRE_L[lang].stepRoom, done: roomScanned }] : []),
   ];
   const activeStepIdx = steps.findIndex((s) => !s.done);
+  /** QADAMMA-QADAM: bir vaqtda bitta kichik oyna ko'rinadi.
+   *  Ilgari kamera, shaxs tekshiruvi, jonlilik va qoidalar bir sahifada birga
+   *  chiqardi — topshiruvchi nimadan boshlashni bilmay, chalkashib ketardi. */
+  const stepIdDone = Boolean(verified && livenessPassed);
 
   const blocked: string[] = [];
   if (exam?.test_center_enabled && !centerMode) {
@@ -1726,7 +1733,7 @@ export function PreExamCheck({
 
           {/* Shaxs va jonlilik tekshiruvi — o'z ustuni. */}
           <section className="flex flex-col gap-3">
-            {user.profile_image ? (
+            {stepIdDone ? null : user.profile_image ? (
               <div className={`flex flex-col min-h-0 p-3.5 border rounded-xl space-y-2.5 transition-colors ${verified ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-white'}`}>
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="relative shrink-0">
@@ -1899,8 +1906,9 @@ export function PreExamCheck({
                 {t.profilePhotoMissingExam}
               </div>
             )}
-            {/* Nazorat qoidalari — ixcham, scrollsiz; to'liq matn alohida oynada. */}
-            {!vacRules ? (
+            {/* Nazorat qoidalari — faqat shaxs tasdiqlangandan KEYIN ochiladi,
+                shunda ekranda bir vaqtda bitta vazifa turadi. */}
+            {stepIdDone && (!vacRules ? (
               <div className="rounded-xl border border-gray-200 bg-white p-3.5">
                 <div className="text-[14px] font-semibold text-gray-900">{PRE_L[lang].stepConsent}</div>
                 {rulesLoading && !rulesError ? (
@@ -1964,7 +1972,12 @@ export function PreExamCheck({
                 </div>
                 {consentError && <div className="mt-1.5 text-[12px] font-medium text-red-600">{consentError}</div>}
               </div>
-            )}
+            ))}
+            {stepIdDone && consentSaved ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-[13px] font-semibold text-emerald-800">
+                {PRE_L[lang].preExamReadyHint}
+              </div>
+            ) : null}
           </section>
             </div>
 

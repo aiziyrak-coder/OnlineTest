@@ -279,6 +279,7 @@ export function ReportsPage({ token, lang }: Props) {
   const loadSeasons = useCallback(async () => {
     try {
       const res = await fetch(apiUrl('/api/admin/reports/seasons'), h);
+      if (res.status === 423) { window.alert('Parol noto‘g‘ri — ball o‘zgarmadi'); return; }
       if (!checkAdminAuthResponse(res)) return;
       const j = await readJsonSafe<{ seasons?: Season[] }>(res);
       const list = Array.isArray(j?.seasons) ? j!.seasons : [];
@@ -481,10 +482,13 @@ export function ReportsPage({ token, lang }: Props) {
     const n = Number(editVal);
     if (!Number.isFinite(n) || n < 0 || n > row.total) { setEditErr(t.scoreRange); return; }
     setEditBusy(true); setEditErr('');
+    // Ball o'zgarishi uchun alohida parol (server ham tekshiradi).
+    const pw = window.prompt('Ballni tahrirlash paroli', '');
+    if (pw === null || !pw.trim()) { setEditBusy(false); return; }
     try {
       const res = await fetch(apiUrl('/api/admin/student_exams/' + row.student_exam_id + '/score'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token, lang) },
+        headers: { 'Content-Type': 'application/json', 'X-Score-Password': pw.trim(), ...authHeaders(token, lang) },
         body: JSON.stringify({ score: n }),
       });
       if (!checkAdminAuthResponse(res)) return;

@@ -33,6 +33,10 @@ export function LiveMonitor({ examId, token, lang, onClose }: LiveMonitorProps) 
   const t = translations[lang];
   const [students, setStudents] = useState<StudentEntry[]>([]);
   const [banAlerts, setBanAlerts] = useState<BanAlert[]>([]);
+  /** Kritik hodisalar: topshiruvchiga ko'rsatilmaydi, nazoratchi shu yerda ko'radi. */
+  const [proctorAlerts, setProctorAlerts] = useState<
+    { id: string; student_id: string; student_name: string; label: string; at: string }[]
+  >([]);
   const [unblockError, setUnblockError] = useState('');
   const [unblockBusy, setUnblockBusy] = useState<Record<number, boolean>>({});
   const wsRef = useRef<ReturnType<typeof createRealtimeSocket> | null>(null);
@@ -142,6 +146,18 @@ export function LiveMonitor({ examId, token, lang, onClose }: LiveMonitorProps) 
             },
           ];
         });
+      } else if (msg.type === 'proctor_alert') {
+        const a = msg as any;
+        setProctorAlerts((prev) => [
+          {
+            id: `${a.student_id}:${a.violation_type}:${a.at}`,
+            student_id: String(a.student_id || ''),
+            student_name: String(a.student_name || a.student_id || ''),
+            label: String(a.label || a.violation_type || ''),
+            at: String(a.at || ''),
+          },
+          ...prev,
+        ].slice(0, 30));
       } else if (msg.type === 'student_joined') {
         const channel = msg.channel as string;
         const userId = msg.user_id as string;
@@ -254,6 +270,36 @@ export function LiveMonitor({ examId, token, lang, onClose }: LiveMonitorProps) 
 
       {/* ── Ban alerts ── */}
       <AnimatePresence>
+        {proctorAlerts.length > 0 && (
+          <div className="shrink-0 px-5 pt-4">
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[13px] font-bold text-amber-900">
+                  Diqqat talab qiladigan hodisalar ({proctorAlerts.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setProctorAlerts([])}
+                  className="text-[12px] font-medium text-amber-800 underline-offset-2 hover:underline"
+                >
+                  Tozalash
+                </button>
+              </div>
+              <ul className="max-h-40 space-y-1 overflow-y-auto">
+                {proctorAlerts.map((a) => (
+                  <li key={a.id} className="flex items-center gap-2 text-[12.5px] text-amber-900">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-600" />
+                    <span className="font-semibold">{a.student_name}</span>
+                    <span className="truncate">{a.label}</span>
+                    <span className="ml-auto shrink-0 tabular-nums text-amber-700">
+                      {a.at ? new Date(a.at).toLocaleTimeString() : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
         {(activeAlerts.length > 0 || unblockError) && (
           <div className="shrink-0 px-5 pt-4 space-y-2">
             {unblockError && (

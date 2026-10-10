@@ -224,6 +224,23 @@ class ExamRealtimeConsumer(AsyncJsonWebsocketConsumer):
             return True
         return str(event.get("student_id") or "") == str(self.user_id)
 
+    async def exam_proctor_alert(self, event: dict) -> None:
+        """Kritik hodisa — FAQAT nazoratchi va adminga (topshiruvchiga emas)."""
+        if event.get("exam_id") != self.exam_id:
+            return
+        if self.role not in ("admin", "staff"):
+            return
+        await self.send_json({
+            "type": "proctor_alert",
+            "student_id": event.get("student_id"),
+            "student_name": event.get("student_name", ""),
+            "student_exam_id": event.get("student_exam_id"),
+            "violation_type": event.get("violation_type", ""),
+            "label": event.get("label", ""),
+            "detail": event.get("detail", ""),
+            "at": event.get("at"),
+        })
+
     async def exam_student_banned(self, event: dict) -> None:
         """Talaba ban bo'lganda barcha proktor/admin va talabaning o'ziga xabar."""
         if event.get("exam_id") != self.exam_id:

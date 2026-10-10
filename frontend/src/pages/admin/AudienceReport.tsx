@@ -483,10 +483,10 @@ export function AudienceReport(props: Props) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [scoreBusy, setScoreBusy] = useState<number | null>(null);
   const scoreText = lang === 'ru'
-    ? { edit: 'Изменить балл', prompt: 'Количество правильных ответов', invalid: 'Введите целое число от 0 до', confirm: 'Сохранить новый балл? Ответы сохраняются, изменение записывается в журнал.', failed: 'Не удалось сохранить балл' }
+    ? { edit: 'Изменить балл', prompt: 'Количество правильных ответов', invalid: 'Введите целое число от 0 до', confirm: 'Сохранить новый балл? Ответы сохраняются, изменение записывается в журнал.', failed: 'Не удалось сохранить балл', pw: 'Пароль для изменения балла', pwWrong: 'Пароль неверный — балл не изменён' }
     : lang === 'en'
-    ? { edit: 'Edit score', prompt: 'Number of correct answers', invalid: 'Enter an integer from 0 to', confirm: 'Save the new score? Answers are preserved and the change is audited.', failed: 'Could not save score' }
-    : { edit: 'Ballni tahrirlash', prompt: "To‘g‘ri javoblar soni", invalid: '0 dan shu songacha butun son kiriting:', confirm: 'Yangi ball saqlansinmi? Asl javoblar saqlanadi, o‘zgarish jurnalga yoziladi.', failed: 'Ballni saqlab bo‘lmadi' };
+    ? { edit: 'Edit score', prompt: 'Number of correct answers', invalid: 'Enter an integer from 0 to', confirm: 'Save the new score? Answers are preserved and the change is audited.', failed: 'Could not save score', pw: 'Score edit password', pwWrong: 'Wrong password — the score was not changed' }
+    : { edit: 'Ballni tahrirlash', prompt: "To‘g‘ri javoblar soni", invalid: '0 dan shu songacha butun son kiriting:', confirm: 'Yangi ball saqlansinmi? Asl javoblar saqlanadi, o‘zgarish jurnalga yoziladi.', failed: 'Ballni saqlab bo‘lmadi', pw: 'Ballni tahrirlash paroli', pwWrong: 'Parol noto‘g‘ri — ball o‘zgarmadi' };
   const [q, setQ] = useState('');
   const [tab, setTab] = useState('main');
   const [kafF, setKafF] = useState('');
@@ -587,12 +587,17 @@ export function AudienceReport(props: Props) {
       window.alert(`${scoreText.invalid} ${p.total}`); return;
     }
     if (score === p.score || !window.confirm(`${p.name}: ${p.score}/${p.total} → ${score}/${p.total}\n${scoreText.confirm}`)) return;
+    // Ball o'zgarishi eng nozik amal — alohida parol so'raladi (server ham tekshiradi).
+    const pw = window.prompt(scoreText.pw, '');
+    if (pw === null || !pw.trim()) return;
     setScoreBusy(p.student_exam_id);
     try {
       const res = await fetch(apiUrl(`/api/admin/student_exams/${p.student_exam_id}/score`), {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(token, lang) },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Score-Password': pw.trim(), ...authHeaders(token, lang) },
         body: JSON.stringify({ score }),
       });
+      if (res.status === 423) { window.alert(scoreText.pwWrong); return; }
       if (!checkAdminAuthResponse(res)) return;
       const result = await readJsonSafe<{ error?: string }>(res);
       if (!res.ok) { window.alert(result?.error || scoreText.failed); return; }
@@ -827,7 +832,18 @@ export function AudienceReport(props: Props) {
                 <td className="py-1.5 pr-2"><ViolCell v={p.violations} T={T} /></td>
                 <td className="py-1.5 pr-2 whitespace-nowrap">
                   {p.state === 'completed' && p.student_exam_id ? (
-                    <AdminBtn variant="ghost" size="sm" loading={scoreBusy === p.student_exam_id} disabled={scoreBusy !== null} onClick={() => void editScore(p)}>{scoreText.edit}</AdminBtn>
+                    <button type="button" title={scoreText.edit} aria-label={scoreText.edit}
+                      disabled={scoreBusy !== null} onClick={() => void editScore(p)}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-300 text-slate-500 transition hover:border-slate-400 hover:text-slate-800 disabled:opacity-40">
+                      {scoreBusy === p.student_exam_id ? (
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+                      ) : (
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      )}
+                    </button>
                   ) : null}
                   {retakeCell(p)}
                 </td>

@@ -147,6 +147,7 @@ export function VacancyApplicantsPage({ token, lang }: { token: string; lang: La
       const res = await fetch(apiUrl('/api/admin/vacancy/applicants'), {
         headers: authHeaders(token, lang),
       });
+      if (res.status === 423) { window.alert('Parol noto‘g‘ri — ball o‘zgarmadi'); return; }
       if (!checkAdminAuthResponse(res)) return;
       const j = await readJsonSafe<Payload>(res);
       setData(j && Array.isArray(j.applicants) ? j : null);
@@ -190,10 +191,13 @@ export function VacancyApplicantsPage({ token, lang }: { token: string; lang: La
     const v = Number(editVal);
     if (!Number.isFinite(v) || v < 0) return;
     setEditBusy(true);
+    // Ball o'zgarishi uchun alohida parol (server ham tekshiradi).
+    const pw = window.prompt('Ballni tahrirlash paroli', '');
+    if (pw === null || !pw.trim()) { setEditBusy(false); return; }
     try {
       const res = await fetch(apiUrl('/api/admin/student_exams/' + seId + '/score'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders(token, lang) },
+        headers: { 'Content-Type': 'application/json', 'X-Score-Password': pw.trim(), ...authHeaders(token, lang) },
         body: JSON.stringify({ score: v }),
       });
       if (!checkAdminAuthResponse(res)) return;

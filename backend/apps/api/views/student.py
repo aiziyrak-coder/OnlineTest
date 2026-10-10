@@ -63,6 +63,49 @@ def _notify_student_unblocked(
         pass
 
 
+#: Nazoratchi DARHOL ko'rishi kerak bo'lgan hodisalar. Qolganlari jim yoziladi
+#: va hisobotda ko'rinadi — admin panelini shovqinga ko'mmaslik uchun.
+CRITICAL_ALERT_TYPES = frozenset({
+    "FORBIDDEN_OBJECT_CELL_PHONE", "FORBIDDEN_OBJECT_PHONE", "FORBIDDEN_OBJECT_LAPTOP",
+    "FORBIDDEN_OBJECT_TABLET", "FORBIDDEN_OBJECT_EARPHONE", "FORBIDDEN_OBJECT_SMARTWATCH",
+    "FORBIDDEN_OBJECT_NOTES",
+    "IDENTITY_SUBSTITUTION", "MULTIPLE_FACES", "SECOND_PERSON_DETECTED",
+    "FACE_NOT_DETECTED", "PROCTOR_FEED_LOST", "CAMERA_BLOCKED",
+    "SIDE_CONVERSATION_SUSPECTED", "WHISPER_OR_CONVERSATION_SUSPECTED",
+})
+
+
+def _notify_proctor_alert(student_id, student_name, exam_id, student_exam_id,
+                          violation_type, label, detail="") -> None:
+    """Kritik hodisa — nazoratchi/admin ekraniga DARHOL chiqadi.
+
+    Test markazida topshiruvchiga hech qanday ogohlantirish ko'rsatilmaydi;
+    shuning uchun telefon, begona odam yoki kameraning yopilishi kabi holatlar
+    xonadagi nazoratchiga shu yo'l bilan yetkaziladi.
+    """
+    try:
+        layer = get_channel_layer()
+        if not layer:
+            return
+        async_to_sync(layer.group_send)(
+            "exam_%s" % exam_id,
+            {
+                "type": "exam.proctor_alert",
+                "exam_id": int(exam_id),
+                "student_id": str(student_id),
+                "student_name": str(student_name or ""),
+                "student_exam_id": int(student_exam_id or 0),
+                "violation_type": str(violation_type or ""),
+                "label": str(label or ""),
+                "detail": str(detail or "")[:300],
+                "at": dj_tz.now().isoformat(),
+            },
+        )
+    except Exception:  # noqa: BLE001 — signal yuborilmasa ham imtihon davom etadi
+        logger.warning("[PROCTOR-ALERT] yuborilmadi exam=%s user=%s", exam_id, student_id,
+                       exc_info=True)
+
+
 @api_view(["POST"])
 @throttle_classes([FaceVerifyThrottle])
 @permission_classes([IsAuthenticated])
@@ -2758,6 +2801,13 @@ def student_violations(request):
                     detail=detail,
                     outcome="review",
                 )
+                # Topshiruvchiga hech narsa ko'rsatilmaydi — kritik hodisa
+                # nazoratchining ekraniga darhol chiqadi.
+                if vtype in CRITICAL_ALERT_TYPES:
+                    _notify_proctor_alert(
+                        u.id, getattr(u, "name", ""), exam_id_int, se_for_device.pk, vtype,
+                        violation_reason_text(vtype, resolve_ui_language(request)), detail,
+                    )
         return _guard(
             {
                 "banned": False,
