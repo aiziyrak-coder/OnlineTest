@@ -214,3 +214,71 @@ class CenterAutoModeTests(TestCase):
             res = self._start("8.8.8.8")
         self.assertEqual(res.status_code, 403)
         self.assertEqual(res.data["code"], "TEST_CENTER_PIN_REQUIRED")
+
+
+class StaffPowersTests(TestCase):
+    """Nazoratchi (staff) imtihon jarayonidagi amallarni bajara oladi."""
+
+    def setUp(self):
+        from datetime import timedelta
+        import json as _json
+        from django.utils import timezone
+        from apps.core.models import Exam, StudentExam
+
+        self.owner = AppUser.objects.create(id="sp-admin", role="admin", name="Admin")
+        self.staff = AppUser.objects.create(id="sp-staff", role="staff", name="Nazoratchi")
+        self.staff.is_authenticated = True
+        st = AppUser.objects.create(id="sp-student", role="student", name="Talaba")
+        # Imtihon BOSHQA odam nomiga yaratilgan — markazdagi odatiy holat.
+        self.exam = Exam.objects.create(
+            teacher=self.owner, title="Markaz imtihoni",
+            start_time=timezone.now() - timedelta(minutes=10),
+            end_time=timezone.now() + timedelta(hours=2), duration_minutes=60,
+            questions_json=_json.dumps([{"id": 1, "text": "S", "options": ["A", "B"],
+                                         "correctAnswer": "A"}]))
+        self.se = StudentExam.objects.create(student=st, exam=self.exam, status="In Progress",
+                                             started_at=timezone.now(), access_granted=True)
+        self.f = APIRequestFactory()
+
+    def _post(self, view, **kw):
+        from rest_framework.test import force_authenticate
+
+        req = self.f.post("/x", {}, format="json")
+        force_authenticate(req, user=self.staff)
+        return view(req, **kw)
+
+    def test_without_full_powers_staff_cannot_touch_other_exams(self):
+        from apps.api.views import admin as admin_views
+
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", False):
+            res = self._post(admin_views.admin_student_exams_unblock, pk=self.se.pk)
+        self.assertEqual(res.status_code, 403)
+
+    def test_with_full_powers_staff_can_unblock(self):
+        from apps.api.views import admin as admin_views
+
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", True):
+            res = self._post(admin_views.admin_student_exams_unblock, pk=self.se.pk)
+        self.assertNotEqual(res.status_code, 403)
+
+    def test_with_full_powers_staff_can_finish_a_session(self):
+        from apps.api.views import admin as admin_views
+        from apps.api.views.test_center import admin_test_center_finish
+        from apps.core.models import StudentExam
+
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", True):
+            res = self._post(admin_test_center_finish, pk=self.se.pk)
+        self.assertEqual(res.status_code, 200, getattr(res, "data", None))
+        self.assertEqual(StudentExam.objects.get(pk=self.se.pk).status, "Completed")
+
+    def test_student_role_still_cannot(self):
+        from apps.api.views import admin as admin_views
+        from rest_framework.test import force_authenticate
+
+        other = AppUser.objects.create(id="sp-other", role="student", name="Boshqa")
+        other.is_authenticated = True
+        req = self.f.post("/x", {}, format="json")
+        force_authenticate(req, user=other)
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", True):
+            res = admin_views.admin_student_exams_unblock(req, pk=self.se.pk)
+        self.assertEqual(res.status_code, 403)

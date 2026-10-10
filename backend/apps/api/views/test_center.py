@@ -63,7 +63,11 @@ def admin_test_center_live(request):
     qs = StudentExam.objects.filter(status="In Progress").select_related("student", "exam")
     if only_center:
         qs = qs.filter(test_center_mode=True)
-    if _request_user_role_norm(request.user) == "staff":
+    # Nazoratchi xonadagi HAMMANI ko'rishi kerak — imtihon kimning nomiga
+    # yaratilganiga bog'liq emas (markazda bir vaqtda o'nlab fan topshiriladi).
+    from apps.api.views.admin import STAFF_FULL_POWERS
+
+    if _request_user_role_norm(request.user) == "staff" and not STAFF_FULL_POWERS:
         qs = qs.filter(exam__teacher_id=request.user.id)
     rows = list(qs.order_by("started_at")[:300])
     ids = [se.id for se in rows]
@@ -124,8 +128,15 @@ def admin_test_center_frames(request, pk: int):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def admin_test_center_finish(request, pk: int):
-    """Imtihonni shu zahoti yakunlaydi — belgilangan javoblar hisobga olinadi."""
-    if _request_user_role_norm(request.user) != "admin":
+    """Imtihonni shu zahoti yakunlaydi — belgilangan javoblar hisobga olinadi.
+
+    Xonadagi nazoratchi ham bajara oladi (STAFF_FULL_POWERS): vaqti tugagan yoki
+    chiqib ketgan odamning sessiyasini yopish uchun adminni kutish shart emas.
+    """
+    from apps.api.views.admin import STAFF_FULL_POWERS
+
+    _role = _request_user_role_norm(request.user)
+    if _role != "admin" and not (_role == "staff" and STAFF_FULL_POWERS):
         return Response({"error": "Forbidden"}, status=403)
     se = StudentExam.objects.select_related("student", "exam").filter(pk=pk).first()
     if not se:

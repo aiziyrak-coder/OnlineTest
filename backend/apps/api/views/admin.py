@@ -437,9 +437,8 @@ def admin_student_exams_unblock(request, pk: int):
         return Response({"error": "Not found"}, status=404)
 
     # Staff faqat o'z imtihonini unblock qila oladi
-    if u.role == "staff":
-        if not Exam.objects.filter(pk=se.exam_id, teacher_id=u.id).exists():
-            return Response({"error": "Forbidden"}, status=403)
+    if u.role == "staff" and not _staff_can_manage_student_exam(u, se):
+        return Response({"error": "Forbidden"}, status=403)
 
     can_retake = bool(request.data.get("can_retake", True))
     exam_id = se.exam_id
@@ -573,10 +572,22 @@ def admin_student_exams_score(request, pk: int):
     )
 
 
+#: Nazoratchining vakolati. Ilgari u FAQAT o'ziga biriktirilgan imtihonlarni
+#: boshqara olardi: test markazida imtihonlar boshqa nom ostida yaratilgani
+#: uchun xonadagi nazoratchi hech kimga yordam bera olmasdi — har bir mayda
+#: ish uchun admin kutilardi. STAFF_FULL_POWERS=1 bo'lsa nazoratchi imtihon
+#: JARAYONIGA oid barcha amallarni bajaradi (chetlatish, blokdan chiqarish,
+#: qayta imkon berish, sessiyani yakunlash). Natijani tahrirlash, hisob
+#: o'chirish va imtihon sozlamalari baribir faqat adminda qoladi.
+STAFF_FULL_POWERS = os.environ.get("STAFF_FULL_POWERS", "0").strip() not in ("0", "false", "no", "")
+
+
 def _staff_can_manage_student_exam(user, se: StudentExam) -> bool:
     if user.role == "admin":
         return True
     if user.role == "staff":
+        if STAFF_FULL_POWERS:
+            return True
         return Exam.objects.filter(pk=se.exam_id, teacher_id=user.id).exists()
     return False
 
