@@ -31,6 +31,12 @@ UNSET = (
     "PROCTOR_HARDENED_MODE",
     "PROCTOR_AUDIO_REVIEW_ONLY",
     "PROCTOR_NO_RETAKE_VIOLATIONS",
+    # Test markazi sozlamalari: prod .env dagi qiymat testlarga o'tsa, "PIN
+    # so'ralsinmi" degan testlar serverda boshqacha natija berardi.
+    "TEST_CENTER_IPS",
+    "TEST_CENTER_LOGIN_PIN",
+    "SCORE_EDIT_PASSWORD",
+    "CENTER_LOGIN_MAX_WRONG",
 )
 
 
