@@ -506,6 +506,15 @@ def student_exams_list(request):
                         else (e.end_time.isoformat() if e.end_time else None)
                     )
                 ),
+                # Oxirgi kirish vaqti: shundan keyin yangi sessiya ochilmaydi.
+                # Ilova shu bo'yicha "kirish 15:45 da yopiladi" deb ogohlantiradi
+                # va kamera/AI tekshiruvini behuda sarflamaydi. Boshlangan
+                # sessiyaga (resume) va shaxsiy retake oynasiga ta'sir qilmaydi.
+                "last_entry_at": (
+                    e.last_entry_at.isoformat()
+                    if getattr(e, "last_entry_at", None) and e.id not in retake_window_end
+                    else None
+                ),
                 "duration_minutes": e.duration_minutes,
                 "language": e.language,
                 "custom_rules": e.custom_rules,
@@ -1131,6 +1140,26 @@ def _student_exams_start_impl(request, pk: int):
         and (pending_se.status or "").strip() == "In Progress"
         and pending_se.started_at
     )
+    # OXIRGI KIRISH VAQTI. Kun bo'yi navbat bilan topshiriladigan imtihonda
+    # oyna oxirida kirgan odam davomiylikni to'liq olmaydi, keyin "vaqtim
+    # yetmadi" degan shikoyat chiqadi. Shuning uchun kirish oynadan ertaroq
+    # yopiladi. Boshlab bo'lingan sessiya (resume) to'smaydi — odam o'z
+    # muddatigacha ishlaydi. Shaxsiy retake oynasi ham bu cheklovdan tashqari:
+    # uni admin ataylab, texnik muammodan keyin beradi.
+    if exam.last_entry_at and not resuming and not in_retake and now > exam.last_entry_at:
+        return Response(
+            {
+                "error": student_api_msg(
+                    "entry_closed",
+                    resolve_ui_language(request),
+                    at=dj_tz.localtime(exam.last_entry_at).strftime("%H:%M"),
+                ),
+                "code": "ENTRY_CLOSED",
+                "last_entry_at": exam.last_entry_at.isoformat(),
+            },
+            status=403,
+        )
+
     if (
         identity_verify_required()
         and not resuming

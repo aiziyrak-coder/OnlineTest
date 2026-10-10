@@ -807,6 +807,9 @@ def _exam_row_dict(e: Exam, teacher_name: str | None = None):
         "title": e.title,
         "start_time": e.start_time.isoformat() if e.start_time else None,
         "end_time": e.end_time.isoformat() if e.end_time else None,
+        "last_entry_at": (
+            e.last_entry_at.isoformat() if getattr(e, "last_entry_at", None) else None
+        ),
         "duration_minutes": e.duration_minutes,
         "questions_json": e.questions_json,
         "language": e.language,

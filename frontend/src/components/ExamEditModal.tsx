@@ -42,6 +42,8 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
   const [title, setTitle] = useState('');
   const [startLocal, setStartLocal] = useState('');
   const [endLocal, setEndLocal] = useState('');
+  /** Oxirgi kirish vaqti — bo'sh bo'lsa cheklov yo'q (oyna oxirigacha kiradi). */
+  const [lastEntryLocal, setLastEntryLocal] = useState('');
   const [duration, setDuration] = useState(60);
   const [language, setLanguage] = useState('uz');
   /** Tashqi shovqin nazorati (talabaning o'z nutqiga ta'sir qilmaydi). */
@@ -101,6 +103,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         setTitle(data.title);
         setStartLocal(fromIsoToDatetimeLocal(data.start_time));
         setEndLocal(fromIsoToDatetimeLocal(data.end_time));
+        setLastEntryLocal(data.last_entry_at ? fromIsoToDatetimeLocal(data.last_entry_at) : '');
         setDuration(Number(data.duration_minutes) || 60);
         setLanguage(data.language || 'uz');
         setAmbientAudioEnabled(data.ambient_audio_enabled !== false);
@@ -173,6 +176,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         title,
         start_time: startIso,
         end_time: endIso,
+        last_entry_at: lastEntryLocal ? toIsoOrNull(lastEntryLocal) : null,
         duration_minutes: duration,
         language,
         ambient_audio_enabled: ambientAudioEnabled,
@@ -420,6 +424,21 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                       min={startLocal || undefined} dateLabel={t.examDateLabel} timeLabel={t.examTimeLabel} hint={t.dateTimeHint24h} />
                   </AdminField>
                 </div>
+
+                {/* Oxirgi kirish: kun bo'yi navbat bilan topshiriladigan imtihon uchun */}
+                <AdminField label={t.examLastEntry}>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <DateTimeField value={lastEntryLocal} onChange={setLastEntryLocal}
+                      min={startLocal || undefined} className="min-w-[260px]"
+                      dateLabel={t.examDateLabel} timeLabel={t.examTimeLabel} />
+                    {lastEntryLocal ? (
+                      <AdminBtn variant="ghost" size="sm" onClick={() => setLastEntryLocal('')}>
+                        {t.examLastEntryClear}
+                      </AdminBtn>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-[12px] leading-snug text-gray-500">{t.examLastEntryHint}</p>
+                </AdminField>
 
                 {/* Duration + Lang + PIN */}
                 <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">

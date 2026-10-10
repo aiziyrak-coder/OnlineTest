@@ -822,6 +822,12 @@ export function StudentDashboard({
                   const endMs = accessUntilMs(e);
                   const isOngoing = now >= startMs && now <= endMs;
                   const isUpcoming = now < startMs;
+                  // Oxirgi kirish vaqti: oyna hali ochiq, lekin YANGI sessiya
+                  // boshlanmaydi. Tugmani shu yerda to'samasak, odam kamera va
+                  // identifikatsiya tekshiruvini bosib o'tib, oxirida serverdan
+                  // 403 olardi.
+                  const lastEntryMs = e.last_entry_at ? new Date(e.last_entry_at).getTime() : NaN;
+                  const entryClosed = Number.isFinite(lastEntryMs) && now > lastEntryMs && !e.in_progress;
                   const untilStart = msUntil(e.start_time, now);
                   const retakesBlocked = Boolean(e.exam_retakes_blocked);
                   // Retake-pending: oldingi urinishda yiqilgan, lekin retake qolgan va
@@ -915,6 +921,13 @@ export function StudentDashboard({
                             label={t.endTime}
                             value={formatExamDateTime(e.access_until || e.end_time, lang)}
                           />
+                          {e.last_entry_at ? (
+                            <MetaRow
+                              icon={<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12H3m0 0l4-4m-4 4l4 4m6-11h5a2 2 0 012 2v10a2 2 0 01-2 2h-5" />}
+                              label={t.examLastEntry}
+                              value={formatExamDateTime(e.last_entry_at, lang)}
+                            />
+                          ) : null}
                           <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-gray-100">
                             <span className="text-gray-500 inline-flex items-center gap-2">
                               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -1125,6 +1138,13 @@ export function StudentDashboard({
                             >
                               {L.restartExam}
                             </AdminBtn>
+                          </div>
+                        ) : entryClosed ? (
+                          <div className="space-y-2">
+                            <AdminBtn variant="ghost" size="lg" className="w-full" disabled>
+                              {t.examEntryClosed}
+                            </AdminBtn>
+                            <p className="text-[12px] text-gray-500 leading-snug">{t.examEntryClosedHint}</p>
                           </div>
                         ) : isOngoing ? (
                           e.exam_mode === 'faculty_ai_books' && e.questions_ready === false ? (

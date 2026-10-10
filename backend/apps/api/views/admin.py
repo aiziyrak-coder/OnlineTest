@@ -2233,6 +2233,21 @@ def admin_exam_detail(request, pk: int):
             e.bank_category_ids = bank_cats_json
             e.bank_question_count = bank_count
             e.imentor_subject_codes = imentor_codes_json
+            # Oxirgi kirish vaqti: bo'sh yuborilsa cheklov olib tashlanadi.
+            # Oynadan tashqarida bo'lsa ma'nosiz — oyna ichiga qisqartiramiz.
+            if "last_entry_at" in d:
+                raw_le = d.get("last_entry_at")
+                if raw_le in (None, "", "null"):
+                    e.last_entry_at = None
+                else:
+                    le = parse_iso_datetime(raw_le)
+                    if not le:
+                        raise ValueError("LAST_ENTRY")
+                    e.last_entry_at = min(max(le, st), et)
+            elif e.last_entry_at and not (st <= e.last_entry_at <= et):
+                # Oyna ko'chirilsa eski cheklov ma'nosiz bo'lib qoladi
+                # (masalan oyna qisqartirilsa kirish umuman yopilib qolardi).
+                e.last_entry_at = min(max(e.last_entry_at, st), et)
             if d.get("technical_retakes_allowed") is not None:
                 e.technical_retakes_allowed = max(
                     0, min(20, int(d.get("technical_retakes_allowed") or 0))
@@ -2305,6 +2320,8 @@ def admin_exam_detail(request, pk: int):
             return Response({"error": "Invalid direction"}, status=400)
         if str(ve) == "KAFEDRA":
             return Response({"error": "Invalid kafedra"}, status=400)
+        if str(ve) == "LAST_ENTRY":
+            return Response({"error": "Oxirgi kirish vaqti noto'g'ri"}, status=400)
         return Response(
             {"error": admin_api_msg("group_required", resolve_ui_language(request))},
             status=400,

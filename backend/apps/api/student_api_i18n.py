@@ -84,6 +84,11 @@ _MSG: dict[str, dict[str, str]] = {
         "Экзамен ещё не начался",
         "Exam has not started yet",
     ),
+    "entry_closed": _tri(
+        "Imtihonga kirish vaqti tugagan (oxirgi kirish: {at}). Nazoratchi bilan bog'laning.",
+        "Время входа на экзамен завершено (последний вход: {at}). Обратитесь к наблюдателю.",
+        "Entry to the exam has closed (last entry: {at}). Please contact the proctor.",
+    ),
     "exam_already_ended": _tri(
         "Imtihon allaqachon tugagan",
         "Экзамен уже завершён",

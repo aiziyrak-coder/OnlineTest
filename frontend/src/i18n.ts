@@ -36,6 +36,13 @@ export const translations = {
     examTitlePlaceholder: "Masalan: Akusherlik — 2026 bahorgi imtihon",
     startTime: "Boshlanish vaqti",
     endTime: "Tugash vaqti",
+    examLastEntry: "Oxirgi kirish",
+    examLastEntryClear: "Cheklovni olib tashlash",
+    examLastEntryHint:
+      "Shu vaqtdan keyin yangi sessiya boshlanmaydi, boshlangani esa o‘z muddatigacha davom etadi. Bo‘sh qoldirilsa oyna oxirigacha kirish mumkin.",
+    examEntryClosed: "Kirish vaqti tugagan",
+    examEntryClosedHint:
+      "Imtihonga kirish belgilangan vaqtda yopildi. Texnik muammo bo‘lgan bo‘lsa nazoratchiga murojaat qiling.",
     examDateLabel: "Sana",
     examTimeLabel: "Soat",
     duration: "Davomiyligi (daqiqa)",
@@ -969,6 +976,13 @@ export const translations = {
     examTitlePlaceholder: "Например: Акушерство — весенний экзамен 2026",
     startTime: "Время начала",
     endTime: "Время окончания",
+    examLastEntry: "Последний вход",
+    examLastEntryClear: "Снять ограничение",
+    examLastEntryHint:
+      "После этого времени новая сессия не начинается, а начатая идёт до своего срока. Пусто — вход до конца окна.",
+    examEntryClosed: "Время входа завершено",
+    examEntryClosedHint:
+      "Вход на экзамен закрылся в установленное время. Если была техническая проблема — обратитесь к наблюдателю.",
     examDateLabel: "Дата",
     examTimeLabel: "Время",
     duration: "Длительность (мин)",
@@ -1895,6 +1909,13 @@ export const translations = {
     examTitlePlaceholder: "e.g. Obstetrics — Spring 2026 exam",
     startTime: "Start Time",
     endTime: "End Time",
+    examLastEntry: "Last entry",
+    examLastEntryClear: "Remove the limit",
+    examLastEntryHint:
+      "After this moment no new session starts; a session already running continues to its own deadline. Leave it empty to allow entry until the window closes.",
+    examEntryClosed: "Entry has closed",
+    examEntryClosedHint:
+      "Entry to this exam closed at the set time. If you had a technical problem, contact the proctor.",
     examDateLabel: "Date",
     examTimeLabel: "Time",
     duration: "Duration (minutes)",

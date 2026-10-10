@@ -10,6 +10,12 @@ class Exam(models.Model):
     title = models.CharField(max_length=500)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
+    # Oxirgi kirish vaqti: shundan keyin YANGI sessiya boshlanmaydi, lekin
+    # boshlangan sessiya o'z muddatigacha davom etadi. Kun bo'yi navbat bilan
+    # topshiriladigan imtihon uchun kerak: oynaning oxirida kirgan odam
+    # davomiylikning yarmini ham olmay qolmasligi uchun kirish ertaroq yopiladi.
+    # NULL = cheklov yo'q (oyna oxirigacha kirish mumkin).
+    last_entry_at = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.IntegerField()
     questions_json = models.TextField(default="[]")
     language = models.CharField(max_length=10, default="uz")

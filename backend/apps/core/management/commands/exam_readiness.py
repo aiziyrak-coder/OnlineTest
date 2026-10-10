@@ -71,6 +71,18 @@ class Command(BaseCommand):
                               % (tz.localtime(e.start_time).strftime("%d.%m.%Y %H:%M") if e.start_time else "-",
                                  tz.localtime(e.end_time).strftime("%d.%m.%Y %H:%M") if e.end_time else "-",
                                  e.duration_minutes, need, bank, ai, e.pass_percent))
+            if getattr(e, "last_entry_at", None):
+                le = tz.localtime(e.last_entry_at)
+                self.stdout.write("   oxirgi kirish: %s" % le.strftime("%d.%m.%Y %H:%M"))
+                # Kirish oynasining oxiriga juda yaqin bo'lsa, kech kirgan odam
+                # davomiylikni to'liq olmaydi — buni oldindan aytib qo'yamiz.
+                if e.end_time and e.duration_minutes:
+                    qolgan = (e.end_time - e.last_entry_at).total_seconds() / 60
+                    if qolgan + 0.5 < int(e.duration_minutes or 0):
+                        warn.append(
+                            "[%s] oxirgi kirishdan keyin %d daq qoladi, davomiyligi %s daq"
+                            % (e.id, round(qolgan), e.duration_minutes)
+                        )
             self.stdout.write("   PIN: %s | uydan: %s | avto qayta urinish: %s+%s%s | ruxsat: %d kishi (kutilmoqda %d)"
                               % (e.test_center_pin or "yo'q", "ha" if exam_is_remote(e) else "yo'q",
                                  exam_violation_retakes_allowed(e), exam_identity_retakes_allowed(e),
