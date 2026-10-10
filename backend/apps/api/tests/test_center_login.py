@@ -271,6 +271,60 @@ class StaffPowersTests(TestCase):
         self.assertEqual(res.status_code, 200, getattr(res, "data", None))
         self.assertEqual(StudentExam.objects.get(pk=self.se.pk).status, "Completed")
 
+    def _get(self, view, **kw):
+        from rest_framework.test import force_authenticate
+
+        req = self.f.get("/x")
+        force_authenticate(req, user=self.staff)
+        return view(req, **kw)
+
+    def test_with_full_powers_staff_sees_every_exam_in_the_list(self):
+        from apps.api.views import admin as admin_views
+        from apps.api.views.staff import staff_exams_list
+
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", True):
+            res = self._get(staff_exams_list)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(self.exam.id, [row["id"] for row in res.data])
+
+    def test_without_full_powers_staff_sees_only_own_exams(self):
+        from apps.api.views import admin as admin_views
+        from apps.api.views.staff import staff_exams_list
+
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", False):
+            res = self._get(staff_exams_list)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual([row["id"] for row in res.data], [])
+
+    def test_with_full_powers_staff_opens_results_of_another_persons_exam(self):
+        from apps.api.views import admin as admin_views
+        from apps.api.views.staff import staff_exams_results
+
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", True):
+            res = self._get(staff_exams_results, pk=self.exam.pk)
+        self.assertEqual(res.status_code, 200, getattr(res, "data", None))
+
+    def test_without_full_powers_results_of_another_persons_exam_are_closed(self):
+        from apps.api.views import admin as admin_views
+        from apps.api.views.staff import staff_exams_results
+
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", False):
+            res = self._get(staff_exams_results, pk=self.exam.pk)
+        self.assertEqual(res.status_code, 404)
+
+    def test_student_role_cannot_read_the_staff_exam_list(self):
+        from apps.api.views import admin as admin_views
+        from apps.api.views.staff import staff_exams_list
+        from rest_framework.test import force_authenticate
+
+        other = AppUser.objects.create(id="sp-list-other", role="student", name="Boshqa")
+        other.is_authenticated = True
+        req = self.f.get("/x")
+        force_authenticate(req, user=other)
+        with mock.patch.object(admin_views, "STAFF_FULL_POWERS", True):
+            res = staff_exams_list(req)
+        self.assertEqual(res.status_code, 403)
+
     def test_student_role_still_cannot(self):
         from apps.api.views import admin as admin_views
         from rest_framework.test import force_authenticate

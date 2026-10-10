@@ -670,7 +670,7 @@ export function AdminExamsTab({
                           <button type="button" onClick={() => setOpenRow(open ? null : r.id)} className="mr-2 text-[12.5px] font-semibold text-indigo-700 hover:underline">
                             {T.details} {open ? '▴' : '▾'}
                           </button>
-                          {!isStaffPortal && (r.status === 'Banned' || r.status === 'Completed' || r.status === 'Failed') ? (
+                          {(r.status === 'Banned' || r.status === 'Completed' || r.status === 'Failed') ? (
                             <AdminBtn variant="ghost" size="sm" onClick={() => allowRetake(r.id)}>{T.retake}</AdminBtn>
                           ) : null}
                         </td>

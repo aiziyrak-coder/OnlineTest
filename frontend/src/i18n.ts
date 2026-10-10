@@ -391,7 +391,11 @@ export const translations = {
     staffPortalTitle: "Hodim kabineti",
     staffBadge: "Hodim",
     staffPortalSubtitle:
-      "Bu yerda faqat sizga mas'ul qilingan imtihonlar ko‘rinadi. Administrator imtihon yaratishda «Mas'ul hodim» sifatida sizni tanlashi kerak.",
+      "Nazorat posti: imtihon jarayonidagi barcha amallar — jonli kuzatuv, ekran va kamera, sessiyani yakunlash, texnik muammoda qayta ruxsat.",
+    staffTabExams: "Imtihonlar",
+    staffTabCenter: "Jonli nazorat",
+    staffPowersNote:
+      "Siz jonli nazorat qila olasiz, ekran va kamera kadrini ko‘rasiz, sessiyani yakunlaysiz hamda texnik muammoda qayta ruxsat berasiz. Blokdan chiqarish va o‘chirish — faqat administratorda.",
     staffMyExamsTitle: "Mening imtihonlarim",
     staffNoExamsHint:
       "Hozircha sizga biriktirilgan imtihon yo‘q. Administrator imtihon yaratishda mas'ul hodim sifatida sizning ID raqamingizni tanlasin.",
@@ -1315,7 +1319,11 @@ export const translations = {
     staffPortalTitle: "Кабинет сотрудника",
     staffBadge: "Сотрудник",
     staffPortalSubtitle:
-      "Здесь только экзамены, за которые вы ответственны. Администратор должен выбрать вас при создании экзамена.",
+      "Пост наблюдения: все действия во время экзамена — онлайн-мониторинг, экран и камера, завершение сессии, повторный доступ при технической проблеме.",
+    staffTabExams: "Экзамены",
+    staffTabCenter: "Онлайн-наблюдение",
+    staffPowersNote:
+      "Вы ведёте онлайн-наблюдение, видите экран и камеру, завершаете сессию и даёте повторный доступ при технической проблеме. Снятие блокировки и удаление — только у администратора.",
     staffMyExamsTitle: "Мои экзамены",
     staffNoExamsHint: "Нет назначенных экзаменов. Попросите администратора указать вас ответственным.",
     adminNoExamsYet: "Список экзаменов пока пуст.",
@@ -2237,7 +2245,11 @@ export const translations = {
     staffPortalTitle: "Staff portal",
     staffBadge: "Staff",
     staffPortalSubtitle:
-      "Only exams for which you are the responsible teacher appear here. An admin must pick you when creating the exam.",
+      "Proctor station: every in-exam action — live monitoring, screen and camera, ending a session, re-granting access after a technical fault.",
+    staffTabExams: "Exams",
+    staffTabCenter: "Live monitoring",
+    staffPowersNote:
+      "You can monitor live, see the screen and camera frame, end a session and re-grant access after a technical fault. Lifting a ban and deleting stay with the administrator.",
     staffMyExamsTitle: "My assigned exams",
     staffNoExamsHint: "No exams are assigned to you yet. Ask an admin to set you as the responsible staff on the exam.",
     adminNoExamsYet: "No exams in the list yet.",

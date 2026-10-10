@@ -7,11 +7,19 @@ from apps.api.views._helpers import *  # noqa: F401,F403
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def staff_exams_list(request):
-    """Hodim: faqat o'ziga biriktirilgan (teacher_id) imtihonlar."""
+    """Nazoratchi ko'radigan imtihonlar.
+
+    STAFF_FULL_POWERS yoqilganda — hammasi. Markazda bir vaqtda o'nlab fan
+    topshiriladi, nazoratchi imtihon kimning nomiga yaratilganini bilmaydi.
+    O'chirilganda — faqat o'ziga biriktirilgani (teacher_id).
+    """
     u = request.user
     if not _is_staff_user(u):
         return Response({"error": "Forbidden"}, status=403)
-    exams = list(Exam.objects.filter(teacher_id=u.id).select_related("teacher").order_by("-start_time"))
+    from apps.api.views.admin import STAFF_FULL_POWERS
+
+    qs = Exam.objects.all() if STAFF_FULL_POWERS else Exam.objects.filter(teacher_id=u.id)
+    exams = list(qs.select_related("teacher").order_by("-start_time")[:400])
     exam_ids = [e.id for e in exams]
     group_map: dict[int, list[int]] = {}
     for eg in ExamGroup.objects.filter(exam_id__in=exam_ids):
@@ -36,11 +44,16 @@ def staff_exams_list(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def staff_exams_results(request, pk: int):
-    """Hodim: faqat o'z imtihoni uchun natijalar (admin bilan bir xil struktura, faqat o'qish)."""
+    """Nazoratchi uchun natijalar (admin bilan bir xil struktura).
+
+    STAFF_FULL_POWERS yoqilganda har qanday imtihon natijasi ko'rinadi.
+    """
     u = request.user
     if not _is_staff_user(u):
         return Response({"error": "Forbidden"}, status=403)
-    e = Exam.objects.filter(pk=pk, teacher_id=u.id).first()
+    from apps.api.views.admin import STAFF_FULL_POWERS
+
+    e = Exam.objects.filter(pk=pk).first() if STAFF_FULL_POWERS else Exam.objects.filter(pk=pk, teacher_id=u.id).first()
     if not e:
         return Response({"error": "Exam not found"}, status=404)
     violations = _violations_with_priority(pk)
