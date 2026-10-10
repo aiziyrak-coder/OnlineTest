@@ -1101,6 +1101,34 @@ def _student_exams_start_impl(request, pk: int):
             return Response({"error": student_api_msg("exam_not_started", resolve_ui_language(request))}, status=403)
         return Response({"error": student_api_msg("exam_already_ended", resolve_ui_language(request))}, status=403)
 
+    # OXIRGI KIRISH VAQTI. Kun bo'yi navbat bilan topshiriladigan imtihonda
+    # oyna oxirida kirgan odam davomiylikni to'liq olmaydi, keyin "vaqtim
+    # yetmadi" degan shikoyat chiqadi. Shuning uchun kirish oynadan ertaroq
+    # yopiladi. Tekshiruv shu yerda — qurilma va identifikatsiya shartlaridan
+    # OLDIN: kirish yopilgan bo'lsa qolgan hech narsa ahamiyatsiz, odam
+    # kamera/AI tekshiruvini behuda sarflamasligi kerak. Boshlab bo'lingan
+    # sessiya to'smaydi (odam o'z muddatigacha ishlaydi), shaxsiy retake
+    # oynasi ham bu cheklovdan tashqari — uni admin ataylab beradi.
+    if exam.last_entry_at and not in_retake and now > exam.last_entry_at:
+        _running = (
+            StudentExam.objects.filter(student_id=u.id, exam_id=pk, status="In Progress")
+            .exclude(started_at=None)
+            .exists()
+        )
+        if not _running:
+            return Response(
+                {
+                    "error": student_api_msg(
+                        "entry_closed",
+                        resolve_ui_language(request),
+                        at=dj_tz.localtime(exam.last_entry_at).strftime("%H:%M"),
+                    ),
+                    "code": "ENTRY_CLOSED",
+                    "last_entry_at": exam.last_entry_at.isoformat(),
+                },
+                status=403,
+            )
+
     # Ordinator/magistr: imtihon TO'LOVDAN keyin ochiladi.
     from apps.api.views.ordinator import access_state, is_paid_role
 
@@ -1140,26 +1168,6 @@ def _student_exams_start_impl(request, pk: int):
         and (pending_se.status or "").strip() == "In Progress"
         and pending_se.started_at
     )
-    # OXIRGI KIRISH VAQTI. Kun bo'yi navbat bilan topshiriladigan imtihonda
-    # oyna oxirida kirgan odam davomiylikni to'liq olmaydi, keyin "vaqtim
-    # yetmadi" degan shikoyat chiqadi. Shuning uchun kirish oynadan ertaroq
-    # yopiladi. Boshlab bo'lingan sessiya (resume) to'smaydi — odam o'z
-    # muddatigacha ishlaydi. Shaxsiy retake oynasi ham bu cheklovdan tashqari:
-    # uni admin ataylab, texnik muammodan keyin beradi.
-    if exam.last_entry_at and not resuming and not in_retake and now > exam.last_entry_at:
-        return Response(
-            {
-                "error": student_api_msg(
-                    "entry_closed",
-                    resolve_ui_language(request),
-                    at=dj_tz.localtime(exam.last_entry_at).strftime("%H:%M"),
-                ),
-                "code": "ENTRY_CLOSED",
-                "last_entry_at": exam.last_entry_at.isoformat(),
-            },
-            status=403,
-        )
-
     if (
         identity_verify_required()
         and not resuming

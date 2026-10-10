@@ -94,35 +94,35 @@ class LastEntryTests(TestCase):
         self.assertIsNotNone(row["last_entry_at"])
 
     def test_admin_can_set_and_clear_the_cutoff(self):
-        from apps.api.views.admin import admin_exams_update
+        from apps.api.views.admin import admin_exam_detail
 
         self.admin.is_authenticated = True
         at = (dj_tz.now() + timedelta(minutes=45)).isoformat()
-        req = self.f.put("/x", {"last_entry_at": at}, format="json")
+        req = self.f.patch("/x", {"last_entry_at": at}, format="json")
         force_authenticate(req, user=self.admin)
         with mock.patch("apps.api.views.admin.audit", lambda *a, **k: None):
-            res = admin_exams_update(req, pk=self.exam.pk)
+            res = admin_exam_detail(req, pk=self.exam.pk)
         self.assertEqual(res.status_code, 200, getattr(res, "data", None))
         self.exam.refresh_from_db()
         self.assertIsNotNone(self.exam.last_entry_at)
 
-        req2 = self.f.put("/x", {"last_entry_at": ""}, format="json")
+        req2 = self.f.patch("/x", {"last_entry_at": ""}, format="json")
         force_authenticate(req2, user=self.admin)
         with mock.patch("apps.api.views.admin.audit", lambda *a, **k: None):
-            res2 = admin_exams_update(req2, pk=self.exam.pk)
+            res2 = admin_exam_detail(req2, pk=self.exam.pk)
         self.assertEqual(res2.status_code, 200, getattr(res2, "data", None))
         self.exam.refresh_from_db()
         self.assertIsNone(self.exam.last_entry_at)
 
     def test_cutoff_outside_the_window_is_clamped_into_it(self):
-        from apps.api.views.admin import admin_exams_update
+        from apps.api.views.admin import admin_exam_detail
 
         self.admin.is_authenticated = True
         far = (self.exam.end_time + timedelta(days=1)).isoformat()
-        req = self.f.put("/x", {"last_entry_at": far}, format="json")
+        req = self.f.patch("/x", {"last_entry_at": far}, format="json")
         force_authenticate(req, user=self.admin)
         with mock.patch("apps.api.views.admin.audit", lambda *a, **k: None):
-            res = admin_exams_update(req, pk=self.exam.pk)
+            res = admin_exam_detail(req, pk=self.exam.pk)
         self.assertEqual(res.status_code, 200, getattr(res, "data", None))
         self.exam.refresh_from_db()
         self.assertEqual(self.exam.last_entry_at, self.exam.end_time)
