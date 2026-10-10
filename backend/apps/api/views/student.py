@@ -3583,6 +3583,24 @@ def student_exams_start(request, pk: int):
         and not exam_is_remote(_exam_for_pin)
     )
     if _pin_required and not center_start_allowed(_se_pin):
+        # Markaz kompyuteridan kirilgan bo'lsa PIN QAYTA so'ralmaydi: odam
+        # tizimga allaqachon markaz PIN kodi bilan kirgan (pasport + PIN), ikkinchi
+        # marta so'rash navbatni cho'zardi va xatoga sabab bo'lardi. IP ro'yxati
+        # sozlanmagan serverda eski tartib (PIN oynasi) saqlanadi.
+        from apps.api.center_login import allowed_networks, client_ip, ip_allowed
+
+        if allowed_networks() and ip_allowed(client_ip(request)):
+            _se_row = StudentExam.objects.filter(student_id=uid, exam_id=pk).first()
+            if _se_row is None:
+                _se_row = StudentExam.objects.create(student_id=uid, exam_id=pk, status="Pending")
+            if not _se_row.test_center_mode:
+                _se_row.test_center_mode = True
+                _se_row.test_center_at = dj_tz.now()
+                _se_row.save(update_fields=["test_center_mode", "test_center_at"])
+                logger.info("[TEST-CENTER] markaz kompyuteri — rejim avtomatik yoqildi user=%s exam=%s",
+                            uid, pk)
+            _se_pin = {"test_center_mode": True}
+    if _pin_required and not center_start_allowed(_se_pin):
         return Response(
             {"error": "Avval test markazi xodimi PIN kodni kiritsin.",
              "code": "TEST_CENTER_PIN_REQUIRED"}, status=403,

@@ -161,3 +161,56 @@ class ScoreEditPasswordTests(TestCase):
         self.assertEqual(res.status_code, 200, getattr(res, "data", None))
         self.se.refresh_from_db()
         self.assertEqual(self.se.score, 8)
+
+
+class CenterAutoModeTests(TestCase):
+    """Markaz kompyuterida PIN ikkinchi marta so'ralmaydi."""
+
+    def setUp(self):
+        from datetime import timedelta
+        import json as _json
+        from django.utils import timezone
+        from apps.core.models import Exam, ExamGroup, Group, Level, StudentExam
+
+        self.owner = AppUser.objects.create(id="ac-admin", role="admin", name="Admin")
+        lvl = Level.objects.create(name="Kurs")
+        self.group = Group.objects.create(name="G", level=lvl)
+        self.user = AppUser.objects.create(id="ac-student", role="student", name="Talaba",
+                                           group=self.group)
+        self.user.is_authenticated = True
+        self.exam = Exam.objects.create(
+            teacher=self.owner, title="Markaz imtihoni",
+            start_time=timezone.now() - timedelta(minutes=5),
+            end_time=timezone.now() + timedelta(hours=2), duration_minutes=60,
+            test_center_pin="2005",
+            questions_json=_json.dumps([{"id": 1, "text": "S", "options": ["A", "B"],
+                                         "correctAnswer": "A"}]))
+        ExamGroup.objects.create(exam=self.exam, group=self.group)
+        self.f = APIRequestFactory()
+
+    def _start(self, ip):
+        from rest_framework.test import force_authenticate
+        from apps.api.views.student import student_exams_start
+
+        req = self.f.post("/x", {}, format="json", REMOTE_ADDR=ip)
+        force_authenticate(req, user=self.user)
+        return student_exams_start(req, pk=self.exam.id)
+
+    def test_centre_computer_does_not_ask_for_pin_again(self):
+        from apps.core.models import StudentExam
+
+        with mock.patch.dict("os.environ", {"TEST_CENTER_IPS": "45.150.24."}, clear=False), \
+             mock.patch("apps.api.views.student._try_start_lock", return_value=True), \
+             mock.patch("apps.api.views.student._release_start_lock"), \
+             mock.patch("apps.api.views.student._student_exams_start_impl") as impl:
+            from rest_framework.response import Response as R
+            impl.return_value = R({"ok": True})
+            res = self._start("45.150.24.91")
+        self.assertEqual(res.status_code, 200, getattr(res, "data", None))
+        self.assertTrue(StudentExam.objects.get(student=self.user, exam=self.exam).test_center_mode)
+
+    def test_outside_computer_still_needs_the_pin(self):
+        with mock.patch.dict("os.environ", {"TEST_CENTER_IPS": "45.150.24."}, clear=False):
+            res = self._start("8.8.8.8")
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.data["code"], "TEST_CENTER_PIN_REQUIRED")
