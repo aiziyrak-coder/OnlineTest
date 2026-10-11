@@ -202,6 +202,15 @@ function QuestionsPanel({ catId, lang, token }: { catId: number; lang: Language;
 }
 
 /* ── Main component ── */
+interface QualityRow {
+  id: number; name: string; total: number; avg_score: number; avg_len: number;
+  defects: number; review: number; strong: number; weak: number;
+}
+interface QualityReport {
+  totals: { collections: number; total: number; strong: number; defects: number; review: number };
+  categories: QualityRow[];
+}
+
 export function TestBankTab({ token, lang }: { token: string; lang: Language }) {
   const t = translations[lang];
   const h = authHeaders(token, lang);
@@ -228,6 +237,11 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
   // Expanded questions panel
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
+  /* Sifat ko'rsatkichlari: har to'plamda nechta savol imtihonga tayyor
+   * (USMLE balli baland va nuqsonsiz), nechtasida apellyatsiyaga sabab
+   * bo'luvchi nuqson bor, nechtasini odam ko'rib chiqishi kerak. */
+  const [quality, setQuality] = useState<QualityReport | null>(null);
+
   const load = useCallback(async () => {
     const res = await fetch(apiUrl('/api/admin/test-bank/categories'), { headers: h });
     if (!checkAdminAuthResponse(res)) return;
@@ -236,6 +250,15 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadQuality = useCallback(async () => {
+    const res = await fetch(apiUrl('/api/admin/test-bank/quality'), { headers: h });
+    if (!checkAdminAuthResponse(res) || !res.ok) return;
+    const data = await readJsonSafe<QualityReport>(res);
+    if (data && Array.isArray(data.categories)) setQuality(data);
+  }, [token]);
+
+  useEffect(() => { loadQuality(); }, [loadQuality]);
 
   useEffect(() => {
     setSmartBusy(sharedImportState.running);
@@ -365,18 +388,21 @@ export function TestBankTab({ token, lang }: { token: string; lang: Language }) 
       />
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
         {[
-          { label: t.bankCollections, value: categories.length },
-          { label: t.bankTotalQuestions, value: totalQuestions },
-          { label: t.bankLanguages, value: 3 },
+          { label: t.bankCollections, value: categories.length, tone: '' },
+          { label: t.bankTotalQuestions, value: totalQuestions, tone: '' },
+          { label: t.bankStrong, value: quality?.totals.strong ?? '—', tone: 'text-emerald-700' },
+          { label: t.bankDefects, value: quality?.totals.defects ?? '—', tone: 'text-red-700' },
+          { label: t.bankReview, value: quality?.totals.review ?? '—', tone: 'text-amber-700' },
         ].map((s) => (
           <div key={s.label} className="bg-white border border-gray-200 rounded-lg px-4 py-3.5">
-            <p className="text-[26px] font-semibold text-gray-900 leading-none tabular-nums">{s.value}</p>
+            <p className={`text-[26px] font-semibold leading-none tabular-nums ${s.tone || 'text-gray-900'}`}>{s.value}</p>
             <p className="text-[13px] text-gray-500 mt-1.5">{s.label}</p>
           </div>
         ))}
       </div>
+      <p className="text-[12.5px] leading-relaxed text-gray-500">{t.bankQualityHint}</p>
 
       <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-5 items-start">
 

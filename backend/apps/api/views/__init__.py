@@ -16,6 +16,7 @@ from apps.api.views.student import *  # noqa: F401,F403
 from apps.api.views.student_results import *  # noqa: F401,F403
 from apps.api.views.admin import *  # noqa: F401,F403
 from apps.api.views.admin_reports import *  # noqa: F401,F403
+from apps.api.views.test_base import *  # noqa: F401,F403
 from apps.api.views.audience_reports import *  # noqa: F401,F403
 from apps.api.views.profile_photo import *  # noqa: F401,F403
 from apps.api.views.vacancy import *  # noqa: F401,F403

@@ -111,6 +111,7 @@ urlpatterns = [
     path("admin/test-bank/categories/<int:pk>", views.admin_test_bank_categories_delete),
     path("admin/test-bank/import-smart", views.admin_test_bank_import_smart),
     path("admin/test-bank/questions", views.admin_test_bank_questions),
+    path("admin/test-bank/quality", views.admin_test_base_quality),
     path("admin/imentor/departments", views.admin_imentor_departments),
     path("admin/imentor/departments/<str:department_code>/subjects", views.admin_imentor_department_subjects),
     path("admin/imentor/subjects", views.admin_imentor_subjects),

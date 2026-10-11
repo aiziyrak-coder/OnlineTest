@@ -8,6 +8,7 @@ import { authHeaders } from '../lib/uiLangHeader';
 import { readJsonSafe, checkAdminAuthResponse } from '../lib/http';
 import { ImtixonTab } from './ImtixonTab';
 import { AdminExamsTab } from './AdminExamsTab';
+import { TestBankTab } from './TestBankTab';
 import { ExamineesHub } from './admin/ExamineesHub';
 import { OverviewPage } from './admin/OverviewPage';
 import { LevelsPage } from './admin/LevelsPage';
@@ -41,6 +42,7 @@ type AdminPage =
   | 'staff'
   | 'audit'
   | 'test_center'
+  | 'test_base'
   | 'bulk_access'
   | 'exam_create'
   | 'exam_list'
@@ -300,6 +302,7 @@ export function AdminDashboard({
       items: [
         { id: 'exam_create', label: t.sidebarExamCreateSub },
         { id: 'exam_list', label: t.sidebarExamListSub },
+        { id: 'test_base', label: L2('Test baza', 'Банк тестов', 'Test base') },
       ],
     },
     {
@@ -517,6 +520,9 @@ export function AdminDashboard({
           )}
           {page === 'test_center' && (
             <TestCenterPage token={token} lang={lang} />
+          )}
+          {page === 'test_base' && (
+            <TestBankTab token={token} lang={lang} />
           )}
           {page === 'bulk_access' && (
             <BulkAccessPage token={token} lang={lang} />
