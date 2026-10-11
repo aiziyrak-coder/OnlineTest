@@ -154,6 +154,26 @@ class PreparedVariantFlowTests(TestCase):
             for j in range(i + 1, len(keys)):
                 self.assertNotEqual(keys[i], keys[j])
 
+    def test_first_sets_are_spread_before_the_spares(self):
+        """Qo'shni ikki kishining IMTIHONDAGI savollari kesishmasligi kerak.
+
+        Bank 4 kishiga bitta to'plamga yetadi (4 x 25 = 100 <= 300), lekin
+        uchta urinishga yetmaydi. Shunda ham birinchi to'plamlar butunlay
+        boshqa bo'lishi kerak: ular bank bo'ylab birinchi navbatda
+        taqsimlanadi.
+        """
+        self.exam.questions_json = json.dumps(_bank(110))
+        self.exam.save(update_fields=["questions_json"])
+        self._prepare("--attempts", "3", "--apply")
+        birinchi = []
+        for se in StudentExam.objects.order_by("student_id"):
+            se.refresh_from_db()
+            birinchi.append({question_key(q) for q in json.loads(se.session_questions_json)})
+        for i in range(len(birinchi)):
+            for j in range(i + 1, len(birinchi)):
+                self.assertEqual(birinchi[i] & birinchi[j], set(),
+                                 "imtihondagi to'plamlar kesishdi")
+
     def test_starting_the_exam_adds_no_new_selection(self):
         from apps.api.views.student import _student_exams_start_impl
 

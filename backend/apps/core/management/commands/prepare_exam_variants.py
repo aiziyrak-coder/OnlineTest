@@ -181,20 +181,19 @@ class Command(BaseCommand):
                     if isinstance(q, dict):
                         usage[question_key(q)] += 1
             kishi = toplam = 0
+            # Kimga to'plam yig'iladi. Boshlangan yoki topshirilgan sessiyaga
+            # tegilmaydi — imtihon ustida ishlayotgan odamning savollari
+            # o'zgarmasligi kerak.
+            maqsadlar = []
             for se in ses:
                 band = (se.status or "").strip() not in ("", "Pending") or se.started_at
-                if band:
-                    tegilmadi += 1
-                    continue
-                if se.session_questions_json and not force:
+                if band or (se.session_questions_json and not force):
                     tegilmadi += 1
                     continue
                 # Qaytadan yig'ishda (--force) eski "berilgan" ro'yxat
                 # hisobga olinmaydi: o'sha to'plamlar hech kimga
                 # ko'rsatilmagan, lekin ular tanlovni kichraytirib
-                # savollarni takrorlanishga majbur qilardi. Haqiqatan
-                # topshirilgan urinishlar baribir chetlanadi — ularning
-                # sessiyasiga bu buyruq tegmaydi.
+                # savollarni takrorlanishga majbur qilardi.
                 avoid = set()
                 if not (force and se.session_questions_json):
                     for x in json.loads(se.served_question_ids or "[]") or []:
@@ -202,10 +201,28 @@ class Command(BaseCommand):
                             avoid.add(int(x))
                         except (TypeError, ValueError):
                             continue
-                variants = build_variants(tanlov, need, attempts, usage=usage, rnd=rnd,
-                                          avoid=avoid, quality=usmle_score)
-                if any(len(v) < need for v in variants):
-                    yetmadi += 1
+                maqsadlar.append((se, avoid))
+
+            # NAVBAT MUHIM: avval HAMMAGA 1-to'plam, keyin hammaga 2-to'plam.
+            # Ilgari bir odamning uchta to'plami ketma-ket yig'ilardi: uning
+            # 2 va 3-to'plami bankni "band" qilib qo'yardi, keyingi odamning
+            # BIRINCHI to'plami esa allaqachon ishlatilgan savollardan
+            # tushardi. Shu sababli imtihonda qo'shni ikki kishining
+            # savollari 19 tagacha ustma-ust tushgan edi. Endi birinchi
+            # to'plamlar butun bank bo'ylab birinchi navbatda taqsimlanadi.
+            toplamlar: dict[int, list] = {id(se): [] for se, _a in maqsadlar}
+            olingan: dict[int, set] = {id(se): set(av) for se, av in maqsadlar}
+            for _urinish in range(attempts):
+                for se, _av in maqsadlar:
+                    v = build_variants(tanlov, need, 1, usage=usage, rnd=rnd,
+                                       avoid=olingan[id(se)], quality=usmle_score)[0]
+                    toplamlar[id(se)].append(v)
+                    olingan[id(se)] |= {question_key(q) for q in v}
+                    if len(v) < need:
+                        yetmadi += 1
+
+            for se, avoid in maqsadlar:
+                variants = toplamlar[id(se)]
                 se.session_questions_json = json.dumps(variants[0], ensure_ascii=False)
                 set_prepared(se, variants[1:])
                 ids = sorted({question_key(q) for v in variants for q in v
