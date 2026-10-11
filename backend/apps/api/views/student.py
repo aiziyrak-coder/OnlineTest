@@ -1365,7 +1365,22 @@ def _student_exams_start_impl(request, pk: int):
             if (exam.exam_mode or "") in REGENERATE_QUESTION_MODES:
                 se.session_questions_json = None
                 retake_update_fields.append("session_questions_json")
+                from apps.api.exam_variants import take_prepared
+
+                if take_prepared(se):
+                    retake_update_fields.append("prepared_variants_json")
             se.save(update_fields=retake_update_fields)
+
+    # OLDINDAN TAYYORLANGAN TO'PLAM. Imtihon boshlanganda savol tanlash ham,
+    # AI chaqiruvi ham bo'lmasligi kerak: yuz kishi bir vaqtda kiradi. Agar
+    # navbatda tayyor to'plam bo'lsa, shu yerda sessiyaga qo'yiladi va
+    # quyidagi tanlov tarmoqlari umuman ishga tushmaydi.
+    if not se.session_questions_json:
+        from apps.api.exam_variants import take_prepared
+
+        if take_prepared(se):
+            se.save(update_fields=["session_questions_json", "prepared_variants_json"])
+            logger.info("[VARIANT] tayyor to'plam berildi user=%s exam=%s", u.id, pk)
 
     full_questions: list[dict]
     student_lang = resolve_student_exam_language(request, exam)

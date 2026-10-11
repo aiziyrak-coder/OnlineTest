@@ -52,6 +52,10 @@ class StudentExam(models.Model):
     access_granted = models.BooleanField(default=False)
     # Admin to'lov asosida nechta urinish bergani (kvitansiya tasdiqlangani).
     paid_attempts_granted = models.PositiveSmallIntegerField(default=0)
+    # OLDINDAN TAYYORLANGAN to'plamlar navbati (ro'yxatlar ro'yxati). Imtihon
+    # boshlanganda yoki qayta ruxsat berilganda savollar tanlanmaydi —
+    # navbatdagi tayyor to'plam olinadi (apps/api/exam_variants.py).
+    prepared_variants_json = models.TextField(default="[]", blank=True)
     # Shu kishiga ALLAQACHON berilgan savol raqamlari. Qayta urinishda
     # ular chetlab o'tiladi - savollar takrorlanmasligi kerak.
     served_question_ids = models.TextField(blank=True, default="[]")

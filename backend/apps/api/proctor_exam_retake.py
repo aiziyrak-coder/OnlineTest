@@ -224,6 +224,13 @@ def reset_fields_for_exam_retake(se: StudentExam, reason: str = "") -> list[str]
     if exam and (exam.exam_mode or "") in REGENERATE_QUESTION_MODES:
         se.session_questions_json = None
         update_fields.append("session_questions_json")
+        # Oldindan tayyorlangan navbat bo'lsa — navbatdagi to'plam shu yerda
+        # qo'yiladi: qayta ruxsat berilgan lahzada hech narsa tanlanmaydi va
+        # odamga butunlay BOSHQA savollar tushadi.
+        from apps.api.exam_variants import take_prepared
+
+        if take_prepared(se):
+            update_fields.append("prepared_variants_json")
     return update_fields
 
 
