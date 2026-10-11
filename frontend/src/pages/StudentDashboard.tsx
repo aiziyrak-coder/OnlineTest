@@ -827,7 +827,11 @@ export function StudentDashboard({
                   // identifikatsiya tekshiruvini bosib o'tib, oxirida serverdan
                   // 403 olardi.
                   const lastEntryMs = e.last_entry_at ? new Date(e.last_entry_at).getTime() : NaN;
-                  const entryClosed = Number.isFinite(lastEntryMs) && now > lastEntryMs && !e.in_progress;
+                  // Tekshiruvni vaqtida boshlaganga server muhlat beradi —
+                  // tugmani undan ertaroq o'chirib qo'ymaymiz.
+                  const graceMs = e.entry_grace_until ? new Date(e.entry_grace_until).getTime() : NaN;
+                  const closeAtMs = Number.isFinite(graceMs) ? Math.max(lastEntryMs, graceMs) : lastEntryMs;
+                  const entryClosed = Number.isFinite(closeAtMs) && now > closeAtMs && !e.in_progress;
                   const untilStart = msUntil(e.start_time, now);
                   const retakesBlocked = Boolean(e.exam_retakes_blocked);
                   // Retake-pending: oldingi urinishda yiqilgan, lekin retake qolgan va

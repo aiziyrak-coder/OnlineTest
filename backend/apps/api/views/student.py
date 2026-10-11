@@ -42,6 +42,22 @@ from channels.layers import get_channel_layer
 ENTRY_GRACE_MINUTES = 10
 
 
+def _entry_grace_until(exam, se, in_retake: bool) -> str | None:
+    """Oxirgi kirish vaqtidan keyin tekshiruvni tugatishga qolgan muhlat.
+
+    Faqat tekshiruvni VAQTIDA boshlaganga tegishli — rozilik yoki shaxs
+    tasdiqlash belgisi cheklovdan oldin qo'yilgan bo'lsa. Aks holda None.
+    """
+    cutoff = getattr(exam, "last_entry_at", None)
+    if not cutoff or in_retake or se is None:
+        return None
+    marks = [t for t in (getattr(se, "vac_consent_at", None),
+                         getattr(se, "identity_verified_at", None)) if t]
+    if not marks or min(marks) > cutoff:
+        return None
+    return (cutoff + timedelta(minutes=ENTRY_GRACE_MINUTES)).isoformat()
+
+
 def _notify_student_unblocked(
     student_id: str,
     student_exam_id: int,
@@ -520,6 +536,11 @@ def student_exams_list(request):
                     if getattr(e, "last_entry_at", None) and e.id not in retake_window_end
                     else None
                 ),
+                # Imtihon oldi tekshiruvini vaqtida boshlagan odam uchun
+                # muhlat: ilova tugmani server qaroridan ertaroq o'chirib
+                # qo'ymasligi kerak (kamerasi uzilib qolsa qayta urinadi).
+                "entry_grace_until": _entry_grace_until(e, ses_by_exam.get(e.id),
+                                                        e.id in retake_window_end),
                 "duration_minutes": e.duration_minutes,
                 "language": e.language,
                 "custom_rules": e.custom_rules,

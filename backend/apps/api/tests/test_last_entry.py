@@ -129,6 +129,29 @@ class LastEntryTests(TestCase):
         row = next(r for r in res.data if r["id"] == self.exam.id)
         self.assertIsNotNone(row["last_entry_at"])
 
+    def test_the_list_reports_the_grace_only_for_a_check_started_in_time(self):
+        from apps.api.views.student import student_exams_list
+
+        cutoff = dj_tz.now() - timedelta(minutes=2)
+        se = StudentExam.objects.create(
+            student_id=self.student.id, exam_id=self.exam.id, status="Pending",
+            access_granted=True, vac_consent_at=cutoff - timedelta(minutes=1),
+        )
+        self.exam.last_entry_at = cutoff
+        self.exam.save(update_fields=["last_entry_at"])
+        req = self.f.get("/x")
+        force_authenticate(req, user=self.student)
+        row = next(r for r in student_exams_list(req).data if r["id"] == self.exam.id)
+        self.assertIsNotNone(row["entry_grace_until"])
+
+        # Rozilik cheklovdan KEYIN qo'yilgan bo'lsa muhlat berilmaydi.
+        se.vac_consent_at = cutoff + timedelta(minutes=1)
+        se.save(update_fields=["vac_consent_at"])
+        req2 = self.f.get("/x")
+        force_authenticate(req2, user=self.student)
+        row2 = next(r for r in student_exams_list(req2).data if r["id"] == self.exam.id)
+        self.assertIsNone(row2["entry_grace_until"])
+
     def test_admin_can_set_and_clear_the_cutoff(self):
         from apps.api.views.admin import admin_exam_detail
 
