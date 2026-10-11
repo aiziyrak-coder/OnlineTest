@@ -82,17 +82,23 @@ class Command(BaseCommand):
             )
             if not ses:
                 continue
-            # USMLE KESIMI: eng past balli savollar tanlovdan chiqadi, lekin
-            # bank bir odamning hamma urinishiga yetishi SHART — aks holda
-            # qiyinlik uchun savol takrorlanib ketardi.
+            # USMLE KESIMI: past balli savollar tanlovdan chiqadi. Lekin
+            # tanlov juda torayib ketmasligi kerak — aks holda savollar
+            # odamlar orasida takrorlanib ketadi. Shuning uchun kesim ikki
+            # shartni bir vaqtda qondiradi:
+            #   * bir odamning HAMMA urinishiga boshqa savol yetsin
+            #     (need × attempts), ustiga biroz zaxira;
+            #   * hamma odamga kerak bo'ladigan joylarning yarmidan kam
+            #     bo'lmasin, ya'ni bir savol o'rtacha ikki kishidan ko'pga
+            #     tushmasin.
             kerakli = need * attempts
+            joylar = len(ses) * attempts * need
+            maqsad = max(int(kerakli * 1.5), min(len(bank), (joylar + 1) // 2))
             kesim = 0
             if str(opts["min_usmle"]).strip().lower() not in ("off", "0", ""):
                 if str(opts["min_usmle"]).strip().lower() == "auto":
                     for t_ball in range(12, -1, -1):
-                        if len([q for q in bank if usmle_score(q) >= t_ball]) >= max(
-                            kerakli, int(kerakli * 1.5)
-                        ):
+                        if len([q for q in bank if usmle_score(q) >= t_ball]) >= maqsad:
                             kesim = t_ball
                             break
                 else:
@@ -117,12 +123,19 @@ class Command(BaseCommand):
                 if se.session_questions_json and not force:
                     tegilmadi += 1
                     continue
+                # Qaytadan yig'ishda (--force) eski "berilgan" ro'yxat
+                # hisobga olinmaydi: o'sha to'plamlar hech kimga
+                # ko'rsatilmagan, lekin ular tanlovni kichraytirib
+                # savollarni takrorlanishga majbur qilardi. Haqiqatan
+                # topshirilgan urinishlar baribir chetlanadi — ularning
+                # sessiyasiga bu buyruq tegmaydi.
                 avoid = set()
-                for x in json.loads(se.served_question_ids or "[]") or []:
-                    try:
-                        avoid.add(int(x))
-                    except (TypeError, ValueError):
-                        continue
+                if not (force and se.session_questions_json):
+                    for x in json.loads(se.served_question_ids or "[]") or []:
+                        try:
+                            avoid.add(int(x))
+                        except (TypeError, ValueError):
+                            continue
                 variants = build_variants(tanlov, need, attempts, usage=usage, rnd=rnd,
                                           avoid=avoid, quality=usmle_score)
                 if any(len(v) < need for v in variants):
