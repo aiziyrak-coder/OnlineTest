@@ -26,6 +26,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.api.exam_variants import build_variants, question_key, set_prepared
+from apps.api.usmle_screen import usmle_score
 from apps.core.models import AuditLog, Exam, StudentExam
 
 
@@ -38,6 +39,9 @@ class Command(BaseCommand):
         parser.add_argument("--attempts", type=int, default=2,
                             help="Har kishiga nechta to'plam (standart: 2)")
         parser.add_argument("--seed", type=int, help="Takrorlanadigan tasodif (sinov uchun)")
+        parser.add_argument("--min-usmle", default="auto",
+                            help="USMLE ball kesimi: 'auto' (bank ruxsat bergancha baland) "
+                                 "yoki aniq son, yoki 'off'")
         parser.add_argument("--force", action="store_true",
                             help="Tayyorlangan to'plamlarni qaytadan yig'adi")
         parser.add_argument("--apply", action="store_true", help="Haqiqatan yozish")
@@ -78,6 +82,25 @@ class Command(BaseCommand):
             )
             if not ses:
                 continue
+            # USMLE KESIMI: eng past balli savollar tanlovdan chiqadi, lekin
+            # bank bir odamning hamma urinishiga yetishi SHART — aks holda
+            # qiyinlik uchun savol takrorlanib ketardi.
+            kerakli = need * attempts
+            kesim = 0
+            if str(opts["min_usmle"]).strip().lower() not in ("off", "0", ""):
+                if str(opts["min_usmle"]).strip().lower() == "auto":
+                    for t_ball in range(12, -1, -1):
+                        if len([q for q in bank if usmle_score(q) >= t_ball]) >= max(
+                            kerakli, int(kerakli * 1.5)
+                        ):
+                            kesim = t_ball
+                            break
+                else:
+                    kesim = int(opts["min_usmle"])
+            tanlov = [q for q in bank if usmle_score(q) >= kesim] if kesim else list(bank)
+            if len(tanlov) < kerakli:
+                tanlov = list(bank)
+                kesim = 0
             usage: Counter = Counter()
             # Mavjud to'plamlar ham hisobga olinadi — qaytadan yig'ilmaydigan
             # odamlarning savollari boshqalarga kam tushishi uchun.
@@ -100,7 +123,8 @@ class Command(BaseCommand):
                         avoid.add(int(x))
                     except (TypeError, ValueError):
                         continue
-                variants = build_variants(bank, need, attempts, usage=usage, rnd=rnd, avoid=avoid)
+                variants = build_variants(tanlov, need, attempts, usage=usage, rnd=rnd,
+                                          avoid=avoid, quality=usmle_score)
                 if any(len(v) < need for v in variants):
                     yetmadi += 1
                 se.session_questions_json = json.dumps(variants[0], ensure_ascii=False)
@@ -116,14 +140,17 @@ class Command(BaseCommand):
             # Bank qanchalik teng ishlatilgani: bir savol necha kishiga tushgan.
             # Bank bir odamning hamma urinishiga yetadimi: `attempts` ta
             # to'plam uchun need*attempts ta boshqa savol kerak.
-            if len(bank) < need * attempts:
-                tor_banklar.append("[%s] %s — bank %d, kerak %d (%d urinish × %d savol)"
-                                   % (e.id, nom, len(bank), need * attempts, attempts, need))
+            if len(tanlov) < need * attempts:
+                tor_banklar.append("[%s] %s — tanlov %d, kerak %d (%d urinish × %d savol)"
+                                   % (e.id, nom, len(tanlov), need * attempts, attempts, need))
             if kishi:
-                vals = [usage[question_key(q)] for q in bank]
+                vals = [usage[question_key(q)] for q in tanlov]
+                ortacha_matn = sum(len(str(q.get("text") or "")) for q in tanlov) // max(1, len(tanlov))
                 self.stdout.write(
-                    "   [%s] %-38s %3d kishi × %d to'plam | bank %4d | bir savol %d-%d marta"
-                    % (e.id, nom, kishi, attempts, len(bank), min(vals), max(vals)))
+                    "   [%s] %-34s %3d kishi × %d | tanlov %4d/%4d (USMLE>=%d) | "
+                    "matn o'rt %4d belgi | bir savol %d-%d marta"
+                    % (e.id, nom, kishi, attempts, len(tanlov), len(bank), kesim,
+                       ortacha_matn, min(vals), max(vals)))
 
         self.stdout.write("")
         self.stdout.write("Tayyorlanadi: %d kishi, %d to'plam | tegilmaydi: %d"

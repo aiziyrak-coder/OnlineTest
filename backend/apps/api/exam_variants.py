@@ -66,12 +66,16 @@ def build_variants(
     usage: Counter | None = None,
     rnd: random.Random | None = None,
     avoid: set | None = None,
+    quality=None,
 ) -> list[list[dict]]:
     """Bitta odam uchun `count` ta to'plam tuzadi.
 
     `usage` — bank bo'ylab savol necha marta ishlatilgani (odamlar orasida
     teng taqsimlash uchun); funksiya uni yangilaydi. `avoid` — bu odamga
-    ilgari berilgan savollar (takrorlanmasin).
+    ilgari berilgan savollar (takrorlanmasin). `quality` — savolga ball
+    beruvchi funksiya (masalan USMLE balli): teng darajada ishlatilgan
+    savollar orasidan balli balandi oldin tanlanadi, ya'ni qiyinroq va
+    uzunroq klinik savollar birinchi navbatda tushadi.
     """
     rnd = rnd or random.Random()
     usage = usage if usage is not None else Counter()
@@ -83,8 +87,12 @@ def build_variants(
             # Bank tugadi — bu odamga berilmaganlar yetmaydi. Shunda eng kam
             # ishlatilganlardan to'ldiramiz (imtihon boshlanmay qolmasin).
             pool = list(bank)
-        # Eng kam ishlatilganlar oldinda; teng bo'lganlar tasodifiy tartibda.
-        pool.sort(key=lambda q: (usage[question_key(q)], rnd.random()))
+        # Eng kam ishlatilganlar oldinda; teng ishlatilganlar orasida balli
+        # balandi oldinda; qolgani tasodifiy tartibda.
+        if quality is None:
+            pool.sort(key=lambda q: (usage[question_key(q)], rnd.random()))
+        else:
+            pool.sort(key=lambda q: (usage[question_key(q)], -quality(q), rnd.random()))
         picked = pool[:need]
         rnd.shuffle(picked)
         variant = []
