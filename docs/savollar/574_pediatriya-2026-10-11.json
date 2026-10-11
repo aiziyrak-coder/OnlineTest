@@ -1,0 +1,445 @@
+{
+"category": "Pediatriya — ordinatura 1-kurs",
+"questions": [
+{
+ "text": "2 yoshli o'g'il bola kechasi to'satdan boshlangan quruq, qarsillovchi yo'tal va nafas olishda shovqin bilan keltirildi. Uch kundan beri burun bitishi va yengil isitma bor edi. Ko'rikda tana harorati 37,8°C, nafas 38/daq, tinch holatda ingalyator ovozi (inspirator stridor) eshitiladi, ko'krak qafasi yengil botadi, saturatsiya 95%, bola yig'laydi lekin so'lak oqmaydi, yutinishi normal. O'pka auskultatsiyasida nafas shovqini simmetrik. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Deksametazonni bir martalik dozada berish va kuzatish",
+  "Darhol intubatsiya qilib, reanimatsiyaga o'tkazish",
+  "Vena ichiga keng qamrovli antibiotik boshlash",
+  "Salbutamol ingalyatsiyasini asosiy davolash sifatida qo'llash",
+  "Faqat issiq bug' nafas oldirish va uyga javob berish"
+ ],
+ "correctAnswer": "Deksametazonni bir martalik dozada berish va kuzatish"
+},
+{
+ "text": "4 yoshli bola bir necha soat ichida tez yomonlashgan holatda keltirildi: tana harorati 39,6°C, so'lak oqadi, yutinishdan bosh tortadi, oldinga engashib o'tiradi va bo'ynini cho'zadi, ovozi bo'g'iq. Yo'tal deyarli yo'q. Ko'rikda nafas 36/daq, inspirator stridor, saturatsiya 93%; bola juda bezovta. Emlash tarixi to'liq emas. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+ "options": [
+  "Bolani bezovta qilmasdan operatsiya xonasida nafas yo'lini ta'minlashga tayyorlanish va antibiotik boshlash",
+  "Og'iz bo'shlig'ini shpatel bilan ko'rib, tomoqdan surtma olish",
+  "Ingalyatsion adrenalin berib, uyga javob berish",
+  "Deksametazon berib, ambulatoriyada kuzatish",
+  "Darhol ko'krak qafasi rentgenogrammasiga yuborish va navbat kutish"
+ ],
+ "correctAnswer": "Bolani bezovta qilmasdan operatsiya xonasida nafas yo'lini ta'minlashga tayyorlanish va antibiotik boshlash"
+},
+{
+ "text": "5 oylik chaqaloq uch kundan beri burun bitishi, yo'tal va yengil isitma bilan kasal; bugun nafas olishi qiyinlashdi va emishdan qoldi. Ko'rikda tana harorati 37,6°C, nafas 62/daq, burun qanotlari kerilgan, ko'krak qafasi botadi, o'pkada ikki tomonlama mayda xirillashlar va nafas chiqarishda hushtaksimon tovushlar eshitiladi, saturatsiya 91%. Ko'krak qafasi rentgenogrammasi olinmagan. Qish mavsumi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "O'tkir bronxiolit",
+  "Bakterial pnevmoniya",
+  "Bronxial astma xuruji",
+  "Bo'g'ma (krup)",
+  "Yurak yetishmovchiligi"
+ ],
+ "correctAnswer": "O'tkir bronxiolit"
+},
+{
+ "text": "3 yoshli bola to'rt kundan beri isitma (39,5°C) va yo'tal bilan kasal. Ko'rikda nafas 46/daq, o'ng ko'krak qafasining pastki qismida nafas shovqini kuchsizlashgan va mayda nam xirillashlar eshitiladi, perkussiyada bo'g'iqlik bor, saturatsiya 93%, bola suyuqlik qabul qila oladi. Ko'krak qafasi rentgenogrammasida o'ng pastki bo'lakda zichlashuv aniqlandi. Laborator: leykotsitoz, CRP yuqori. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Og'iz orqali amoksisillinni yuqori dozada boshlab, ambulatoriyada kuzatish",
+  "Faqat antivirus preparat berib, antibiotiksiz kuzatish",
+  "Ingalyatsion glyukokortikosteroid boshlash",
+  "Vena ichiga vankomitsin va meropenem boshlash",
+  "Faqat bug' nafas oldirish va antipiretik berish"
+ ],
+ "correctAnswer": "Og'iz orqali amoksisillinni yuqori dozada boshlab, ambulatoriyada kuzatish"
+},
+{
+ "text": "18 oylik bola isitma ko'tarilgandan keyin tirishish bilan keltirildi: tirishish umumiy, 2 daqiqa davom etgan, keyin bola uyquchan bo'lgan va bir soat ichida to'liq hushiga kelgan. Ko'rikda tana harorati 39,2°C, tomoq qizargan, meningeal belgilar yo'q, liqildoq normal, nevrologik defitsit yo'q. Oldin tirishish bo'lmagan, rivojlanishi yoshiga mos, oilada otasida bolaligida shunday epizod bo'lgan. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Isitmani tushirish, ota-onaga tushuntirish va kuzatish; profilaktik antiepileptik kerak emas",
+  "Uzoq muddatli fenobarbital profilaktikasini boshlash",
+  "Darhol bosh miya kompyuter tomografiyasini o'tkazish",
+  "Orqa miya suyuqligini olish, hamma holatda majburiy",
+  "Elektroensefalografiyani shoshilinch tartibda o'tkazish"
+ ],
+ "correctAnswer": "Isitmani tushirish, ota-onaga tushuntirish va kuzatish; profilaktik antiepileptik kerak emas"
+},
+{
+ "text": "6 yoshli bola bir kundan beri isitma, bosh og'rig'i va qusish bilan keltirildi; bugun ertalab uyqusi chuqurlashdi. Ko'rikda tana harorati 39,8°C, bo'yin rigidligi bor, Kernig belgisi musbat, terida petexial toshma yo'q, hushi uyquchan lekin javob beradi. Fundoskopiyada dimlanish yo'q, nevrologik o'choqli belgi yo'q. Laborator: leykotsitoz, CRP yuqori. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "Qon ekmasini olib, darhol antibiotik boshlash va lyumbal punksiya o'tkazish",
+  "Avval bosh miya kompyuter tomografiyasini kutib, antibiotikni keyinga qoldirish",
+  "Faqat antipiretik berib, 12 soat kuzatish",
+  "Faqat antivirus preparat (asiklovir) boshlash",
+  "Og'iz orqali antibiotik berib, uyga javob berish"
+ ],
+ "correctAnswer": "Qon ekmasini olib, darhol antibiotik boshlash va lyumbal punksiya o'tkazish"
+},
+{
+ "text": "11 oylik bola ikki kundan beri to'xtovsiz yig'laydi: yig'lash xurujlari 15-20 daqiqada takrorlanadi, xuruj paytida bola oyoqlarini qorniga tortadi, oraliqda tinchlanadi. Bugun najasda shilimshiq va qon aralashmasi paydo bo'ldi. Ko'rikda qorinning o'ng yuqori qismida kolbasasimon hajm palpatsiya qilinadi, qorin yumshoq. Qorin exoskopiyasida ko'ndalang kesimda nishonsimon ko'rinish aniqlandi. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Havo yoki suyuqlik bilan klizma orqali ichakni to'g'rilash (jarroh nazoratida)",
+  "Faqat spazmolitik berib, kuzatish",
+  "Darhol laparotomiya qilib, ichakni rezeksiya qilish",
+  "Probiotik va rehidratatsiya bilan uyda davolash",
+  "Nazogastral zond qo'yib, antibiotik bilan kuzatish"
+ ],
+ "correctAnswer": "Havo yoki suyuqlik bilan klizma orqali ichakni to'g'rilash (jarroh nazoratida)"
+},
+{
+ "text": "5 haftalik o'g'il chaqaloq bir haftadan beri ovqatdan keyin otilib qusadi; qusuq safrosiz, bola qusgandan keyin yana darhol ochqaydi. Vazn qo'shishi to'xtagan. Ko'rikda qorin yuqori qismida to'lqinsimon peristaltika ko'rinadi, o'ng yuqori kvadrantda zaytunsimon hajm palpatsiya qilinadi, shilliq qavatlar quruq. Laborator: kaliy 3,0 mmol/l, xlor 88 mmol/l, pH 7,52, bikarbonat 32 mmol/l. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Gipertrofik pilorostenoz",
+  "Oshqozon-qizilo'ngach reflyuksi",
+  "Ichak burilishi (volvulus)",
+  "Sigir suti oqsiliga allergiya",
+  "Buyrak usti bezi tug'ma giperplaziyasi"
+ ],
+ "correctAnswer": "Gipertrofik pilorostenoz"
+},
+{
+ "text": "2 yoshli bola bir kundan beri kuniga 8 marta suvdek ich ketishi va qusish bilan keltirildi. Ko'rikda bola bezovta, ko'zlari ichiga tushgan, shilliq qavatlar quruq, teri burmasi sekin yoziladi, kapillyar to'lish 3 soniya, puls 148/daq, qon bosimi 88/52 mm sim. ust., siydik ajralishi kamaygan; tana vazni kasallikdan oldingidan 8% kam. Bola og'iz orqali suyuqlikni qusib tashlayapti. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+ "options": [
+  "Vena ichiga izotonik eritma bilan tez suyuqlik to'ldirish (bolyus 20 ml/kg)",
+  "Og'iz orqali rehidratatsiya eritmasini qoshiqda berishni davom ettirish",
+  "Antibiotik boshlab, suyuqlikni keyinga qoldirish",
+  "Ich ketishga qarshi loperamid berish",
+  "Faqat probiotik berib, uyga javob berish"
+ ],
+ "correctAnswer": "Vena ichiga izotonik eritma bilan tez suyuqlik to'ldirish (bolyus 20 ml/kg)"
+},
+{
+ "text": "14 oylik bola rangparlik tufayli tekshirilmoqda. Kuniga 900 ml sigir suti ichadi, qo'shimcha ovqatni yomon yeydi, go'sht deyarli bermaydi. Ko'rikda teri va shilliq qavatlar rangpar, yurakda yumshoq sistolik shovqin, jigar va taloq kattalashmagan. Laborator: gemoglobin 82 g/l, o'rtacha eritrotsit hajmi 68 fl, rang ko'rsatkichi past, temir past, ferritin past, umumiy temir bog'lash qobiliyati yuqori, retikulotsitlar past. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Og'iz orqali temir preparati va sut hajmini kamaytirib, ovqatlanishni tuzatish",
+  "Darhol eritrotsitar massa quyish",
+  "Vitamin B12 in'eksiyalarini boshlash",
+  "Folat kislotasi monoterapiyasi",
+  "Faqat ovqatlanish bilan tuzatish, preparat kerak emas"
+ ],
+ "correctAnswer": "Og'iz orqali temir preparati va sut hajmini kamaytirib, ovqatlanishni tuzatish"
+},
+{
+ "text": "4 yoshli bola ikki kundan beri tanada ko'karishlar va burundan qon ketishi bilan keltirildi. Ikki hafta oldin virusli infeksiya bo'lgan. Ko'rikda terida petexiyalar va ekximozlar bor, isitma yo'q, limfa tugunlari kattalashmagan, jigar va taloq kattalashmagan, bola faol. Laborator: trombotsitlar 12x10^9/l, gemoglobin 118 g/l, leykotsitlar normal, leykoformula normal, periferik qon surtmasida blast hujayralar yo'q. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Immun trombotsitopenik purpura",
+  "O'tkir limfoblastik leykemiya",
+  "Gemolitik-uremik sindrom",
+  "Shenlein-Genox purpurasi",
+  "Aplastik anemiya"
+ ],
+ "correctAnswer": "Immun trombotsitopenik purpura"
+},
+{
+ "text": "6 yoshli bola ikki haftadan beri oyoqlarda toshma, qorin og'rig'i va bo'g'im og'rig'i bilan keltirildi. Ko'rikda boldir va dumba sohasida ko'tarilgan, bosganda rangi o'chmaydigan purpura bor (toshma simmetrik), tizza bo'g'imlari shishgan va og'riqli, qorin palpatsiyada og'riqli. Laborator: trombotsitlar 320x10^9/l (normal), ivish ko'rsatkichlari normal, siydikda eritrotsitlar va oqsil bor, kreatinin normal. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Shenlein-Genox purpurasi (IgA vaskuliti)",
+  "Immun trombotsitopenik purpura",
+  "Meningokokkemiya",
+  "Gemofiliya",
+  "Yuvenil idiopatik artrit"
+ ],
+ "correctAnswer": "Shenlein-Genox purpurasi (IgA vaskuliti)"
+},
+{
+ "text": "4 yoshli bola bir haftadan beri qovoqlari shishgan va siydigi kamaygan holda keltirildi. Ko'rikda yuz va qovoqlar shishgan, oyoqlarda bosilganda iz qoladigan shish bor, qorin kattalashgan, qon bosimi 98/60 mm sim. ust. (yoshiga mos), isitma yo'q. Laborator: siydikda oqsil 4+ (sutkalik oqsil 3,8 g), eritrotsitlar yo'q, albumin 18 g/l, umumiy xolesterin yuqori, kreatinin normal, komplement C3 normal. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Og'iz orqali glyukokortikosteroid (prednizolon) bilan davolashni boshlash",
+  "Siklofosfamid bilan davolashni birinchi tanlov sifatida boshlash",
+  "Darhol buyrak biopsiyasini o'tkazib, keyin davolash",
+  "Faqat tuzni cheklash va diuretik bilan cheklanish",
+  "Antibiotik bilan davolash"
+ ],
+ "correctAnswer": "Og'iz orqali glyukokortikosteroid (prednizolon) bilan davolashni boshlash"
+},
+{
+ "text": "8 yoshli bola bir kundan beri qora-qo'ng'ir rangli siydik va qovoq shishi bilan keltirildi. Ikki hafta oldin tomoq og'rig'i bo'lgan va antibiotik olmagan. Ko'rikda qon bosimi 136/88 mm sim. ust. (yoshiga nisbatan yuqori), qovoqlar shishgan, siydik ajralishi kamaygan. Laborator: siydikda eritrotsitlar ko'p va eritrotsitar silindrlar bor, oqsil 1+, kreatinin yengil yuqori, komplement C3 past, antistreptolizin-O titri yuqori. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Streptokokkdan keyingi o'tkir glomerulonefrit",
+  "Minimal o'zgarishlar bilan nefrotik sindrom",
+  "IgA nefropatiyasi",
+  "Gemolitik-uremik sindrom",
+  "O'tkir pielonefrit"
+ ],
+ "correctAnswer": "Streptokokkdan keyingi o'tkir glomerulonefrit"
+},
+{
+ "text": "10 oylik qiz bola uch kundan beri sababi noma'lum isitma (39,3°C) bilan keltirildi, boshqa shikoyat yo'q. Ko'rikda tomoq toza, o'pka toza, quloq pardalari normal, toshma yo'q, bola bezovta. Laborator: leykotsitoz, CRP yuqori. Siydik tahlilida leykotsitlar ko'p, nitritlar musbat, bakteriyalar bor; siydik ekmasi olindi. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Siydik yo'llari infeksiyasini davolashni boshlash va keyin buyrak-siydik yo'llari exoskopiyasini o'tkazish",
+  "Faqat antipiretik berib, ekma natijasini kutish",
+  "Darhol sistouretrografiya o'tkazish, davolashdan oldin",
+  "Faqat ko'p suyuqlik ichirish bilan cheklanish",
+  "Antibiotikni bir hafta kechiktirib, takroriy tahlil qilish"
+ ],
+ "correctAnswer": "Siydik yo'llari infeksiyasini davolashni boshlash va keyin buyrak-siydik yo'llari exoskopiyasini o'tkazish"
+},
+{
+ "text": "14 oylik bola oyoqlari qiyshayib borayotgani tufayli keltirildi. Bola kech yurgan (15 oylik), ko'p terlaydi, kechasi bezovta. Faqat ona suti bilan ovqatlangan, D vitamini qo'shimchasi berilmagan, quyoshda kam bo'ladi. Ko'rikda bilakuzuk sohasi qalinlashgan, ko'krak qafasida tasbeh donasimon qalinlashuv bor, oyoqlar O-shaklida qiyshaygan, katta liqildoq hali yopilmagan. Laborator: kaltsiy past chegarada, fosfor past, alkalin fosfataza yuqori, paratgormon yuqori, 25-OH vitamin D juda past. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "D vitamini va kaltsiy preparatlari bilan davolash",
+  "Faqat kaltsiy preparati bilan davolash",
+  "Faqat fosfor preparati bilan davolash",
+  "Bisfosfonat bilan davolash",
+  "O'sish gormoni bilan davolash"
+ ],
+ "correctAnswer": "D vitamini va kaltsiy preparatlari bilan davolash"
+},
+{
+ "text": "5 yoshli bola besh kundan beri isitma (39,4°C) bilan kasal. Ko'rikda ikki tomonlama yiringsiz konyunktivit, lablar yorilgan va qizil, til malinasimon, bo'yinda bitta kattalashgan limfa tugun, kaft va tovonlarda qizarish va shish bor; terida polimorf toshma. Laborator: leykotsitoz, CRP juda yuqori, trombotsitlar 480x10^9/l, transaminazalar yengil yuqori. Tomoqdan olingan tez test streptokokkka salbiy. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Vena ichiga immunoglobulin va yuqori dozada atsetilsalitsil kislotasi",
+  "Vena ichiga tsefalosporin antibiotik",
+  "Faqat antipiretik va suyuqlik bilan kuzatish",
+  "Og'iz orqali prednizolon monoterapiyasi",
+  "Og'iz orqali amoksisillin"
+ ],
+ "correctAnswer": "Vena ichiga immunoglobulin va yuqori dozada atsetilsalitsil kislotasi"
+},
+{
+ "text": "7 yoshli bola uch kundan beri isitma, tomoq og'rig'i va tanada toshma bilan keltirildi. Ko'rikda tana harorati 38,9°C, tomoq va bodomsimon bezlar yorqin qizargan, tilda malina ko'rinishi, bo'yinda og'riqli limfa tugunlari; terida mayda nuqtali, qum qog'ozi kabi qo'pol toshma bor, burun-lab uchburchagi oqargan, teri burmalarida toshma to'q. Tez test A guruh streptokokkka musbat. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Og'iz orqali 10 kunlik penitsillin yoki amoksisillin kursi",
+  "Faqat antipiretik va tomoq chayish",
+  "Og'iz orqali atsiklovir",
+  "Vena ichiga immunoglobulin",
+  "Og'iz orqali prednizolon"
+ ],
+ "correctAnswer": "Og'iz orqali 10 kunlik penitsillin yoki amoksisillin kursi"
+},
+{
+ "text": "3 yoshli emlanmagan bola to'rt kundan beri yuqori isitma, yo'tal, burun oqishi va konyunktivit bilan kasal. Bugun yuz va bo'yindan boshlab tanaga tarqalgan makulopapulyoz toshma paydo bo'ldi. Ko'rikda og'iz shilliq qavatida mayda oq dog'lar (Koplik dog'lari) bor, tana harorati 39,5°C, nafas 32/daq, o'pka toza. Ushbu bemorda eng muhim qo'shimcha chora qaysi?",
+ "options": [
+  "A vitaminini yuqori dozada berish va izolyatsiya qilish",
+  "Keng qamrovli antibiotik boshlash",
+  "Og'iz orqali prednizolon berish",
+  "Og'iz orqali atsiklovir berish",
+  "Vena ichiga immunoglobulin yuborish"
+ ],
+ "correctAnswer": "A vitaminini yuqori dozada berish va izolyatsiya qilish"
+},
+{
+ "text": "2 yoshli bola uch kun davomida yuqori isitma (39,5°C) bilan kasal bo'lgan; isitma to'satdan tushgandan keyin tanada mayda pushti makulyar toshma paydo bo'ldi. Ko'rikda bola faol, toshma asosan tanada, qo'l va oyoqlarda kam, qichishmaydi; ensa limfa tugunlari yengil kattalashgan, og'iz shilliq qavati toza, o'pka toza. Laborator: leykotsitlar normal, CRP past. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Bolalarning to'satdan ekzantemasi (roseola infantum)",
+  "Qizamiq",
+  "Qizilcha (rubella)",
+  "Skarlatina",
+  "Dori toshmasi"
+ ],
+ "correctAnswer": "Bolalarning to'satdan ekzantemasi (roseola infantum)"
+},
+{
+ "text": "3 yoshli bola og'zida og'riqli yaralar va ovqatdan bosh tortishi bilan keltirildi. Ko'rikda og'iz bo'shlig'ida mayda eroziyalar, kaft va tovonlarda hamda dumba sohasida oval shaklli vezikulalar bor; tana harorati 38,2°C, bola suyuqlik qabul qilishi mumkin. Bog'chada shunday holatlar ko'p qayd etilgan. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Og'riqni qoldirish va suyuqlik berish; antibiotik va antivirus preparat kerak emas",
+  "Og'iz orqali atsiklovir boshlash",
+  "Keng qamrovli antibiotik boshlash",
+  "Og'iz orqali prednizolon berish",
+  "Antifungal preparat boshlash"
+ ],
+ "correctAnswer": "Og'riqni qoldirish va suyuqlik berish; antibiotik va antivirus preparat kerak emas"
+},
+{
+ "text": "9 yoshli bola uch kundan beri chap sonda og'riq va oqsoqlanish bilan keltirildi; bugun yurolmay qoldi. Ko'rikda tana harorati 39,1°C, chap son bo'g'imi yarim bukilgan va tashqariga burilgan holatda ushlanadi, har qanday harakatda kuchli og'riq, bo'g'im atrofida issiqlik bor. Laborator: leykotsitoz, CRP 140 mg/l, eritrotsitlar cho'kish tezligi 70 mm/soat. Son bo'g'imi exoskopiyasida bo'g'im bo'shlig'ida suyuqlik aniqlandi. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Bo'g'imni shoshilinch punksiya qilib material olish va parenteral antibiotik boshlash",
+  "Og'iz orqali nosteroid preparat berib, bir hafta kuzatish",
+  "Faqat yotoq rejimi va issiq kompress tayinlash",
+  "Fizioterapiya kursini boshlash",
+  "Bo'g'imga glyukokortikosteroid yuborish"
+ ],
+ "correctAnswer": "Bo'g'imni shoshilinch punksiya qilib material olish va parenteral antibiotik boshlash"
+},
+{
+ "text": "13 yoshli semiz o'g'il bola bir oydan beri chap tizzada og'riq va oqsoqlanishdan shikoyat qiladi; jarohat bo'lmagan. Ko'rikda tana harorati normal, tizza bo'g'imi tashqi ko'rinishi normal va og'riqsiz, lekin chap son bo'g'imini ichkariga burishda og'riq va cheklanish bor, oyoq tashqariga burilgan holatda yuradi. Son bo'g'imi rentgenogrammasida (frog-leg ko'rinishida) son suyagi boshchasining bo'yinga nisbatan siljishi aniqlandi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Son suyagi boshchasi epifizining siljishi (SCFE)",
+  "Legg-Kalve-Pertes kasalligi",
+  "O'tkir gematogen osteomielit",
+  "O'tkir limfoblastik leykemiya",
+  "O'tkinchi (reaktiv) sinovit"
+ ],
+ "correctAnswer": "Son suyagi boshchasi epifizining siljishi (SCFE)"
+},
+{
+ "text": "14 yoshli o'g'il bola bir soat oldin to'satdan boshlangan chap moyak sohasidagi kuchli og'riq va qusish bilan keltirildi. Ko'rikda chap moyak xaltada yuqoriga tortilgan va ko'ndalang joylashgan, juda og'riqli, shishgan; moyakni ko'tarish og'riqni kamaytirmaydi, kremaster refleksi chaqirilmaydi. Tana harorati normal, siydik tahlili normal. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Shoshilinch jarrohlik aralashuv (moyakni burilishdan chiqarish va fiksatsiya)",
+  "Antibiotik boshlab, 24 soat kuzatish",
+  "Og'riq qoldiruvchi berib, ertalab exoskopiya qilish",
+  "Faqat moyakni yuqoriga ko'tarib bog'lash",
+  "Issiq kompress va nosteroid preparat tayinlash"
+ ],
+ "correctAnswer": "Shoshilinch jarrohlik aralashuv (moyakni burilishdan chiqarish va fiksatsiya)"
+},
+{
+ "text": "7 yoshli bola uch haftadan beri ko'p suv ichadi, tez-tez siyadi (kechasi ham), 4 kg vazn yo'qotgan. Bugun qorin og'rig'i va qusish paydo bo'ldi. Ko'rikda shilliq qavatlar quruq, nafas chuqur, og'zidan atseton hidi keladi, bola uyquchan. Laborator: glyukoza 24 mmol/l, siydikda ketonlar ko'p, pH 7,15, bikarbonat 8 mmol/l. Ushbu bemorda tashxis qanday?",
+ "options": [
+  "1-tur qandli diabet, ketoatsidoz bilan debyut",
+  "2-tur qandli diabet, giperosmolyar holat bilan",
+  "Qandsiz diabet",
+  "O'tkir gastroenterit va suvsizlanish",
+  "Birlamchi buyrak usti bezi yetishmovchiligi"
+ ],
+ "correctAnswer": "1-tur qandli diabet, ketoatsidoz bilan debyut"
+},
+{
+ "text": "2 yoshli bola to'satdan yo'tal xuruji va bo'g'ilish bilan keltirildi; ota-onasi bola yong'oq yeb o'tirganini aytadi. Ko'rikda bola gapira oladi va yig'laydi, nafas 34/daq, o'ng ko'krak qafasida nafas shovqini kuchsizlashgan va faqat o'ng tomonda hushtaksimon tovush eshitiladi, saturatsiya 94%. Ko'krak qafasi rentgenogrammasida o'ng o'pkada havo ushlanib qolishi (giperinflyatsiya) aniqlandi. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Bronxoskopiya o'tkazib, yot jismni olib tashlash",
+  "Orqasiga urib, yot jismni chiqarishga urinish",
+  "Ingalyatsion bronxolitik berib, kuzatish",
+  "Antibiotik boshlab, bir hafta kuzatish",
+  "Faqat kislorod berib, rentgenni takrorlash"
+ ],
+ "correctAnswer": "Bronxoskopiya o'tkazib, yot jismni olib tashlash"
+},
+{
+ "text": "3 yoshli bola uyda tasodifan paratsetamol siropidan ko'p miqdorda ichgan; voqeadan 2 soat o'tgan. Bola hozir yaxshi, shikoyati yo'q, bir marta qusgan. Taxminiy olingan doza 220 mg/kg. Ko'rikda tana harorati normal, gemodinamika barqaror, jigar palpatsiyada og'riqsiz. Laborator: ALT va AST normal, protrombin vaqti normal; paratsetamol qon darajasi olingan va zaharlanish egri chizig'ida davolash chegarasidan yuqori. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "N-atsetilsistein bilan davolashni boshlash",
+  "Faqat kuzatish va 24 soatdan keyin fermentlarni takrorlash",
+  "Faol ko'mir berib, uyga javob berish",
+  "Naloksonni yuborish",
+  "Majburiy diurez bilan preparatni chiqarish"
+ ],
+ "correctAnswer": "N-atsetilsistein bilan davolashni boshlash"
+},
+{
+ "text": "4 oylik bola bosh suyagi sinishi va turli yoshdagi ko'p sonli ko'karishlar bilan keltirildi. Ota-onasi divandan yiqilib tushgan deb tushuntiradi. Ko'rikda yuz, ko'krak va orqada turli bosqichdagi ko'karishlar, chap son suyagida spiral sinish aniqlandi; ko'z tubida ikki tomonlama to'r parda qon quyilishlari bor. Laborator: ivish ko'rsatkichlari normal, kaltsiy va alkalin fosfataza normal. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Bolani kasalxonada qoldirish, skelet rentgenografiyasini o'tkazish va vakolatli organlarga xabar berish",
+  "Ota-onaga ehtiyot bo'lishni tushuntirib, uyga javob berish",
+  "Faqat sinishni gipslab, ambulatoriyada kuzatish",
+  "D vitamini preparatini boshlab, bir oydan keyin ko'rish",
+  "Gematologik tekshiruvni kutib, boshqa chora ko'rmaslik"
+ ],
+ "correctAnswer": "Bolani kasalxonada qoldirish, skelet rentgenografiyasini o'tkazish va vakolatli organlarga xabar berish"
+},
+{
+ "text": "6 yoshli qiz bolada ikki yildan beri kechasi to'shakka siyish davom etmoqda; kunduzi siyish nazorati to'liq, siyishda og'riq yoki shoshilinchlik yo'q. Ko'rikda qorin yumshoq, bel sohasida patologiya yo'q, nevrologik ko'rik normal, o'sishi va rivojlanishi yoshiga mos. Siydik tahlili va exoskopiya normal. Kunduzi suyuqlik ichishi ko'p, kechga yaqin ham ichadi. Ushbu bemorda eng to'g'ri birinchi qadam qaysi?",
+ "options": [
+  "Suyuqlik rejimini tartibga solish, tungi signalli to'shak sistemasi va rag'batlantirish usullari",
+  "Darhol desmopressin boshlash",
+  "Darhol oksibutinin boshlash",
+  "Antibiotik profilaktikasini boshlash",
+  "Sistoskopiya o'tkazish"
+ ],
+ "correctAnswer": "Suyuqlik rejimini tartibga solish, tungi signalli to'shak sistemasi va rag'batlantirish usullari"
+},
+{
+ "text": "6 yoshli bola uch haftadan beri oqarib ketgan, tez charchaydi va suyaklarida og'riq bor; ikki marta sababi noma'lum isitma bo'lgan. Ko'rikda teri rangpar, bo'yin va qo'ltiq limfa tugunlari kattalashgan, jigar va taloq kattalashgan, oyoqlarda petexiyalar bor. Laborator: gemoglobin 74 g/l, trombotsitlar 28x10^9/l, leykotsitlar 2,1x10^9/l; periferik qon surtmasida blast hujayralar topildi. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "Suyak ko'migi punksiyasi va bolalar onkogematologiya markaziga shoshilinch yo'llash",
+  "Temir preparati bilan davolashni boshlash",
+  "Og'iz orqali prednizolon boshlab, bir hafta kuzatish",
+  "Qon quyib, uyga javob berish",
+  "Keng qamrovli antibiotik bilan cheklanish"
+ ],
+ "correctAnswer": "Suyak ko'migi punksiyasi va bolalar onkogematologiya markaziga shoshilinch yo'llash"
+},
+{
+ "text": "3 yoshli bolada bir oydan beri ich qotishi bor: najas har 4-5 kunda bir marta, qattiq va yirik, ba'zan og'riqdan najasni ushlab turadi; bir marta najasda qon chizig'i bo'lgan. Ko'rikda qorin yumshoq, chap pastki kvadrantda zich massa palpatsiya qilinadi, anal teshik normal joylashgan, anal yoriq bor, nevrologik ko'rik normal, vazn va bo'y yoshiga mos. Chaqaloqlikda mekoniy birinchi 24 soatda chiqqan. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Najasni yumshatuvchi (polietilenglikol) bilan tozalash va keyin saqlab turuvchi davolash, ovqatlanishni tuzatish",
+  "Darhol irrigografiya va rektal biopsiya o'tkazish",
+  "Faqat ovqatlanishni o'zgartirib, preparat bermaslik",
+  "Og'iz orqali antibiotik kursini boshlash",
+  "Har kuni tozalovchi klizma qilishni uzoq muddat tayinlash"
+ ],
+ "correctAnswer": "Najasni yumshatuvchi (polietilenglikol) bilan tozalash va keyin saqlab turuvchi davolash, ovqatlanishni tuzatish"
+},
+{
+ "text": "6 yoshli qiz bolaning ko'krak bezlari rivojlanishi 7 oy oldin boshlangan, qo'ltiq tuklari paydo bo'lgan va oxirgi yilda bo'yi 11 sm o'sgan. Ko'rikda ko'krak bezlari Tanner 3-bosqich, qo'ltiq tuklari bor, yurish va nevrologik ko'rik normal. Laborator: suyak yoshi xronologik yoshdan 2,5 yil katta, LG gonadotropin-relizing gormon sinoviga pubertal javob beradi, estradiol yuqori. Bosh miya MRI si normal. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Gonadotropin-relizing gormon agonisti bilan davolash",
+  "Faqat kuzatish, davolash kerak emas",
+  "O'sish gormoni bilan davolash",
+  "Aromataza inhibitori bilan davolash",
+  "Jarrohlik aralashuv"
+ ],
+ "correctAnswer": "Gonadotropin-relizing gormon agonisti bilan davolash"
+},
+{
+ "text": "8 yoshli o'g'il bola bo'yi tengdoshlaridan past bo'lgani uchun keltirildi. Bo'yi 3 persentildan past, yiliga 3,5 sm o'sadi (sekin), vazn bo'yiga nisbatan yetarli, yuzi yumaloq va bolalarcha. Ko'rikda jinsiy rivojlanish boshlanmagan, nevrologik ko'rik normal, qalqonsimon bez normal. Laborator: suyak yoshi 5,5 yil (kechikkan), TSH va erkin T4 normal, IGF-1 past, tseliakiya markerlari salbiy, buyrak va jigar funksiyasi normal. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "O'sish gormoni stimulyatsiya sinovini o'tkazish va gipofiz MRI sini ko'rib chiqish",
+  "Darhol o'sish gormoni bilan davolashni boshlash",
+  "Faqat bir yil kuzatib, keyin qarorga kelish",
+  "Testosteron bilan davolashni boshlash",
+  "Levotiroksin bilan davolashni boshlash"
+ ],
+ "correctAnswer": "O'sish gormoni stimulyatsiya sinovini o'tkazish va gipofiz MRI sini ko'rib chiqish"
+},
+{
+ "text": "5 yoshli bolada bog'chada boshqalarga xalaqit berishi, o'tirolmasligi va navbat kutolmasligi haqida shikoyat bor; bu belgilar uyda ham, bog'chada ham kuzatiladi va ikki yildan ortiq davom etadi. Ko'rikda nevrologik patologiya yo'q, eshitish va ko'rish normal, rivojlanish bosqichlari o'z vaqtida o'tgan, nutqi yoshiga mos. Ota-onasi va tarbiyachi savolnomalari diqqat yetishmovchiligi va giperaktivlik ko'rsatkichlari yuqori ekanini ko'rsatdi. Ushbu yoshda eng to'g'ri birinchi qadam qaysi?",
+ "options": [
+  "Ota-onalar uchun xulq-atvor treningi va bog'cha bilan birgalikdagi xulq dasturi",
+  "Darhol metilfenidat bilan davolashni boshlash",
+  "Darhol antipsixotik preparat boshlash",
+  "Faqat ovqatlanishdan shakar va bo'yoqlarni chiqarish",
+  "Bir yil hech narsa qilmasdan kuzatish"
+ ],
+ "correctAnswer": "Ota-onalar uchun xulq-atvor treningi va bog'cha bilan birgalikdagi xulq dasturi"
+},
+{
+ "text": "4 yoshli bolada tasodifiy ko'rikda yurak shovqini eshitildi. Ko'rikda bola faol, o'sishi yoshiga mos, sianoz va hansirash yo'q, barmoqlari normal. Shovqin ko'krak suyagi chap chetining pastki qismida, yumshoq (2/6 daraja), sistolik, qo'shimcha tovushsiz; bola o'tirganda va kuchanganda shovqin kuchsizlanadi, yotganda kuchayadi. Puls simmetrik, son arteriyasi pulsi yaxshi palpatsiya qilinadi, qon bosimi normal. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Funksional (zararsiz) shovqin sifatida kuzatish, qo'shimcha tekshiruv shart emas",
+  "Darhol kardioxirurgga yo'llash",
+  "Antibiotik profilaktikasini boshlash",
+  "Jismoniy tarbiyadan butunlay ozod qilish",
+  "Darhol yurak kateterizatsiyasini o'tkazish"
+ ],
+ "correctAnswer": "Funksional (zararsiz) shovqin sifatida kuzatish, qo'shimcha tekshiruv shart emas"
+},
+{
+ "text": "9 yoshli bolada uch haftadan beri bo'g'imlar og'rig'i bor: avval tizza, keyin to'piq, og'riq bir bo'g'imdan boshqasiga ko'chadi va bo'g'imlar shishgan. Bir oy oldin tomoq og'rig'i bo'lgan. Ko'rikda tana harorati 38,2°C, yurak auskultatsiyasida yangi apikal sistolik shovqin eshitiladi, teri ustida halqasimon eritema bor. Laborator: eritrotsitlar cho'kish tezligi 68 mm/soat, CRP yuqori, antistreptolizin-O titri yuqori; EKG da PQ intervali uzaygan. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "O'tkir revmatik isitma",
+  "Yuvenil idiopatik artrit",
+  "Reaktiv artrit",
+  "Tizimli qizil yuguruk",
+  "Septik artrit"
+ ],
+ "correctAnswer": "O'tkir revmatik isitma"
+},
+{
+ "text": "11 yoshli semiz o'g'il bolada profilaktik ko'rikda qon bosimi uch marta turli kunlarda yoshi va bo'yiga nisbatan 95-persentildan yuqori chiqdi. Ko'rikda vazn indeksi 29 (semizlik), bo'yin orqasida teri qoraygan, son arteriyasi pulsi yaxshi, qorin palpatsiyada patologiya yo'q, shish yo'q. Laborator: siydik tahlili normal, kreatinin normal, lipid profili buzilgan (triglitseridlar yuqori), nahorda glyukoza 5,9 mmol/l; buyrak exoskopiyasi normal. Ushbu bemorda eng to'g'ri birinchi qadam qaysi?",
+ "options": [
+  "Turmush tarzini o'zgartirish: vazn kamaytirish, tuzni cheklash va jismoniy faollik",
+  "Darhol angiotenzin aylantiruvchi ferment inhibitorini boshlash",
+  "Beta-blokatorni darhol boshlash",
+  "Buyrak arteriyasi angiografiyasini o'tkazish",
+  "Diuretikni uzoq muddatga tayinlash"
+ ],
+ "correctAnswer": "Turmush tarzini o'zgartirish: vazn kamaytirish, tuzni cheklash va jismoniy faollik"
+},
+{
+ "text": "6 yoshli bolada bronxial astma tashxisi bor. Hozir shoshilinch bo'limga keltirildi: nafas qisishi kuchli, gapirganda so'zlarni bo'lib-bo'lib aytadi. Ko'rikda nafas 44/daq, puls 140/daq, ko'krak qafasi botadi, o'pkada ikki tomonlama hushtaksimon tovushlar, saturatsiya 90%. Bola o'tirgan holatda, bezovta. Ushbu bemorda birinchi navbatda nima qilinadi?",
+ "options": [
+  "Kislorod berish va qisqa ta'sirli beta-2-agonistni ipratropium bilan ingalyatsiya qilish, so'ng tizimli steroid",
+  "Darhol intubatsiya qilish",
+  "Faqat tizimli steroid yuborib, ingalyatsiyani keyinga qoldirish",
+  "Vena ichiga antibiotik boshlash",
+  "Sedativ preparat berib, bolani tinchlantirish"
+ ],
+ "correctAnswer": "Kislorod berish va qisqa ta'sirli beta-2-agonistni ipratropium bilan ingalyatsiya qilish, so'ng tizimli steroid"
+},
+{
+ "text": "3 yoshli bolada ikki kundan beri qonli ich ketishi bor edi, bugun siydik kamaydi va qovoqlari shishdi. Ko'rikda teri rangpar, petexiyalar bor, qon bosimi 112/70 mm sim. ust. (yoshiga nisbatan yuqori), shish bor. Laborator: gemoglobin 72 g/l, trombotsitlar 42x10^9/l, kreatinin 180 mkmol/l, LDG yuqori, periferik qon surtmasida shizotsitlar (parchalangan eritrotsitlar) bor; najas ekmasida Shiga toksin ishlab chiqaruvchi ichtayoqcha topildi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Gemolitik-uremik sindrom",
+  "Immun trombotsitopenik purpura",
+  "Shenlein-Genox purpurasi",
+  "Tarqoq ichdomir ivish sindromi",
+  "O'tkir glomerulonefrit"
+ ],
+ "correctAnswer": "Gemolitik-uremik sindrom"
+},
+{
+ "text": "7 oylik bolada ikki oydan beri teri burmalarida va tirsak bukilishida qichishuvchi, qipiqlanuvchi toshma bor; bola kechasi tinchlanmaydi va terisini qashiydi. Oilada otasida bronxial astma, onasida allergik rinit bor. Ko'rikda yuz, bo'yin va tirsak bukilishida eritematoz, qipiqli o'choqlar, ekskoriatsiyalar bor, teri umuman quruq; infeksiya belgisi (yiring, qipiq-qobiq) yo'q. Ushbu bemorda davolashning asosi nima?",
+ "options": [
+  "Kunda bir necha marta emollient va qo'zish davrida past-o'rta kuchli mahalliy glyukokortikosteroid",
+  "Tizimli glyukokortikosteroid kursi",
+  "Tizimli antibiotik kursi",
+  "Faqat antigistamin preparat",
+  "Keng qamrovli eliminatsion diyeta, teri davolashsiz"
+ ],
+ "correctAnswer": "Kunda bir necha marta emollient va qo'zish davrida past-o'rta kuchli mahalliy glyukokortikosteroid"
+}
+]
+}

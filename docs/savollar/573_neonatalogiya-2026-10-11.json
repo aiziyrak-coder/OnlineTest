@@ -1,0 +1,445 @@
+{
+"category": "Neonatalogiya — ordinatura 1-kurs",
+"questions": [
+{
+ "text": "Muddatida tug'ilgan 3400 g vaznli o'g'il chaqaloq hayotining 36-soatida. Ko'rikda teri va shilliq qavatlar sarg'aygan, sarg'ayish yuz va ko'krakdan tarqalib, qorin pastiga ham yetgan. Bola faol emadi, uyquchan. Onasi 0(I) Rh(+) qon guruhiga, bola A(II) Rh(+) ga ega. Laborator: umumiy bilirubin 320 mkmol/l (to'g'ridan-to'g'ri fraksiya 12 mkmol/l), gemoglobin 128 g/l, retikulotsitlar 9%, to'g'ridan-to'g'ri Kumbs sinovi musbat. Fototerapiya 8 soat davomida olib borilgan, bilirubin pasaymagan. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "Almashtirib qon quyish (eksanguinotransfuziya) o'tkazish",
+  "Fototerapiyani davom ettirib, 12 soatdan keyin qayta baholash",
+  "Immunoglobulinni vena ichiga yuborib, kuzatishni davom ettirish",
+  "Fenobarbital bilan jigar fermentlarini induksiya qilish",
+  "Emizishni to'xtatib, faqat aralashma bilan ovqatlantirish"
+ ],
+ "correctAnswer": "Almashtirib qon quyish (eksanguinotransfuziya) o'tkazish"
+},
+{
+ "text": "28 haftalik muddatda 1100 g vazn bilan tug'ilgan chaqaloqda tug'ilgandan 20 daqiqa o'tib nafas qisishi kuchaydi: nafas 72/daq, ko'krak qafasi botib-chiqishi, nafas chiqarishda ingrash, saturatsiya 85% (kislorod 40% bilan). Ko'krak qafasi rentgenogrammasida ikki tomonlama retikulogranulyar ko'rinish va havo bronxogrammasi aniqlandi. Onaga tug'ruqdan oldin steroid ulgurib berilmagan. Hozir bolaga doimiy musbat bosim (CPAP) 6 sm suv ust. berilmoqda, lekin holati yaxshilanmayapti. Keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "Intubatsiya qilib, endotraxeal surfaktant yuborish",
+  "Keng qamrovli antibiotiklarni boshlab, kuzatishni davom ettirish",
+  "Diuretik (furosemid) yuborib, o'pka shishini kamaytirish",
+  "CPAP bosimini 10 sm suv ust. gacha ko'tarib, boshqa chora ko'rmaslik",
+  "Vena ichiga glyukokortikosteroid yuborish"
+ ],
+ "correctAnswer": "Intubatsiya qilib, endotraxeal surfaktant yuborish"
+},
+{
+ "text": "Muddatida sezaryen bilan tug'ilgan 3600 g vaznli qiz chaqaloqda hayotining birinchi soatidan nafas tezlashgan (nafas 80/daq), yengil ko'krak botishi va nafas chiqarishda ingrash bor; saturatsiya kislorodsiz 92%. Isitma yo'q, onada suvsiz davr qisqa, qon tahlilida leykotsitlar va CRP normal. Ko'krak qafasi rentgenogrammasida o'pka maydonlari havoga to'lgan, perihilar chiziqli zichlanish va interlobar yoriqda suyuqlik bor. 6 soat ichida nafas tezligi asta-sekin kamaymoqda. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Chaqaloqning o'tkinchi taxipnoesi",
+  "Respirator distress sindromi (surfaktant tanqisligi)",
+  "Tug'ma pnevmoniya",
+  "Mekoniy aspiratsiyasi sindromi",
+  "Diafragma churrasi"
+ ],
+ "correctAnswer": "Chaqaloqning o'tkinchi taxipnoesi"
+},
+{
+ "text": "41 haftalik muddatda tug'ilgan chaqaloq tug'ruq paytida qalin mekoniyli amniotik suvda bo'lgan. Tug'ilgandan keyin nafas qisishi kuchli: nafas 78/daq, ko'krak qafasi bochkasimon, saturatsiya o'ng qo'lda 88%, oyoqda 76% (farq 12%). Ko'krak qafasi rentgenogrammasida tarqoq dog'li infiltratsiya va giperinflyatsiya. Exokardiografiyada o'ng bo'lmacha bosimi yuqori, ochiq arterial yo'l orqali o'ngdan chapga shunt bor, yurak tuzilishi normal. Kislorod 100% berilganda ham saturatsiya past qolmoqda. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Chaqaloqning doimiy o'pka gipertenziyasi (PPHN)",
+  "Tug'ma yurak nuqsoni — Fallo tetradasi",
+  "Respirator distress sindromi",
+  "Chaqaloqning o'tkinchi taxipnoesi",
+  "Pnevmotoraks"
+ ],
+ "correctAnswer": "Chaqaloqning doimiy o'pka gipertenziyasi (PPHN)"
+},
+{
+ "text": "26 haftalik muddatda 800 g vazn bilan tug'ilgan chaqaloq hayotining 9-kunida. Enteral ovqatlantirish uch kun oldin boshlangan va hajmi tez oshirilgan. Hozir qorin dam bo'lgan, qorin devori oldingi yuzasida qizarish bor, oshqozondan safroli qoldiq keladi, najasda qon aralashmasi paydo bo'ldi. Bola letargik, harorati beqaror. Qorin bo'shlig'i rentgenogrammasida ichak devorida havo pufakchalari (pnevmatoz) aniqlandi, erkin havo yo'q. Laborator: trombotsitlar 68x10^9/l, metabolik atsidoz. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Enteral ovqatlantirishni to'xtatish, nazogastral dekompressiya, keng qamrovli antibiotik va parenteral ovqatlantirish",
+  "Ovqatlantirishni davom ettirib, probiotik qo'shish",
+  "Darhol laparotomiya qilib, ichakning zararlangan qismini olib tashlash",
+  "Faqat og'iz orqali antibiotik berib, ovqatlantirishni kamaytirish",
+  "Qon quyib, trombotsitlarni ko'tarib, boshqa chora ko'rmaslik"
+ ],
+ "correctAnswer": "Enteral ovqatlantirishni to'xtatish, nazogastral dekompressiya, keng qamrovli antibiotik va parenteral ovqatlantirish"
+},
+{
+ "text": "Muddatida tug'ilgan 4300 g vaznli chaqaloq hayotining 2-soatida tekshirilmoqda. Onasida gestatsion qandli diabet bor edi. Bola bezovta, titroq bor, emishi yaxshi emas; keyin letargiya va yuzaki apnoe epizodi kuzatildi. Ko'rikda makrosomiya, yuz to'la, harorati normal. Qondagi glyukoza 1,4 mmol/l. Bola og'iz orqali ovqatlantirishni yaxshi qabul qilmaydi. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "Vena ichiga 10% glyukoza bolyusi (2 ml/kg) yuborib, infuziyani davom ettirish",
+  "Og'iz orqali 5% glyukoza eritmasi berib, bir soatdan keyin qayta o'lchash",
+  "Faqat tez-tez emizishga o'tkazish va kuzatish",
+  "Glyukagon mushak ichiga yuborish va boshqa chora ko'rmaslik",
+  "Gidrokortizonni vena ichiga yuborish"
+ ],
+ "correctAnswer": "Vena ichiga 10% glyukoza bolyusi (2 ml/kg) yuborib, infuziyani davom ettirish"
+},
+{
+ "text": "39 haftalik muddatda tug'ilgan chaqaloqda tug'ruq og'ir kechgan: ikkinchi davr uzoq davom etgan, Apgar 1-daqiqada 2, 5-daqiqada 4 ball. Kindik arteriyasi qonida pH 6,92, asos defitsiti 18 mmol/l. Hayotining 2-soatida bola koma holatida, mushak tonusi past, so'rish refleksi yo'q, tirishish epizodlari bor. Gestatsion yosh 39 hafta, vazn 3200 g, tug'ilgandan 4 soat o'tgan. Ushbu bemorda eng to'g'ri davolash chorasi qaysi?",
+ "options": [
+  "Terapevtik gipotermiya (tanani 33-34°C gacha sovutish) boshlash",
+  "Yuqori dozada deksametazon yuborish",
+  "Mannitol bilan miya shishini kamaytirish",
+  "Tanani faol isitib, 37,5°C da ushlab turish",
+  "Profilaktik fenobarbitalni uzoq muddat tayinlash"
+ ],
+ "correctAnswer": "Terapevtik gipotermiya (tanani 33-34°C gacha sovutish) boshlash"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 14-soatida: tana harorati 35,8°C, nafas 70/daq, letargik, emishi yomon, terisi marmarsimon. Onada tug'ruqdan oldin isitma bo'lgan va suvsiz davr 22 soat davom etgan; onaning oldingi homiladorligida B guruh streptokokk tashuvchiligi aniqlangan, tug'ruq paytida antibiotik profilaktikasi berilmagan. Laborator: leykotsitlar 4,2x10^9/l, yosh shakllar nisbati yuqori, CRP 48 mg/l, trombotsitlar 94x10^9/l. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Qon va orqa miya suyuqligi ekmasini olib, darhol ampitsillin va gentamitsin boshlash",
+  "Faqat kuzatish va 12 soatdan keyin CRP ni qayta tekshirish",
+  "Faqat antivirus preparat (asiklovir) boshlash",
+  "Immunoglobulinni vena ichiga yuborib, antibiotiksiz kuzatish",
+  "Og'iz orqali amoksisillin berib, uyga javob berish"
+ ],
+ "correctAnswer": "Qon va orqa miya suyuqligi ekmasini olib, darhol ampitsillin va gentamitsin boshlash"
+},
+{
+ "text": "Ona suti bilan ovqatlanayotgan muddatida tug'ilgan chaqaloq hayotining 5-kunida: sarg'ayish bor, umumiy bilirubin 210 mkmol/l (to'g'ridan-to'g'ri 9 mkmol/l). Bola faol, yaxshi emadi (kuniga 10-12 marta), siydik va najas me'yorida, vazni tug'ilish vaznidan 4% kam. Qon guruhi onasiga mos, Kumbs sinovi salbiy, gemoglobin 165 g/l, retikulotsitlar normal. Jigar va taloq kattalashmagan, najas rangi normal. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Emizishni davom ettirib, bilirubinni kuzatish — maxsus davolash shart emas",
+  "Emizishni butunlay to'xtatib, aralashmaga o'tkazish",
+  "Darhol fototerapiya boshlash",
+  "Almashtirib qon quyishga tayyorlash",
+  "Ursodeoksixol kislotasi tayinlash"
+ ],
+ "correctAnswer": "Emizishni davom ettirib, bilirubinni kuzatish — maxsus davolash shart emas"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 3-haftasida: sarg'ayish saqlanib turgan, najas och rangli (axoliyali), siydik to'q sariq. Vazn qo'shishi sekin. Ko'rikda jigar qirrasi qattiq, 3 sm kattalashgan. Laborator: umumiy bilirubin 180 mkmol/l, to'g'ridan-to'g'ri fraksiya 120 mkmol/l (umumiyning 65%), GGT yuqori, ALT yengil yuqori. Ushbu bemorda keyingi eng muhim qadam qaysi?",
+ "options": [
+  "O't yo'llari atreziyasini izlash: jigar va o't yo'llari exoskopiyasi va bolalar jarrohi ko'rigi",
+  "Fototerapiya kursini boshlash",
+  "Emizishni to'xtatib, laktozasiz aralashmaga o'tkazish",
+  "Faqat ursodeoksixol kislotasi tayinlab, bir oydan keyin qayta ko'rish",
+  "Almashtirib qon quyish"
+ ],
+ "correctAnswer": "O't yo'llari atreziyasini izlash: jigar va o't yo'llari exoskopiyasi va bolalar jarrohi ko'rigi"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 4-kunida burundan va kindik qoldig'idan qon ketishi bilan keltirildi; najasda ham qon aralashmasi bor. Bola uyda tug'ilgan, tug'ilgandan keyin hech qanday profilaktik in'eksiya qilinmagan, faqat ona suti bilan ovqatlanadi. Ko'rikda terida ekximozlar bor, isitma yo'q, bola faol emas. Laborator: trombotsitlar 230x10^9/l (normal), protrombin vaqti sezilarli uzaygan, APTT uzaygan, fibrinogen normal. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Vitamin K (fitomenadion) ni parenteral yuborish",
+  "Trombotsitar massa quyish",
+  "Vena ichiga immunoglobulin yuborish",
+  "Geparin infuziyasini boshlash",
+  "Faqat yangi muzlatilgan plazma quyib, vitamin bermaslik"
+ ],
+ "correctAnswer": "Vitamin K (fitomenadion) ni parenteral yuborish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 3-kunida ko'kargan holatda topildi. Ko'rikda tinch holatda sianoz bor, yig'laganda sianoz kuchayadi; nafas 55/daq, ko'krak qafasi botmaydi, o'pka auskultatsiyasida xirillash yo'q. Yurak shovqini eshitilmaydi. Kislorod 100% bilan 10 daqiqa nafas oldirilgandan keyin ham arterial qonda pO2 38 mm sim. ust. (giperoksik sinov salbiy). Ko'krak qafasi rentgenogrammasida o'pka maydonlari toza, yurak hajmi normal. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Tug'ma yurak nuqsoni — qonning aralashishi bilan kechuvchi sianotik nuqson",
+  "Respirator distress sindromi",
+  "Chaqaloqning o'tkinchi taxipnoesi",
+  "Tug'ma pnevmoniya",
+  "Metgemoglobinemiya"
+ ],
+ "correctAnswer": "Tug'ma yurak nuqsoni — qonning aralashishi bilan kechuvchi sianotik nuqson"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda hayotining 2-kunida sianoz va holsizlik kuchaydi. Exokardiografiyada aorta qovuzlog'ining og'ir koarktatsiyasi aniqlandi va pastki tana qon aylanishi ochiq arterial yo'lga bog'liq ekani ko'rsatildi. Ko'rikda son arteriyasi pulsi kuchsiz, oyoqlarda qon bosimi qo'llardagidan 30 mm sim. ust. past, metabolik atsidoz bor, siydik ajralishi kamaygan. Jarrohlik tuzatishga tayyorlanmoqda. Ushbu bemorda qaysi preparat hayotiy ahamiyatga ega?",
+ "options": [
+  "Prostaglandin E1 infuziyasi (arterial yo'lni ochiq ushlash uchun)",
+  "Indometatsin (arterial yo'lni yopish uchun)",
+  "Yuqori dozada kislorod (100%) berish",
+  "Furosemid infuziyasi",
+  "Propranolol infuziyasi"
+ ],
+ "correctAnswer": "Prostaglandin E1 infuziyasi (arterial yo'lni ochiq ushlash uchun)"
+},
+{
+ "text": "4200 g vaznli chaqaloq yelkasi qisilgan og'ir tug'ruqdan keyin tekshirilmoqda. Ko'rikda o'ng qo'l tanaga yopishgan holda, yelka ichga burilgan, tirsak yozilgan, panja kaftlari orqaga qaragan; o'ng qo'lda Moro refleksi chaqirilmaydi, panja va barmoqlar harakati saqlangan. Qo'lda shish va og'riqli joy yo'q, ko'krak qafasi rentgenogrammasida yelka kamari suyaklari butun. Diafragma harakati normal. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Yelka chigalining yuqori qismi shikastlanishi (Erb-Dyushen falaji)",
+  "Yelka chigalining pastki qismi shikastlanishi (Klumpke falaji)",
+  "Yelka suyagi sinishi",
+  "Yelka chigalining to'liq uzilishi",
+  "Yurak-o'pka yetishmovchiligi tufayli mushak tonusining pasayishi"
+ ],
+ "correctAnswer": "Yelka chigalining yuqori qismi shikastlanishi (Erb-Dyushen falaji)"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda tug'ilgandan keyin boshda shish aniqlandi. Shish bosh suyagining faqat o'ng tepa suyagi chegarasida joylashgan, chok chizig'idan oshmaydi, bosganda qattiq-elastik, hayotining ikkinchi kunida kattalashgan. Teri ustida ko'karish bor. Bolaning umumiy holati yaxshi, emishi yaxshi, gemoglobin 150 g/l, bilirubin 180 mkmol/l. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Sefalogematoma (suyak usti pardasi ostiga qon quyilishi)",
+  "Tug'ruq shishi (caput succedaneum)",
+  "Bosh suyagi osti (subgaleal) gematoma",
+  "Miya ichiga qon quyilishi",
+  "Ensefalotsela"
+ ],
+ "correctAnswer": "Sefalogematoma (suyak usti pardasi ostiga qon quyilishi)"
+},
+{
+ "text": "29 haftalik muddatda tug'ilgan chaqaloq hayotining 10-kunida: nafas apnoesi epizodlari takrorlanadi (20 soniyadan uzun, bradikardiya va saturatsiya pasayishi bilan), kuniga 6-8 marta. Infeksiya belgilari yo'q (CRP normal, ekma salbiy), gemoglobin 140 g/l, glyukoza va elektrolitlar normal, qorin yumshoq, bosh miya exoskopiyasida qon quyilish yo'q. Bola CPAP da turibdi. Ushbu bemorda eng to'g'ri davolash chorasi qaysi?",
+ "options": [
+  "Kofein sitrat yuklama dozasi va keyin saqlab turuvchi doza",
+  "Fenobarbital bilan tinchlantirish",
+  "Doksapram infuziyasini birinchi tanlov sifatida boshlash",
+  "Darhol intubatsiya qilib, sun'iy nafasga o'tkazish",
+  "Qon quyish va boshqa chora ko'rmaslik"
+ ],
+ "correctAnswer": "Kofein sitrat yuklama dozasi va keyin saqlab turuvchi doza"
+},
+{
+ "text": "27 haftalik muddatda 950 g vazn bilan tug'ilgan chaqaloq hayotining 30-kunida: hali ham kislorodga muhtoj (FiO2 0,30), nafas tez, ko'krak qafasi botadi. Ko'krak qafasi rentgenogrammasida o'pkada notekis havolanish, fibroz chiziqlar va emfizematoz sohalar bor. Infeksiya belgisi yo'q, exokardiografiyada muhim shunt yo'q. Bola surfaktant olgan va bir hafta sun'iy nafasda bo'lgan. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Bronxo-o'pka displaziyasi",
+  "Respirator distress sindromining davom etishi",
+  "Tug'ma pnevmoniya",
+  "Mekoniy aspiratsiyasi sindromi",
+  "O'pka gipoplaziyasi"
+ ],
+ "correctAnswer": "Bronxo-o'pka displaziyasi"
+},
+{
+ "text": "25 haftalik muddatda 700 g vazn bilan tug'ilgan chaqaloq hayotining 4-kunida: holati to'satdan yomonlashdi — qon bosimi pasaydi, gematokrit 12% ga kamaydi, katta liqildoq taranglashdi, tirishish epizodi kuzatildi, metabolik atsidoz chuqurlashdi. Bosh miya exoskopiyasida yon qorinchalarda qon va qorincha kengayishi, miya parenximasiga tarqalgan qon quyilish aniqlandi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Qorincha ichiga qon quyilish, III-IV daraja",
+  "Periventrikulyar leykomalatsiya",
+  "Bakterial meningit",
+  "Gipoksik-ishemik ensefalopatiya",
+  "Sinus venoz trombozi"
+ ],
+ "correctAnswer": "Qorincha ichiga qon quyilish, III-IV daraja"
+},
+{
+ "text": "26 haftalik muddatda 780 g vazn bilan tug'ilgan chaqaloq hozir 34 haftalik postkonseptual yoshda. U uzoq vaqt kislorod olgan va bir necha marta qon quyilgan. Bola hozirda barqaror, ovqatlanishi yaxshi. Ota-onasiga chiqarishdan oldin ko'z ko'rigi rejalashtirilgani aytildi. Qaysi asoratni izlash maqsad qilingan?",
+ "options": [
+  "Chala tug'ilganlar retinopatiyasi",
+  "Tug'ma glaukoma",
+  "Tug'ma katarakta",
+  "Konyunktivit (ophthalmia neonatorum)",
+  "Ko'z olmasining rivojlanmaganligi (mikroftalmiya)"
+ ],
+ "correctAnswer": "Chala tug'ilganlar retinopatiyasi"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 3-kunida ko'zlaridan ko'p miqdorda yiringli ajralma bilan keltirildi. Qovoqlar kuchli shishgan, konyunktiva qizargan, ajralma juda ko'p va qalin. Onada homiladorlik davomida ginekologik kuzatuv bo'lmagan. Ajralmadan olingan surtmada ichki hujayra joylashgan gram-manfiy diplokokklar topildi. Ko'rish qobiliyatiga tahdid bor. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Tizimli uchinchi avlod sefalosporini yuborish va ko'zni tez-tez yuvish",
+  "Faqat mahalliy antibiotik malhami qo'llash",
+  "Faqat ko'zni fiziologik eritma bilan yuvish",
+  "Tizimli asiklovir boshlash",
+  "Mahalliy glyukokortikosteroid tomchi tayinlash"
+ ],
+ "correctAnswer": "Tizimli uchinchi avlod sefalosporini yuborish va ko'zni tez-tez yuvish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqning kindik qoldig'i atrofida hayotining 6-kunida qizarish paydo bo'ldi: qizarish kindikdan 2 sm uzoqqa tarqalgan, qorin devori shishgan va qattiqlashgan, kindikdan badbo'y ajralma keladi. Tana harorati 38,3°C, bola letargik, emishi yomon. Laborator: leykotsitoz, CRP 72 mg/l. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Kasalxonaga yotqizib, vena ichiga keng qamrovli antibiotik boshlash",
+  "Kindikni spirt bilan ishlab, uyda kuzatish",
+  "Faqat mahalliy antibiotik malhami qo'yish",
+  "Kindik qoldig'ini jarrohlik yo'li bilan olib tashlash va antibiotiksiz kuzatish",
+  "Og'iz orqali amoksisillin berib, uch kundan keyin ko'rish"
+ ],
+ "correctAnswer": "Kasalxonaga yotqizib, vena ichiga keng qamrovli antibiotik boshlash"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda hayotining birinchi soatlaridan boshlab og'izdan ko'p so'lak ajraladi, emizishga urinilganda yo'taladi, ko'karadi va suyuqlik burundan qaytadi. Nazogastral zond kiritishga urinilganda zond 10 sm dan chuqur o'tmaydi. Ko'krak va qorin rentgenogrammasida zondning yuqori ko'krak sohasida to'xtaganligi va qorinda havo borligi aniqlandi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Qizilo'ngach atreziyasi, distal traxeo-ezofageal fistula bilan",
+  "Diafragma churrasi",
+  "Choanal atreziya",
+  "Pilorostenoz",
+  "Oshqozon-qizilo'ngach reflyuksi"
+ ],
+ "correctAnswer": "Qizilo'ngach atreziyasi, distal traxeo-ezofageal fistula bilan"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda tug'ilgandan keyin og'ir nafas qisishi bor: nafas 80/daq, sianoz, chap ko'krak qafasida nafas shovqini eshitilmaydi va ichak shovqinlari eshitiladi; yurak tovushlari o'ng tomonga siljigan, qorin ichiga tortilgan. Maska bilan nafas berish holatni yaxshilamadi. Ko'krak qafasi rentgenogrammasida chap ko'krak bo'shlig'ida havoga to'lgan ichak halqalari ko'rinadi. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+ "options": [
+  "Darhol intubatsiya qilish va nazogastral zond bilan oshqozonni bo'shatish",
+  "Maska bilan nafas berishni davom ettirish",
+  "Ko'krak qafasiga drenaj qo'yish",
+  "Surfaktant yuborish",
+  "Qorin bo'shlig'ini punksiya qilish"
+ ],
+ "correctAnswer": "Darhol intubatsiya qilish va nazogastral zond bilan oshqozonni bo'shatish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 20-daqiqasida: nafas qisishi va sianoz bor, lekin bola yig'laganda rangi yaxshilanadi, og'zi yopilganda esa sianoz qaytadi. Nazogastral zondni har ikki burun yo'lidan o'tkazishga urinish muvaffaqiyatsiz tugadi. O'pka auskultatsiyasida nafas shovqini simmetrik, ko'krak qafasi rentgenogrammasi normal. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+ "options": [
+  "Ikki tomonlama choanal atreziya",
+  "Qizilo'ngach atreziyasi",
+  "Traxeomalatsiya",
+  "Tug'ma yurak nuqsoni",
+  "Diafragma churrasi"
+ ],
+ "correctAnswer": "Ikki tomonlama choanal atreziya"
+},
+{
+ "text": "Muddatida tug'ilgan qiz chaqaloqda hayotining 10-kunida qusish, vazn yo'qotish va letargiya kuzatildi. Ko'rikda tashqi jinsiy a'zolar noaniq tuzilgan: klitor kattalashgan, labiyalar birikkan. Teri pigmentatsiyasi kuchaygan. Laborator: natriy 124 mmol/l, kaliy 7,2 mmol/l, glyukoza 2,4 mmol/l, metabolik atsidoz; 17-gidroksiprogesteron sezilarli yuqori. Ushbu bemorda eng to'g'ri shoshilinch taktika qaysi?",
+ "options": [
+  "Fiziologik eritma bilan suyuqlik to'ldirish va gidrokortizonni parenteral yuborish",
+  "Faqat kaliy almashtiruvchi smola berib, kuzatish",
+  "Darhol jinsiy a'zolarga jarrohlik aralashuv o'tkazish",
+  "Tiroksin bilan davolashni boshlash",
+  "Yuqori dozada mineralokortikoid bilan birga insulin infuziyasi"
+ ],
+ "correctAnswer": "Fiziologik eritma bilan suyuqlik to'ldirish va gidrokortizonni parenteral yuborish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda neonatal skrining natijasi qaytdi: qalqonsimon bezni rag'batlantiruvchi gormon (TSH) sezilarli yuqori, erkin T4 past. Bola hozir 12 kunlik, ko'rikda katta til, kindik churrasi, teri quruq, mushak tonusi past, sarg'ayish uzoq davom etmoqda, ich qotishi bor. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Darhol levotiroksin bilan o'rnini bosuvchi terapiyani boshlash",
+  "Bir oydan keyin gormonlarni qayta tekshirib, keyin qarorga kelish",
+  "Faqat yod preparatlari tayinlash",
+  "Qalqonsimon bez sintigrafiyasi natijasini kutib, davolashni kechiktirish",
+  "Propiltiouratsil bilan davolashni boshlash"
+ ],
+ "correctAnswer": "Darhol levotiroksin bilan o'rnini bosuvchi terapiyani boshlash"
+},
+{
+ "text": "Onasi homiladorlik davomida opioid moddalar iste'mol qilgan chaqaloq hayotining 2-kunida: bezovta, to'xtovsiz yig'laydi, titroq bor, qattiq so'radi lekin emishi muvofiqlashmagan, tez-tez aksiradi, ich ketishi va terlash kuzatiladi. Tana harorati 37,6°C, nafas 70/daq. Qon glyukozasi, elektrolitlar va infeksiya ko'rsatkichlari normal, bosh miya exoskopiyasi normal. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+ "options": [
+  "Qo'llab-quvvatlovchi chora-tadbirlar: tinch muhit, o'rash, tez-tez kichik hajmda ovqatlantirish",
+  "Darhol naloksonni mushak ichiga yuborish",
+  "Fenobarbitalni birinchi tanlov sifatida boshlash",
+  "Og'iz orqali metadonni darhol yuqori dozada boshlash",
+  "Emizishni butunlay to'xtatish"
+ ],
+ "correctAnswer": "Qo'llab-quvvatlovchi chora-tadbirlar: tinch muhit, o'rash, tez-tez kichik hajmda ovqatlantirish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda hayotining 2-haftasida ko'rikda: mikrotsefaliya, jigar va taloq kattalashishi, terida petexiyalar, eshitish sinovi ikki tomonlama patologik. Bosh miya kompyuter tomografiyasida periventrikulyar kaltsifikatlar aniqlandi. Siydikda virus DNK si yuqori titrda topildi. Onada homiladorlik davomida yengil isitma epizodi bo'lgan. Ushbu bemorda eng ehtimolli qo'zg'atuvchi qaysi?",
+ "options": [
+  "Sitomegalovirus",
+  "Toksoplazma",
+  "Qizilcha virusi (rubella)",
+  "Oddiy gerpes virusi",
+  "Zangi (sifilis) qo'zg'atuvchisi"
+ ],
+ "correctAnswer": "Sitomegalovirus"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 7-kunida tirishish bilan keltirildi. Ko'rikda terida vezikulyar toshmalar, konyunktivit bor; bola letargik, harorati 38,1°C. Orqa miya suyuqligida limfotsitar pleotsitoz, oqsil yuqori, glyukoza normal; PCR da virus DNK si topildi. Onada tug'ruq paytida jinsiy a'zolarda og'riqli yaralar bo'lgan va tug'ruq tabiiy yo'l bilan kechgan. Ushbu bemorda eng to'g'ri davolash qaysi?",
+ "options": [
+  "Vena ichiga yuqori dozada asiklovir",
+  "Vena ichiga ampitsillin va gentamitsin",
+  "Vena ichiga gansiklovir",
+  "Og'iz orqali asiklovir past dozada",
+  "Vena ichiga immunoglobulin, antivirus preparatsiz"
+ ],
+ "correctAnswer": "Vena ichiga yuqori dozada asiklovir"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining birinchi daqiqasida: nafas olmaydi, mushak tonusi past, yurak urishi daqiqada 80 marta. Tanani quritish, isitish va nafas yo'llarini tozalashdan keyin ham nafas yo'q. Chaqaloq reanimatsiya stolida, kislorod va niqobli nafas apparati tayyor. Keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "Niqob bilan musbat bosimli nafas berishni boshlash",
+  "Darhol ko'krak qafasiga massaj boshlash",
+  "Adrenalinni kindik venasiga yuborish",
+  "Darhol intubatsiya qilish",
+  "Nafas yo'llarini qayta-qayta so'rib tozalashni davom ettirish"
+ ],
+ "correctAnswer": "Niqob bilan musbat bosimli nafas berishni boshlash"
+},
+{
+ "text": "Muddatida tug'ilgan 3800 g vaznli chaqaloq hayotining 36-soatida: terisi juda qizil (ko'kish-qizil), bola uyquchan, emishi yomon, nafas tezlashgan. Onada gestatsion qandli diabet bo'lgan. Laborator: gematokrit 71%, gemoglobin 232 g/l, glyukoza 2,6 mmol/l, trombotsitlar 110x10^9/l, bilirubin 240 mkmol/l. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Qismiy almashtirib qon quyish (gematokritni fiziologik eritma bilan pasaytirish)",
+  "Qon quyish (eritrotsitar massa) bilan anemiyani tuzatish",
+  "Faqat fototerapiya bilan cheklanish",
+  "Diuretik yuborib, suyuqlikni kamaytirish",
+  "Geparin infuziyasini boshlash"
+ ],
+ "correctAnswer": "Qismiy almashtirib qon quyish (gematokritni fiziologik eritma bilan pasaytirish)"
+},
+{
+ "text": "32 haftalik muddatda tug'ilgan chaqaloq hayotining 3-kunida: qon bosimi past, periferik qon aylanishi yomon, siydik ajralishi kamaygan, o'pkada nafas shovqini kuchaygan va butun ko'krakda doimiy mashinasimon shovqin eshitiladi; puls to'lqinlari yuqori amplitudali («sakrovchi» puls). Exokardiografiyada ochiq arterial yo'l orqali chapdan o'ngga katta shunt aniqlandi. Trombotsitlar normal, buyrak funksiyasi yengil buzilgan, siydik haydovchi berilmagan. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Suyuqlikni cheklash va siklooksigenaza inhibitori (ibuprofen yoki indometatsin) bilan arterial yo'lni yopish",
+  "Prostaglandin E1 infuziyasini boshlash",
+  "Suyuqlik hajmini oshirib, qon bosimini ko'tarish",
+  "Darhol jarrohlik ligatura qilish, boshqa chora ko'rmasdan",
+  "Faqat kuzatish — arterial yo'l o'zi yopiladi"
+ ],
+ "correctAnswer": "Suyuqlikni cheklash va siklooksigenaza inhibitori (ibuprofen yoki indometatsin) bilan arterial yo'lni yopish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 30-soatida hali najas chiqarmagan va qorin dam bo'lgan, safroli qusish boshlandi. Ko'rikda qorin kattalashgan, anal teshik ko'rinadi va normal joylashgan. Qorin rentgenogrammasida ingichka va yo'g'on ichak halqalari kengaygan, pastki qismda gaz kam. Irrigografiyada mikrokolon va o'tish zonasi aniqlandi; najas kalsiyli emas. Onada homiladorlik davomida polihidramnion bo'lgan. Ushbu bemorda qaysi kasallikni birinchi navbatda izlash kerak?",
+ "options": [
+  "Mukovistsidoz (mekoniyli ichak tutilishi)",
+  "Girshprung kasalligi",
+  "Anal atreziya",
+  "Nekrozlovchi enterokolit",
+  "Pilorostenoz"
+ ],
+ "correctAnswer": "Mukovistsidoz (mekoniyli ichak tutilishi)"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 3-kunida safroli qusish va qorin og'rig'i belgilari bilan keltirildi. Bola oldin yaxshi emgan va mekoniy chiqargan. Qorin rentgenogrammasida oshqozon va proksimal o'n ikki barmoqli ichak kengaygan, pastda gaz kam. Yuqori oshqozon-ichak kontrast tekshiruvida o'n ikki barmoqli ichakning noto'g'ri joylashuvi va «burama» ko'rinish aniqlandi. Bolaning holati tez yomonlashmoqda, najasda qon paydo bo'ldi. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Shoshilinch jarrohlik aralashuv (ichak burilishini yechish)",
+  "Nazogastral dekompressiya va kuzatishni davom ettirish",
+  "Kontrast klizma qilib, yana kuzatish",
+  "Antibiotik boshlab, rejali operatsiyani 48 soatga qoldirish",
+  "Probiotik va spazmolitik tayinlash"
+ ],
+ "correctAnswer": "Shoshilinch jarrohlik aralashuv (ichak burilishini yechish)"
+},
+{
+ "text": "32 haftalik muddatda tug'ilgan chaqaloq hozir 2100 g vaznga yetdi va enteral ovqatlanishni to'liq o'zlashtirdi. Ona suti bor. Chaqaloq chala tug'ilganlar bo'limida kuzatilmoqda, kislorodga muhtoj emas, apnoe epizodlari to'xtagan. Ota-onasi uyga chiqish oldidan ovqatlanish va profilaktika haqida so'raydi. Chala tug'ilgan chaqaloqda uy sharoitida qaysi qo'shimcha eng muhim?",
+ "options": [
+  "Temir va D vitamini preparatlarini profilaktik tayinlash",
+  "Faqat kaltsiy preparati tayinlash",
+  "Og'iz orqali antibiotik profilaktikasini davom ettirish",
+  "Sigir suti asosidagi oddiy aralashmaga butunlay o'tkazish",
+  "Yod preparatlarini yuqori dozada tayinlash"
+ ],
+ "correctAnswer": "Temir va D vitamini preparatlarini profilaktik tayinlash"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 2-kunida tirishish epizodi bilan keltirildi: qo'l va oyoqlarda ritmik qimirlash, ko'z soqqalarining bir tomonga qarashi. Epizod 2 daqiqa davom etgan. Tug'ruq normal kechgan, Apgar 8/9. Laborator: glyukoza 3,8 mmol/l, natriy 139 mmol/l, kaltsiy 1,52 mmol/l (ionlashgan past), magniy 0,6 mmol/l, infeksiya ko'rsatkichlari normal, bosh miya exoskopiyasi normal. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+ "options": [
+  "Kaltsiy glyukonatni (va magniyni) vena ichiga sekin yuborish",
+  "Fenobarbital yuklama dozasini yuborish",
+  "Glyukoza bolyusini yuborish",
+  "Keng qamrovli antibiotik boshlash",
+  "Piridoksin (B6) yuborish"
+ ],
+ "correctAnswer": "Kaltsiy glyukonatni (va magniyni) vena ichiga sekin yuborish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda hayotining 5-kunida chap ko'krak sohasida shish va qizarish paydo bo'ldi, bola o'sha qo'lini qimirlatishdan saqlanadi va ko'tarilganda yig'laydi. Tana harorati 38,4°C. Laborator: leykotsitoz, CRP yuqori. Yelka bo'g'imi exoskopiyasida bo'g'im bo'shlig'ida suyuqlik aniqlandi. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "Bo'g'imni punksiya qilib material olish va darhol parenteral antibiotik boshlash",
+  "Faqat qo'lni immobilizatsiya qilib, og'riq qoldiruvchi berish",
+  "Mahalliy issiq kompress qo'yib, kuzatish",
+  "Og'iz orqali antibiotik berib, uyga javob berish",
+  "Faqat fizioterapiya tayinlash"
+ ],
+ "correctAnswer": "Bo'g'imni punksiya qilib material olish va darhol parenteral antibiotik boshlash"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloqda tug'ilgandan keyin tanasi sovuq: tana harorati 35,4°C, qo'l-oyoqlari ko'kish, nafas 68/daq, qon glyukozasi 2,3 mmol/l, metabolik atsidoz bor. Tug'ruq xonasida havo harorati 22°C, bola nam holda ochiq stolda yotgan, issiq manba yoqilmagan. Chaqaloqning gestatsion yoshi 39 hafta, vazni 3200 g. Ushbu holatning rivojlanishida eng muhim mexanizm qaysi?",
+ "options": [
+  "Nam teridan bug'lanish orqali issiqlik yo'qotish",
+  "Issiqlikning o'tkazuvchanlik orqali yo'qotilishi (sovuq stol)",
+  "Issiqlikning nurlanish orqali yo'qotilishi (sovuq devorlar)",
+  "Issiqlikning konveksiya orqali yo'qotilishi (havo oqimi)",
+  "Issiqlik ishlab chiqarishning qo'ng'ir yog' hisobidan to'liq yo'qligi"
+ ],
+ "correctAnswer": "Nam teridan bug'lanish orqali issiqlik yo'qotish"
+},
+{
+ "text": "Muddatida tug'ilgan chaqaloq hayotining 28-kunida pediatr ko'rigida: vazn qo'shishi yaxshi, emishi yaxshi. Ko'rikda o'ng moyak xaltada palpatsiyada topilmaydi, chov kanalida ham aniqlanmaydi; chap moyak xaltada, normal. Jinsiy a'zolar tuzilishi erkak turida, siydik chiqarish normal. Ushbu bemorda eng to'g'ri taktika qaysi?",
+ "options": [
+  "6 oylikka qadar kuzatish, moyak o'z-o'zidan tushmasa jarrohga yo'llash",
+  "Darhol orxidopeksiya operatsiyasini bajarish",
+  "Xorionik gonadotropin bilan gormonal davolashni darhol boshlash",
+  "Hech qanday chora kerak emas, bu normal holat",
+  "Darhol karyotip tekshiruvi va jinsni aniqlash kengashini chaqirish"
+ ],
+ "correctAnswer": "6 oylikka qadar kuzatish, moyak o'z-o'zidan tushmasa jarrohga yo'llash"
+},
+{
+ "text": "Muddatida tug'ilgan qiz chaqaloq hayotining 3-kunida chiqarishga tayyorlanmoqda. Ko'rikda chap son bo'g'imini yozishda cheklanish bor, Ortolani sinovida «chiqib-kirish» sezildi, teri burmalari assimetrik. Bola birinchi bola, dumba bilan kelishda tug'ilgan, onasining oilasida son bo'g'imi muammosi bo'lgan. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+ "options": [
+  "Son bo'g'imlari exoskopiyasini o'tkazib, ortopedga yo'llash",
+  "Son bo'g'imlari rentgenogrammasini darhol olish",
+  "Bir yoshgacha kuzatib, keyin tekshirish",
+  "Darhol gipsli immobilizatsiya qo'yish",
+  "Hech qanday chora kerak emas, bu o'tkinchi holat"
+ ],
+ "correctAnswer": "Son bo'g'imlari exoskopiyasini o'tkazib, ortopedga yo'llash"
+}
+]
+}

@@ -1,0 +1,445 @@
+{
+ "category": "Endokrinologiya — ordinatura 1-kurs",
+ "questions": [
+  {
+   "text": "19 yoshli yigit 1-tur qandli diabet bilan og'riydi. Ikki kundan beri qusish va qorin og'rig'i bor, insulinni o'tkazib yuborgan. Ko'rikda qon bosimi 95/60 mm sim. ust., puls 124/daq, nafas chuqur va tez (Kussmaul), og'zidan atseton hidi keladi, shilliq qavatlar quruq, hushi chalkash. Laborator: glyukoza 26 mmol/l, pH 7,08, bikarbonat 7 mmol/l, kaliy 5,4 mmol/l, natriy 132 mmol/l, siydikda ketonlar ko'p. Ushbu bemorda birinchi navbatda nima qilinadi?",
+   "options": [
+    "Fiziologik eritma bilan suyuqlik to'ldirishni boshlash",
+    "Vena ichiga insulin infuziyasini darhol boshlash",
+    "Natriy bikarbonat yuborib, atsidozni tuzatish",
+    "Kaliy preparatini vena ichiga yuborish",
+    "Og'iz orqali suyuqlik berib, kuzatish"
+   ],
+   "correctAnswer": "Fiziologik eritma bilan suyuqlik to'ldirishni boshlash"
+  },
+  {
+   "text": "24 yoshli ayol diabetik ketoatsidoz bilan davolanmoqda. Suyuqlik to'ldirish boshlangan, insulin infuziyasi rejalashtirilgan. Laborator natijalari qaytdi: glyukoza 24 mmol/l, pH 7,10, bikarbonat 8 mmol/l, kaliy 3,0 mmol/l, natriy 134 mmol/l, kreatinin yengil yuqori. Bemor hushida, siydik ajralishi saqlangan, EKG da T to'lqini yassilashgan. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+   "options": [
+    "Insulindan oldin kaliy almashtirishni boshlash",
+    "Insulin infuziyasini darhol boshlab, kaliyni keyin qo'shish",
+    "Natriy bikarbonat yuborish",
+    "Kaltsiy glyukonat yuborish",
+    "Diuretik yuborib, kaliyni chiqarish"
+   ],
+   "correctAnswer": "Insulindan oldin kaliy almashtirishni boshlash"
+  },
+  {
+   "text": "68 yoshli erkak 2-tur qandli diabet bilan og'riydi, uyda yolg'iz yashaydi. Uch kundan beri holsiz, kam suyuqlik ichgan. Ko'rikda qon bosimi 90/55 mm sim. ust., puls 118/daq, shilliq qavatlar juda quruq, teri burmasi yozilmaydi, hushi chalkash, nafas chuqur emas. Laborator: glyukoza 44 mmol/l, pH 7,34, bikarbonat 21 mmol/l, siydikda ketonlar izi, hisoblangan osmolyarlik 335 mosm/kg, natriy 150 mmol/l. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Gipergliikemik giperosmolyar holat",
+    "Diabetik ketoatsidoz",
+    "Laktatatsidoz",
+    "Gipoglikemik koma",
+    "Uremik koma"
+   ],
+   "correctAnswer": "Gipergliikemik giperosmolyar holat"
+  },
+  {
+   "text": "42 yoshli ayol ikki haftadan beri yurak urishi, titroq, isitma va bezovtalikdan shikoyat qiladi; Greyvs kasalligi bo'yicha davolanmagan. Oxirgi kunlarda o'pka infeksiyasi bo'lgan. Ko'rikda tana harorati 39,4°C, puls 158/daq (hilpillovchi aritmiya), qon bosimi 150/60 mm sim. ust., hushi chalkash, qusish va ich ketishi bor, qalqonsimon bez diffuz kattalashgan. Laborator: TSH juda past, erkin T4 juda yuqori. Ushbu bemorda davolashning eng to'g'ri ketma-ketligi qaysi?",
+   "options": [
+    "Propiltiouratsil, keyin 1 soatdan so'ng yod preparati, hamda beta-blokator va gidrokortizon",
+    "Yod preparati, keyin 1 soatdan so'ng propiltiouratsil, beta-blokatorsiz",
+    "Faqat radioaktiv yod bilan davolash",
+    "Faqat beta-blokator va antipiretik bilan cheklanish",
+    "Darhol qalqonsimon bezni jarrohlik yo'li bilan olib tashlash"
+   ],
+   "correctAnswer": "Propiltiouratsil, keyin 1 soatdan so'ng yod preparati, hamda beta-blokator va gidrokortizon"
+  },
+  {
+   "text": "72 yoshli ayol qishda uyida hushsiz holda topildi. Ko'rikda tana harorati 33,8°C, puls 48/daq, qon bosimi 90/60 mm sim. ust., nafas sayoz, teri quruq va shishgan, tovushi bo'g'iq, tovon refleksi cho'zilgan. Anamnezida qalqonsimon bez olib tashlangan, lekin levotiroksinni bir yildan beri qabul qilmaydi. Laborator: TSH juda yuqori, erkin T4 juda past, natriy 126 mmol/l, glyukoza 3,1 mmol/l. Ushbu bemorda eng to'g'ri taktika qaysi?",
+   "options": [
+    "Vena ichiga levotiroksin va gidrokortizon yuborish, isitish va qo'llab-quvvatlash",
+    "Faqat og'iz orqali levotiroksinni past dozada boshlash",
+    "Faqat gidrokortizon yuborib, gormon almashtirishni kutish",
+    "Tanani tez isitib, boshqa davolash qo'llamaslik",
+    "Propiltiouratsil yuborish"
+   ],
+   "correctAnswer": "Vena ichiga levotiroksin va gidrokortizon yuborish, isitish va qo'llab-quvvatlash"
+  },
+  {
+   "text": "56 yoshli ayolda profilaktik tekshiruvda kaltsiy yuqori chiqdi. Shikoyati yo'q, faqat ba'zan charchoq sezadi. Anamnezida ikki marta buyrak toshi bo'lgan. Ko'rikda qon bosimi 135/80 mm sim. ust., boshqa o'zgarish yo'q. Laborator: umumiy kaltsiy 2,92 mmol/l, ionlashgan kaltsiy yuqori, fosfor past, paratgormon 98 pg/ml (yuqori), 25-OH vitamin D normal, kreatinin normal, siydikda kaltsiy ajralishi yuqori. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Birlamchi giperparatireoz (paratireoid adenomasi)",
+    "Oilaviy gipokaltsiuriyali gipekalsemiya (siydikda kaltsiy past bo'ladi)",
+    "Xavfli o'smaga bog'liq gipekalsemiya (paratgormon bosilgan bo'ladi)",
+    "D vitamini intoksikatsiyasi (25-OH vitamin D yuqori bo'ladi)",
+    "Buyrak yetishmovchiligidagi ikkilamchi giperparatireoz (kaltsiy past bo'ladi)"
+   ],
+   "correctAnswer": "Birlamchi giperparatireoz (paratireoid adenomasi)"
+  },
+  {
+   "text": "62 yoshli erkak ikki hafta davomida umumiy holsizlik, ko'ngil aynishi va vazn yo'qotish bilan keldi; yaqinda o'pka saratoni tashxisi qo'yilgan. Ko'rikda hushi uyquchan, shilliq qavatlar quruq, qon bosimi 100/65 mm sim. ust. Laborator: umumiy kaltsiy 3,45 mmol/l, albumin normal, paratgormon juda past, fosfor yuqori, kreatinin 160 mkmol/l. EKG da QT qisqargan. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+   "options": [
+    "Fiziologik eritma bilan ko'p hajmli suyuqlik to'ldirish, keyin bisfosfonat",
+    "Darhol kaltsiy almashtiruvchi smola berish",
+    "Tiazid guruhidagi diuretik yuborish",
+    "Kaltsitriol (D vitamini faol shakli) yuborish",
+    "Paratireoidektomiyaga tayyorlash"
+   ],
+   "correctAnswer": "Fiziologik eritma bilan ko'p hajmli suyuqlik to'ldirish, keyin bisfosfonat"
+  },
+  {
+   "text": "38 yoshli ayol kasalxonaga qusish, qorin og'rig'i va kuchli holsizlik bilan keltirildi; uch kundan beri gripp bilan kasal. Anamnezida autoimmun tireoidit bor. Ko'rikda qon bosimi 78/48 mm sim. ust. (suyuqlikka yaxshi javob bermaydi), puls 112/daq, teri va shilliq qavatlarda giperpigmentatsiya, kaft burmalari to'q rangli. Laborator: natriy 124 mmol/l, kaliy 6,1 mmol/l, glyukoza 2,9 mmol/l, kortizol juda past, AKTG yuqori. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+   "options": [
+    "Vena ichiga gidrokortizon va fiziologik eritma yuborish",
+    "Vena ichiga faqat insulin va glyukoza yuborish",
+    "Og'iz orqali fludrokortizon boshlash",
+    "Kaliy almashtiruvchi smola berib, kortikosteroidni kutish",
+    "Vena ichiga deksametazon yuborib, kortizol sinovini kutish"
+   ],
+   "correctAnswer": "Vena ichiga gidrokortizon va fiziologik eritma yuborish"
+  },
+  {
+   "text": "44 yoshli erkak uch oydan beri xurujsimon bosh og'rig'i, terlash va yurak urishidan shikoyat qiladi; xuruj paytida qon bosimi 210/120 mm sim. ust. gacha ko'tariladi, keyin normallashadi. Ko'rikda teri rangpar va nam, puls 104/daq. Laborator: plazma erkin metanefrinlari sezilarli yuqori, qorin KT da o'ng buyrak usti bezida 4 sm hajmli o'sma aniqlandi. Jarrohlik aralashuv rejalashtirilmoqda. Operatsiyadan oldin eng to'g'ri tayyorgarlik qaysi?",
+   "options": [
+    "Avval alfa-blokator (feniksibenzamin yoki doksazozin), keyin beta-blokator qo'shish",
+    "Avval beta-blokator, keyin alfa-blokator qo'shish",
+    "Faqat kaltsiy kanali blokatori bilan tayyorlash",
+    "Faqat suyuqlikni cheklab, diuretik berish",
+    "Hech qanday tayyorgarlik shart emas, darhol operatsiya"
+   ],
+   "correctAnswer": "Avval alfa-blokator (feniksibenzamin yoki doksazozin), keyin beta-blokator qo'shish"
+  },
+  {
+   "text": "66 yoshli erkak o'pkaning mayda hujayrali saratoni bilan davolanmoqda. Ikki haftadan beri bosh og'rig'i va chalkashlik bor. Ko'rikda shish yo'q, teri burmasi normal, qon bosimi 128/78 mm sim. ust., siydik ajralishi normal. Laborator: natriy 118 mmol/l, plazma osmolyarligi 248 mosm/kg, siydik osmolyarligi 580 mosm/kg, siydikda natriy 60 mmol/l, TSH va kortizol normal, kreatinin normal. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Antidiuretik gormonning noto'g'ri sekretsiyasi sindromi (SIADH)",
+    "Markaziy qandsiz diabet",
+    "Birlamchi polidipsiya",
+    "Buyrak yetishmovchiligi tufayli gipernatriemiya",
+    "Addison kasalligi"
+   ],
+   "correctAnswer": "Antidiuretik gormonning noto'g'ri sekretsiyasi sindromi (SIADH)"
+  },
+  {
+   "text": "34 yoshli ayol gipofiz jarrohligidan keyin ikkinchi kunda: kuniga 7 litr siydik ajratmoqda, kuchli chanqoq bor. Ko'rikda shilliq qavatlar quruq, qon bosimi 110/70 mm sim. ust. Laborator: natriy 152 mmol/l, plazma osmolyarligi 318 mosm/kg, siydik osmolyarligi 95 mosm/kg, glyukoza normal. Desmopressin yuborilgandan keyin siydik osmolyarligi 480 mosm/kg gacha oshdi va hajmi kamaydi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Markaziy qandsiz diabet",
+    "Buyrak (nefrogen) qandsiz diabeti",
+    "Birlamchi polidipsiya",
+    "Osmotik diurez (qandli diabet)",
+    "SIADH"
+   ],
+   "correctAnswer": "Markaziy qandsiz diabet"
+  },
+  {
+   "text": "29 yoshli ayol oxirgi olti oyda takroriy ter bosishi, titroq va chalkashlik epizodlaridan shikoyat qiladi; epizodlar ovqatdan keyin emas, nonushta o'tkazib yuborilganda yuzaga keladi va shirinlik yegandan keyin o'tadi. Vazni 6 kg oshgan. Epizod paytida olingan laborator: glyukoza 2,1 mmol/l, insulin yuqori, C-peptid yuqori, sulfonilurea preparatlari qonda topilmadi, beta-gidroksibutirat past. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Insulinoma",
+    "Yashirin insulin yuborish (ekzogen insulin)",
+    "Sulfonilurea preparati bilan yashirin davolanish",
+    "Buyrak usti bezi yetishmovchiligi",
+    "Reaktiv (ovqatdan keyingi) gipoglikemiya"
+   ],
+   "correctAnswer": "Insulinoma"
+  },
+  {
+   "text": "48 yoshli erkakda birlamchi giperparatireoz tufayli paratireoidektomiya rejalashtirilgan. Anamnezida oshqozon yarasi va buyrak toshi bor. Oilasida otasi yoshligida oshqozon yarasidan operatsiya bo'lgan va amakisida gipofiz o'smasi aniqlangan. Laborator: kaltsiy yuqori, paratgormon yuqori, gastrin sezilarli yuqori, prolaktin yuqori. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "MEN1: paratireoid, gipofiz va oshqozon-ichak endokrin o'smalari",
+    "MEN2A: medullyar qalqonsimon saraton, feoxromotsitoma, paratireoz",
+    "MEN2B: medullyar qalqonsimon saraton, feoxromotsitoma, shilliq neyromalar",
+    "Fon Xippel-Lindau sindromi: gemangioblastoma va buyrak saratoni",
+    "Oilaviy izolyatsiyalangan giperparatireoz: boshqa bez zararlanmaydi"
+   ],
+   "correctAnswer": "MEN1: paratireoid, gipofiz va oshqozon-ichak endokrin o'smalari"
+  },
+  {
+   "text": "52 yoshli ayolda qalqonsimon bez medullyar saratoni aniqlandi. Tekshiruvda qonda kaltsitonin sezilarli yuqori. Oilasida onasi 45 yoshida qalqonsimon bez saratonidan operatsiya bo'lgan. Bemorda vaqti-vaqti bilan bosh og'rig'i va terlash epizodlari bor, qon bosimi 170/100 mm sim. ust. Jarrohlik rejalashtirilmoqda. Operatsiyadan oldin birinchi navbatda nimani aniqlash kerak?",
+   "options": [
+    "Feoxromotsitoma borligini (plazma metanefrinlari bilan)",
+    "Gipofiz o'smasi borligini (prolaktin bilan)",
+    "Oshqozon gastrinomasi borligini",
+    "Buyrak faoliyatini baholash",
+    "Suyak zichligini o'lchash"
+   ],
+   "correctAnswer": "Feoxromotsitoma borligini (plazma metanefrinlari bilan)"
+  },
+  {
+   "text": "47 yoshli erkak uch yildan beri uchta preparat bilan nazorat qilinmaydigan arterial gipertenziya bilan kuzatiladi. Mushak kuchsizligi va tez-tez siyishdan shikoyat qiladi. Ko'rikda qon bosimi 168/104 mm sim. ust., shish yo'q. Laborator: kaliy 2,8 mmol/l (diuretik qabul qilmaydi), natriy 144 mmol/l, metabolik alkaloz, aldosteron/renin nisbati sezilarli yuqori. Qorin KT da chap buyrak usti bezida 1,5 sm adenoma. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Birlamchi giperaldosteronizm (Konn sindromi)",
+    "Feoxromotsitoma",
+    "Kushing sindromi",
+    "Buyrak arteriyasi stenozi",
+    "Liddl sindromi"
+   ],
+   "correctAnswer": "Birlamchi giperaldosteronizm (Konn sindromi)"
+  },
+  {
+   "text": "63 yoshli ayol menopauzadan keyin bel sohasida og'riqdan shikoyat qiladi. Ko'rikda bo'yi besh yilda 4 sm qisqargan, ko'krak qafasi kifozi bor. Suyak zichligi o'lchovida (DXA) bel umurtqalarida T-ball -2,9, son bo'ynida -2,6. Rentgenda L2 umurtqasida siqilish singani aniqlandi. Laborator: kaltsiy, fosfor, paratgormon va 25-OH vitamin D normal chegarada, buyrak funksiyasi normal. Ushbu bemorda eng to'g'ri davolash qaysi?",
+   "options": [
+    "Bisfosfonat (alendronat) va kaltsiy hamda D vitamini qo'shimchasi",
+    "Faqat kaltsiy va D vitamini qo'shimchasi",
+    "Qalqonsimon bez gormoni bilan davolash",
+    "Faqat og'riq qoldiruvchi va korset",
+    "Paratgormon antagonisti bilan davolash"
+   ],
+   "correctAnswer": "Bisfosfonat (alendronat) va kaltsiy hamda D vitamini qo'shimchasi"
+  },
+  {
+   "text": "36 yoshli ayol qalqonsimon bez to'liq olib tashlangandan keyin ikkinchi kunda: barmoqlar va lab atrofida uvishish, mushak tirishishi bor. Ko'rikda yuz nervi sohasiga urilganda mushak qisqaradi, manjet qo'yilganda qo'l panjasi tutib qoladi. Laborator: umumiy kaltsiy 1,62 mmol/l, ionlashgan kaltsiy past, fosfor yuqori, paratgormon juda past, magniy normal, albumin normal. Ushbu bemorda eng to'g'ri taktika qaysi?",
+   "options": [
+    "Kaltsiy glyukonatni vena ichiga yuborish va faol D vitamini (kaltsitriol) boshlash",
+    "Faqat og'iz orqali kaltsiy berib, kuzatish",
+    "Paratgormon preparatini darhol boshlash",
+    "Magniy sulfatni vena ichiga yuborish",
+    "Bisfosfonat boshlash"
+   ],
+   "correctAnswer": "Kaltsiy glyukonatni vena ichiga yuborish va faol D vitamini (kaltsitriol) boshlash"
+  },
+  {
+   "text": "28 yoshli ayol ikki yildan beri hayz ko'rmaydi va ko'kraklaridan sut ajraladi; homilador emas. Ko'rikda ko'rish maydonlari normal, qalqonsimon bez normal. Laborator: prolaktin 180 ng/ml (sezilarli yuqori), TSH normal, homiladorlik testi salbiy, buyrak funksiyasi normal, dopamin antagonisti qabul qilmaydi. Gipofiz MRI da 8 mm hajmli mikroadenoma aniqlandi. Ushbu bemorda eng to'g'ri davolash qaysi?",
+   "options": [
+    "Dopamin agonisti (kabergolin yoki bromokriptin) bilan davolash",
+    "Transsfenoidal jarrohlik aralashuv",
+    "Gipofizga nurlanish terapiyasi",
+    "Faqat kuzatish, davolash kerak emas",
+    "Oktreotid (somatostatin analogi) bilan davolash"
+   ],
+   "correctAnswer": "Dopamin agonisti (kabergolin yoki bromokriptin) bilan davolash"
+  },
+  {
+   "text": "46 yoshli erkak oxirgi yillarda qo'l va oyoq o'lchami kattalashgani, uzuklari torayib qolgani va yuz xususiyatlari qo'pollashgani haqida gapiradi. Bosh og'rig'i va ko'rish chetlarining torayishi bor. Ko'rikda prognatizm, qalin teri, ter ko'p; qon bosimi 150/95 mm sim. ust., glyukoza 7,8 mmol/l. Ushbu bemorda tashxisni tasdiqlash uchun eng to'g'ri tekshiruv qaysi?",
+   "options": [
+    "Insulinga o'xshash o'sish omili-1 (IGF-1) ni aniqlash va glyukoza bilan o'sish gormoni supressiya sinovi",
+    "Bir martalik tasodifiy o'sish gormoni darajasini aniqlash",
+    "Sutkalik siydikda erkin kortizolni aniqlash",
+    "Qalqonsimon bez gormonlarini aniqlash",
+    "Insulin tolerantlik sinovi o'tkazish"
+   ],
+   "correctAnswer": "Insulinga o'xshash o'sish omili-1 (IGF-1) ni aniqlash va glyukoza bilan o'sish gormoni supressiya sinovi"
+  },
+  {
+   "text": "39 yoshli ayolda Kushing sindromiga shubha qilinmoqda: yuz to'laligi, qorin sohasida yog' to'planishi, binafsha rangli striyalar, mushak kuchsizligi va yangi aniqlangan gipertenziya hamda qandli diabet bor. Bemor steroid preparat qabul qilmaydi. Sutkalik siydikda erkin kortizol va yarim tungi tupurik kortizoli ikki marta yuqori chiqdi. Keyingi eng to'g'ri qadam qaysi?",
+   "options": [
+    "AKTG darajasini aniqlab, kortizol ortiqchaligining manbasini ajratish",
+    "Darhol gipofiz MRI sini o'tkazish",
+    "Darhol buyrak usti bezlarini olib tashlashga tayyorlash",
+    "Ketokonazol bilan davolashni boshlash",
+    "Yuqori dozada deksametazon supressiya sinovini birinchi qadam sifatida o'tkazish"
+   ],
+   "correctAnswer": "AKTG darajasini aniqlab, kortizol ortiqchaligining manbasini ajratish"
+  },
+  {
+   "text": "31 yoshli ayol homiladorlikning 9-haftasida ro'yxatga olindi. Shikoyati yo'q, oldin qalqonsimon bez kasalligi aniqlanmagan. Skrining laborator: TSH 5,8 mXB/l (yuqori), erkin T4 normal chegarada, qalqonsimon bezga qarshi antitanalar (anti-TPO) musbat. Puls 82/daq, qon bosimi 112/70 mm sim. ust., bo'yin palpatsiyasida bez yengil kattalashgan. Ushbu bemorda eng to'g'ri taktika qaysi?",
+   "options": [
+    "Levotiroksin bilan o'rnini bosuvchi terapiyani boshlash",
+    "Davolashsiz kuzatish va uchinchi trimestrda qayta tekshirish",
+    "Propiltiouratsil boshlash",
+    "Yod preparatlarini yuqori dozada tayinlash",
+    "Radioaktiv yod bilan tekshiruv o'tkazish"
+   ],
+   "correctAnswer": "Levotiroksin bilan o'rnini bosuvchi terapiyani boshlash"
+  },
+  {
+   "text": "33 yoshli homilador ayol 26-haftada skrining uchun keldi. Vazn indeksi 31, oilasida 2-tur qandli diabet bor. 75 g glyukoza bilan og'iz orqali tolerantlik sinovi natijalari: nahorda 5,4 mmol/l, 1 soatdan keyin 10,8 mmol/l, 2 soatdan keyin 9,0 mmol/l. Bemorda shikoyat yo'q, qon bosimi 118/74 mm sim. ust., siydikda oqsil yo'q. Ushbu bemorda eng to'g'ri birinchi qadam qaysi?",
+   "options": [
+    "Ovqatlanish rejimi va jismoniy faollik bilan boshlash, glyukozani o'z-o'zini nazorat qilish",
+    "Darhol insulin terapiyasini boshlash",
+    "Metforminni darhol yuqori dozada boshlash",
+    "Hech qanday chora kerak emas, natijalar normal",
+    "Homiladorlikni muddatidan oldin tugatishni rejalashtirish"
+   ],
+   "correctAnswer": "Ovqatlanish rejimi va jismoniy faollik bilan boshlash, glyukozani o'z-o'zini nazorat qilish"
+  },
+  {
+   "text": "58 yoshli erkak 2-tur qandli diabet bilan og'riydi (8 yil), metformin maksimal dozada. Qo'shimcha: yurak yetishmovchiligi (chiqarish fraksiyasi 38%) va surunkali buyrak kasalligi (SKF 52 ml/min). Laborator: HbA1c 8,4%, kreatinin 128 mkmol/l, siydikda albumin/kreatinin nisbati yuqori. Vazni ortiqcha (VKI 32). Ushbu bemorga metforminga qo'shimcha qaysi preparat eng mos?",
+   "options": [
+    "SGLT2 inhibitori (empagliflozin yoki dapagliflozin)",
+    "Sulfonilurea preparati (glibenklamid)",
+    "Pioglitazon",
+    "Qisqa ta'sirli insulin monoterapiyasi",
+    "Alfa-glyukozidaza inhibitori"
+   ],
+   "correctAnswer": "SGLT2 inhibitori (empagliflozin yoki dapagliflozin)"
+  },
+  {
+   "text": "64 yoshli ayol 2-tur qandli diabet bilan og'riydi. Shoshilinch bo'limga qorin og'rig'i, qusish va chuqur nafas bilan keltirildi. Ko'rikda qon bosimi 92/58 mm sim. ust., puls 108/daq, teri sovuq. Laborator: glyukoza 9,2 mmol/l, pH 7,14, bikarbonat 9 mmol/l, anion oraliq keng, laktat 8,4 mmol/l, kreatinin 240 mkmol/l (oldin 110), siydikda ketonlar izi. Bemor metformin qabul qiladi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Metforminga bog'liq laktatatsidoz",
+    "Diabetik ketoatsidoz",
+    "Gipergliikemik giperosmolyar holat",
+    "Salitsilat bilan zaharlanish",
+    "Uremik atsidoz"
+   ],
+   "correctAnswer": "Metforminga bog'liq laktatatsidoz"
+  },
+  {
+   "text": "34 yoshli ayol ikki haftadan beri yurak urishi, vazn yo'qotishi va issiqni yomon ko'tarishdan shikoyat qiladi. Ko'rikda puls 112/daq, teri nam, qo'llarda mayda titroq, ko'z yorig'i kengaygan va ekzoftalm bor, qalqonsimon bez diffuz kattalashgan, ustida shovqin eshitiladi. Laborator: TSH juda past, erkin T4 yuqori, TSH-reseptoriga qarshi antitanalar musbat. Bemor yaqin bir yil ichida homiladorlikni rejalashtirmaydi va preparat qabulini afzal ko'radi. Ushbu bemorda eng to'g'ri davolash qaysi?",
+   "options": [
+    "Tiamazol (metimazol) bilan antitiroid terapiya va beta-blokator",
+    "Radioaktiv yod bilan ablatsiya — ko'z belgilari bo'lgani uchun birinchi tanlov",
+    "Qalqonsimon bezni to'liq olib tashlash",
+    "Faqat yod preparatlari bilan davolash",
+    "Levotiroksin bilan supressiv terapiya"
+   ],
+   "correctAnswer": "Tiamazol (metimazol) bilan antitiroid terapiya va beta-blokator"
+  },
+  {
+   "text": "61 yoshli erkak yurak aritmiyasi tufayli ikki yildan beri amiodaron qabul qiladi. Oxirgi oyda vazn yo'qotish, yurak urishi va asabiylashish paydo bo'ldi. Ko'rikda puls 104/daq, qalqonsimon bez kattalashmagan, og'riqsiz. Laborator: TSH past, erkin T4 yuqori. Qalqonsimon bez exoskopiyasida qon oqimi kamaygan, radioaktiv yod to'planishi juda past, interleykin-6 yuqori. Ushbu bemorda eng to'g'ri davolash qaysi?",
+   "options": [
+    "Glyukokortikosteroid bilan davolash (destruktiv tireoidit)",
+    "Tiamazol bilan antitiroid terapiya",
+    "Radioaktiv yod bilan ablatsiya",
+    "Levotiroksin boshlash",
+    "Faqat amiodaronni to'xtatib, boshqa chora ko'rmaslik"
+   ],
+   "correctAnswer": "Glyukokortikosteroid bilan davolash (destruktiv tireoidit)"
+  },
+  {
+   "text": "32 yoshli ayol bir hafta oldin yuqori nafas yo'llari infeksiyasidan keyin bo'yinda og'riq va yutinishda noqulaylik paydo bo'lganini aytadi. Ko'rikda tana harorati 37,8°C, qalqonsimon bez palpatsiyada juda og'riqli va qattiq, puls 98/daq, teri nam. Laborator: TSH past, erkin T4 yuqori, eritrotsitlar cho'kish tezligi 68 mm/soat, CRP yuqori, radioaktiv yod to'planishi juda past. Ushbu bemorda eng to'g'ri davolash qaysi?",
+   "options": [
+    "Nosteroid yallig'lanishga qarshi preparat va beta-blokator; og'ir holatda glyukokortikosteroid",
+    "Tiamazol bilan antitiroid terapiya",
+    "Keng qamrovli antibiotik",
+    "Radioaktiv yod bilan ablatsiya",
+    "Levotiroksin bilan o'rnini bosuvchi terapiya"
+   ],
+   "correctAnswer": "Nosteroid yallig'lanishga qarshi preparat va beta-blokator; og'ir holatda glyukokortikosteroid"
+  },
+  {
+   "text": "71 yoshli erkak reanimatsiyada sepsis tufayli davolanmoqda. Qalqonsimon bez kasalligi anamnezida yo'q. Laborator: TSH 0,3 mXB/l (past chegarada), erkin T4 normal quyi chegarada, umumiy T3 past, teskari T3 yuqori. Qalqonsimon bez palpatsiyada normal, ekzoftalm yo'q, aritmiya yo'q. Ushbu bemorda eng to'g'ri taktika qaysi?",
+   "options": [
+    "Gormon almashtirish shart emas: asosiy kasallik davolanadi, gormonlar tuzalgandan keyin qayta tekshiriladi",
+    "Darhol levotiroksin bilan o'rnini bosuvchi terapiya boshlash",
+    "T3 preparati bilan davolash",
+    "Tiamazol boshlash",
+    "Radioaktiv yod bilan tekshiruv o'tkazish"
+   ],
+   "correctAnswer": "Gormon almashtirish shart emas: asosiy kasallik davolanadi, gormonlar tuzalgandan keyin qayta tekshiriladi"
+  },
+  {
+   "text": "45 yoshli ayolda qalqonsimon bezda tasodifan 1,8 sm hajmli tugun aniqlandi. Shikoyati yo'q, bo'yinda limfa tugunlari palpatsiyada topilmaydi, tovushi o'zgarmagan, nurlanish anamnezi yo'q. Laborator: TSH normal. Exoskopiyada tugun qattiq (gipoexogen), chegarasi noaniq, ichida mayda kaltsifikatlar bor, balandligi kengligidan katta. Ushbu bemorda keyingi eng to'g'ri qadam qaysi?",
+   "options": [
+    "Exoskopiya nazoratida nozik igna bilan aspiratsion biopsiya o'tkazish",
+    "Darhol qalqonsimon bezning yarmini olib tashlash",
+    "Levotiroksin bilan supressiv terapiya boshlab, 6 oydan keyin ko'rish",
+    "Radioaktiv yod bilan ablatsiya qilish",
+    "Faqat bir yildan keyin exoskopiyani takrorlash"
+   ],
+   "correctAnswer": "Exoskopiya nazoratida nozik igna bilan aspiratsion biopsiya o'tkazish"
+  },
+  {
+   "text": "27 yoshli erkak bepushtlik tufayli tekshirilmoqda. Ko'rikda bo'yi 192 sm, oyoq-qo'llari uzun, soqol siyrak, ginekomastiya bor, moyaklari kichik va qattiq (har biri 4 ml). Laborator: testosteron past, FSH va LG yuqori, spermogrammada azoospermiya. Karyotip tekshiruvida 47,XXY aniqlandi. Ushbu bemorda eng to'g'ri taktika qaysi?",
+   "options": [
+    "Testosteron bilan o'rnini bosuvchi terapiya va reproduktiv maslahat (sperma olish imkoniyatini muhokama qilish)",
+    "Gonadotropin bilan ovulyatsiya induksiyasini boshlash",
+    "Moyaklarni olib tashlash",
+    "Faqat kuzatish, davolash kerak emas",
+    "Antiestrogen preparat bilan uzoq muddatli davolash"
+   ],
+   "correctAnswer": "Testosteron bilan o'rnini bosuvchi terapiya va reproduktiv maslahat (sperma olish imkoniyatini muhokama qilish)"
+  },
+  {
+   "text": "17 yoshli qiz hayz ko'rmaganligi tufayli tekshirilmoqda. Ko'rikda bo'yi 142 sm, bo'yni qisqa va teri burmalari bor, ko'krak qafasi keng, ko'krak bezlari rivojlanmagan, yurak auskultatsiyasida sistolik shovqin eshitiladi va oyoqlarda qon bosimi qo'llardagidan past. Laborator: FSH va LG yuqori, estradiol past, karyotip 45,X. Ushbu bemorda qaysi tekshiruv birinchi navbatda zarur?",
+   "options": [
+    "Yurak va aorta holatini baholash (exokardiografiya)",
+    "Suyak yoshini aniqlash uchun qo'l rentgenogrammasi",
+    "Gipofiz MRI si",
+    "Qorin bo'shlig'i KT si",
+    "Suyak zichligini o'lchash"
+   ],
+   "correctAnswer": "Yurak va aorta holatini baholash (exokardiografiya)"
+  },
+  {
+   "text": "24 yoshli ayol hayz siklining buzilishi (yiliga 6 marta), yuz va iyakda tuk o'sishi hamda akne bilan keladi. Vazn indeksi 31. Ko'rikda qon bosimi 124/78 mm sim. ust., bo'yin orqasida teri qoraygan (akantoz). Laborator: testosteron yengil yuqori, LG/FSH nisbati yuqori, prolaktin normal, TSH normal, 17-gidroksiprogesteron normal, kortizol normal, homiladorlik testi salbiy. Exoskopiyada tuxumdonlarda ko'p sonli mayda follikullar. Hozircha homiladorlikni rejalashtirmaydi. Ushbu bemorda eng to'g'ri birinchi qadam qaysi?",
+   "options": [
+    "Vazn kamaytirish va kombinatsiyalangan gormonal kontratseptiv bilan sikl nazorati",
+    "Klomifen sitrat bilan ovulyatsiya induksiyasi",
+    "Glyukokortikosteroid bilan davolash",
+    "Spironolaktonni yolg'iz, boshqa choralarsiz tayinlash",
+    "Tuxumdonlarni jarrohlik yo'li bilan qisman olib tashlash"
+   ],
+   "correctAnswer": "Vazn kamaytirish va kombinatsiyalangan gormonal kontratseptiv bilan sikl nazorati"
+  },
+  {
+   "text": "18 yoshli yigit jinsiy rivojlanish kechikkani tufayli tekshirilmoqda. Ko'rikda soqol va qo'ltiq tuklari yo'q, moyaklar kichik (3 ml), bo'yi yoshiga mos. U hidlarni sezmasligini aytadi. Laborator: testosteron past, FSH va LG past, prolaktin normal, TSH normal, IGF-1 normal. Gipofiz MRI da o'sma yo'q, hid piyozchalari rivojlanmagan. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Kallmann sindromi (gipogonadotrop gipogonadizm, anosmiya bilan)",
+    "Klaynfelter sindromi",
+    "Birlamchi moyak yetishmovchiligi",
+    "Konstitutsional rivojlanish kechikishi",
+    "Prolaktinoma"
+   ],
+   "correctAnswer": "Kallmann sindromi (gipogonadotrop gipogonadizm, anosmiya bilan)"
+  },
+  {
+   "text": "54 yoshli ayol oxirgi yilda yuz va bo'yinda to'satdan qizarish xurujlari, suvli ich ketishi va hansirashdan shikoyat qiladi. Ko'rikda yurak auskultatsiyasida o'ng tomonda sistolik shovqin eshitiladi, jigar kattalashgan. Laborator: sutkalik siydikda 5-gidroksiindolsirka kislotasi sezilarli yuqori; qorin KT da ingichka ichak tutqichida o'sma va jigarda ko'p sonli metastazlar. Ushbu bemorda belgilarni nazorat qilish uchun eng to'g'ri preparat qaysi?",
+   "options": [
+    "Oktreotid (somatostatin analogi)",
+    "Prednizolon",
+    "Antigistamin preparat",
+    "Beta-blokator",
+    "Proton nasosi inhibitori"
+   ],
+   "correctAnswer": "Oktreotid (somatostatin analogi)"
+  },
+  {
+   "text": "38 yoshli ayol tug'ruqdan keyin ko'p qon ketishi bo'lgan va shok holatida davolangan. Tug'ruqdan uch hafta o'tib ko'kragidan sut kelmaydi, hayz tiklanmagan, doimiy holsizlik va bosh aylanishi bor. Ko'rikda qon bosimi 90/60 mm sim. ust., teri rangpar, qo'ltiq tuklari siyrak. Laborator: prolaktin past, TSH past va erkin T4 past, kortizol past, natriy 130 mmol/l, glyukoza 3,2 mmol/l. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Gipofizning tug'ruqdan keyingi nekrozi (Shexan sindromi)",
+    "Birlamchi buyrak usti bezi yetishmovchiligi",
+    "Birlamchi gipotireoz",
+    "Limfotsitar gipofizit",
+    "Prolaktinoma"
+   ],
+   "correctAnswer": "Gipofizning tug'ruqdan keyingi nekrozi (Shexan sindromi)"
+  },
+  {
+   "text": "43 yoshli erkak gipofiz makroadenomasi bilan kuzatiladi. Bugun to'satdan juda kuchli bosh og'rig'i, ikkilanib ko'rish va qusish paydo bo'ldi. Ko'rikda qon bosimi 86/54 mm sim. ust., puls 110/daq, chap ko'z harakati cheklangan, ko'rish maydoni toraygan, hushi uyquchan. Bosh miya MRI da gipofiz o'smasiga qon quyilish aniqlandi. Laborator: natriy 128 mmol/l, kortizol juda past. Ushbu bemorda eng to'g'ri birinchi chora qaysi?",
+   "options": [
+    "Vena ichiga gidrokortizon yuborish va neyroxirurgga shoshilinch yo'llash",
+    "Faqat og'riq qoldiruvchi berib, kuzatish",
+    "Dopamin agonistini darhol yuqori dozada boshlash",
+    "Mannitol yuborib, miya shishini kamaytirish",
+    "Levotiroksinni yuqori dozada boshlash"
+   ],
+   "correctAnswer": "Vena ichiga gidrokortizon yuborish va neyroxirurgga shoshilinch yo'llash"
+  },
+  {
+   "text": "57 yoshli erkak 2-tur qandli diabet bilan 12 yildan beri og'riydi. Oxirgi ko'rikda: qon bosimi 148/88 mm sim. ust., siydikda albumin/kreatinin nisbati 320 mg/g (ikki marta tasdiqlangan), SKF 68 ml/min, HbA1c 7,6%. Bemor metformin va statin qabul qiladi, qon bosimi uchun preparat ichmaydi. Ko'z tubida yengil retinopatiya bor. Ushbu bemorda qaysi preparat eng muhim?",
+   "options": [
+    "Angiotenzin aylantiruvchi ferment inhibitori yoki angiotenzin reseptori blokatori",
+    "Tiazid guruhidagi diuretik",
+    "Beta-blokator",
+    "Kaltsiy kanali blokatori (amlodipin)",
+    "Alfa-blokator"
+   ],
+   "correctAnswer": "Angiotenzin aylantiruvchi ferment inhibitori yoki angiotenzin reseptori blokatori"
+  },
+  {
+   "text": "60 yoshli ayol 2-tur qandli diabet bilan og'riydi. Oyoq panjasida bir oydan beri bitmaydigan yara bor; yara tagida nekroz, atrofida qizarish va shish, badbo'y ajralma keladi. Ko'rikda tana harorati 38,1°C, oyoqda tebranish va og'riq sezuvchanligi pasaygan, son arteriyasi pulsi saqlangan. Laborator: leykotsitoz, CRP yuqori, glyukoza 14 mmol/l; oyoq rentgenogrammasida suyak destruksiyasi belgilari bor. Ushbu bemorda eng to'g'ri taktika qaysi?",
+   "options": [
+    "Kasalxonaga yotqizib, yarani jarrohlik tozalash, chuqur material ekmasini olish va tizimli antibiotik boshlash",
+    "Faqat mahalliy antiseptik bog'lam qo'yib, ambulatoriyada kuzatish",
+    "Faqat glyukoza nazoratini kuchaytirib, antibiotiksiz kuzatish",
+    "Darhol oyoqni yuqori sathdan amputatsiya qilish",
+    "Faqat og'iz orqali antibiotik berib, uyga javob berish"
+   ],
+   "correctAnswer": "Kasalxonaga yotqizib, yarani jarrohlik tozalash, chuqur material ekmasini olish va tizimli antibiotik boshlash"
+  },
+  {
+   "text": "22 yoshli ayol oxirgi uch oyda tez-tez siyish, kuchli chanqoq va 7 kg vazn yo'qotishdan shikoyat qiladi. Ko'rikda vazn indeksi 19, shilliq qavatlar quruq, nafasda atseton hidi yo'q. Laborator: glyukoza 16,8 mmol/l, HbA1c 11,2%, siydikda ketonlar izi, pH normal; C-peptid past, glutamat dekarboksilazaga qarshi antitanalar (anti-GAD) musbat. Ushbu bemorda eng to'g'ri davolash qaysi?",
+   "options": [
+    "Bazal-bolyus rejimida insulin terapiyasini boshlash",
+    "Metformin monoterapiyasini boshlash",
+    "Sulfonilurea preparati bilan boshlash",
+    "Faqat ovqatlanish rejimi bilan uch oy kuzatish",
+    "SGLT2 inhibitori monoterapiyasi"
+   ],
+   "correctAnswer": "Bazal-bolyus rejimida insulin terapiyasini boshlash"
+  },
+  {
+   "text": "70 yoshli erkak 2-tur qandli diabet bilan og'riydi; yurak ishemik kasalligi, surunkali buyrak kasalligi (SKF 44 ml/min) va ikki marta og'ir gipoglikemiya epizodi bor. Yolg'iz yashaydi, ko'rish qobiliyati pasaygan. Hozirgi HbA1c 7,1%, qon bosimi nazoratda. Ushbu bemorda glikemik nazorat maqsadi bo'yicha eng to'g'ri qaror qaysi?",
+   "options": [
+    "Maqsadni yumshatish (HbA1c 7,5-8,0%) va gipoglikemiya xavfini kamaytirish",
+    "HbA1c ni 6,0% dan past darajaga tushirish",
+    "HbA1c ni 6,5% ga tushirish uchun sulfonilurea qo'shish",
+    "Insulin dozasini oshirib, HbA1c ni 6,5% ga olib kelish",
+    "Glikemik nazoratni butunlay to'xtatish"
+   ],
+   "correctAnswer": "Maqsadni yumshatish (HbA1c 7,5-8,0%) va gipoglikemiya xavfini kamaytirish"
+  }
+ ]
+}

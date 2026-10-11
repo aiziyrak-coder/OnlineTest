@@ -1,0 +1,445 @@
+{
+ "category": "Laboratoriya ishi — ordinatura 1-kurs",
+ "questions": [
+  {
+   "text": "34 yoshli erkak jarrohlik aralashuvdan oldin tekshirilmoqda. Anamnezida bolaligidan bo'g'imlarga qon quyilish epizodlari bor, tish olishdan keyin uzoq qon ketgan. Oilasida onasining ukasida shunday holat bo'lgan. Ko'rikda o'ng tizza bo'g'imi deformatsiyalangan. Laborator: trombotsitlar 260x10^9/l (normal), protrombin vaqti normal, aktivlangan qismiy tromboplastin vaqti (APTT) sezilarli uzaygan, qon ketish vaqti normal, fibrinogen normal. Aralashtirish sinovida APTT normallashdi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Gemofiliya (VIII yoki IX omil tanqisligi)",
+    "Villebrand kasalligi",
+    "Immun trombotsitopeniya",
+    "K vitamini tanqisligi",
+    "Antifosfolipid sindromi"
+   ],
+   "correctAnswer": "Gemofiliya (VIII yoki IX omil tanqisligi)"
+  },
+  {
+   "text": "58 yoshli ayol og'ir sepsis bilan reanimatsiyada. Terisida tarqoq petexiyalar, in'eksiya joylaridan qon sizadi, siydik ajralishi kamaygan. Laborator: trombotsitlar 38x10^9/l, protrombin vaqti uzaygan, APTT uzaygan, fibrinogen 1,1 g/l (past), D-dimer juda yuqori, periferik qon surtmasida parchalangan eritrotsitlar bor. Jigar fermentlari yengil yuqori, kreatinin yuqori. Ushbu ko'rsatkichlar majmuasi qaysi holatga xos?",
+   "options": [
+    "Tarqoq ichdomir ivish sindromi (DIC)",
+    "Jigar yetishmovchiligi tufayli koagulopatiya",
+    "K vitamini tanqisligi",
+    "Immun trombotsitopenik purpura",
+    "Gemofiliya A"
+   ],
+   "correctAnswer": "Tarqoq ichdomir ivish sindromi (DIC)"
+  },
+  {
+   "text": "62 yoshli erkak surunkali jigar kasalligi bilan kuzatiladi. Laborator: protrombin vaqti uzaygan, APTT yengil uzaygan, fibrinogen past, trombotsitlar 85x10^9/l, D-dimer yengil yuqori, VIII omil darajasi YUQORI, albumin past, bilirubin yuqori. Terida qon talashlar bor, lekin sepsis belgilari yo'q. Ushbu bemorda qaysi ko'rsatkich jigar koagulopatiyasini tarqoq ichdomir ivish sindromidan ajratishga eng ko'p yordam beradi?",
+   "options": [
+    "VIII omil darajasining yuqoriligi",
+    "Protrombin vaqtining uzayishi",
+    "Trombotsitlar sonining pasayishi",
+    "Fibrinogen darajasining pasayishi",
+    "Bilirubin darajasining yuqoriligi"
+   ],
+   "correctAnswer": "VIII omil darajasining yuqoriligi"
+  },
+  {
+   "text": "24 yoshli ayol holsizlik va sariqlik bilan keldi. Ko'rikda teri va shilliq qavatlar sarg'aygan, taloq yengil kattalashgan, isitma yo'q. Laborator: gemoglobin 78 g/l, retikulotsitlar 9% (yuqori), LDG yuqori, umumiy bilirubin yuqori (bilvosita fraksiya hisobidan), gaptoglobin juda past, to'g'ridan-to'g'ri Kumbs sinovi musbat (IgG). Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Autoimmun gemolitik anemiya (issiq antitanalar bilan)",
+    "Temir tanqisligi anemiyasi",
+    "Megaloblastik anemiya",
+    "Aplastik anemiya",
+    "Talassemiya minor"
+   ],
+   "correctAnswer": "Autoimmun gemolitik anemiya (issiq antitanalar bilan)"
+  },
+  {
+   "text": "48 yoshli ayol surunkali revmatoid artrit bilan kuzatiladi va holsizlikdan shikoyat qiladi. Laborator: gemoglobin 96 g/l, o'rtacha eritrotsit hajmi 82 fl, zardob temiri past, umumiy temir bog'lash qobiliyati PAST, ferritin 180 mkg/l (yuqori), transferrin to'yinishi past, CRP yuqori, eritrotsitlar cho'kish tezligi yuqori. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Surunkali kasallik anemiyasi",
+    "Temir tanqisligi anemiyasi",
+    "Talassemiya minor",
+    "Sideroblast anemiya",
+    "B12 vitamini tanqisligi anemiyasi"
+   ],
+   "correctAnswer": "Surunkali kasallik anemiyasi"
+  },
+  {
+   "text": "29 yoshli ayol holsizlik va bosh aylanishi bilan keldi; hayzi ko'p va uzoq davom etadi. Laborator: gemoglobin 88 g/l, o'rtacha eritrotsit hajmi 68 fl, eritrotsitlar taqsimoti kengligi (RDW) yuqori, zardob temiri past, ferritin 6 mkg/l, umumiy temir bog'lash qobiliyati YUQORI, transferrin to'yinishi 8%, trombotsitlar yengil yuqori. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Temir tanqisligi anemiyasi",
+    "Surunkali kasallik anemiyasi",
+    "Talassemiya minor",
+    "Gemolitik anemiya",
+    "Qo'rg'oshin bilan zaharlanish"
+   ],
+   "correctAnswer": "Temir tanqisligi anemiyasi"
+  },
+  {
+   "text": "26 yoshli erkakda profilaktik tekshiruvda anemiya aniqlandi, shikoyati yo'q. Laborator: gemoglobin 112 g/l, o'rtacha eritrotsit hajmi 64 fl, eritrotsitlar soni 6,1x10^12/l (yuqori), RDW normal, ferritin 95 mkg/l (normal), zardob temiri normal, Mentzer indeksi (MCV/RBC) 10,5; gemoglobin elektroforezida HbA2 5,8% (yuqori). Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Beta-talassemiya minor",
+    "Temir tanqisligi anemiyasi",
+    "Sideroblast anemiya",
+    "Surunkali kasallik anemiyasi",
+    "Alfa-talassemiya o'tkazuvchiligi"
+   ],
+   "correctAnswer": "Beta-talassemiya minor"
+  },
+  {
+   "text": "68 yoshli ayol holsizlik, tilning kuyishi va qo'l-oyoqlarda uvishishdan shikoyat qiladi; yurishi beqaror. Laborator: gemoglobin 84 g/l, o'rtacha eritrotsit hajmi 118 fl, leykotsitlar 3,2x10^9/l, trombotsitlar 110x10^9/l, LDG yuqori, bilvosita bilirubin yengil yuqori, retikulotsitlar past; periferik qon surtmasida giperseegmentlangan neytrofillar bor. B12 vitamini juda past, metilmalon kislotasi yuqori, gomotsistein yuqori. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "B12 vitamini tanqisligi (megaloblastik anemiya)",
+    "Folat kislotasi tanqisligi",
+    "Mielodisplastik sindrom",
+    "Gemolitik anemiya",
+    "Alkogolga bog'liq makrotsitoz"
+   ],
+   "correctAnswer": "B12 vitamini tanqisligi (megaloblastik anemiya)"
+  },
+  {
+   "text": "22 yoshli erkak isitma, bosh og'rig'i va bo'yin rigidligi bilan keltirildi. Lyumbal punksiya o'tkazildi. Orqa miya suyuqligi tahlili: hujayralar 1800/mkl (85% neytrofillar), oqsil 2,1 g/l (yuqori), glyukoza 1,1 mmol/l (qon glyukozasi 5,6 mmol/l), laktat yuqori, suyuqlik loyqa. Gram bo'yashda gram-musbat diplokokklar topildi. Ushbu natijalar qaysi holatga xos?",
+   "options": [
+    "Bakterial meningit",
+    "Virusli (aseptik) meningit",
+    "Sil meningiti",
+    "Zamburug'li meningit",
+    "Subaraxnoidal qon quyilish"
+   ],
+   "correctAnswer": "Bakterial meningit"
+  },
+  {
+   "text": "35 yoshli erkakda uch haftadan beri sekin kuchayib borayotgan bosh og'rig'i, kechki isitma va vazn yo'qotish bor. Lyumbal punksiya natijasi: hujayralar 220/mkl (80% limfotsitlar), oqsil 3,4 g/l (juda yuqori), glyukoza 1,4 mmol/l (qon glyukozasi 6,0 mmol/l), suyuqlik tindirilganda pardasimon cho'kma hosil bo'ldi, xloridlar past. Gram bo'yashda qo'zg'atuvchi topilmadi. Ushbu natijalar qaysi holatga eng xos?",
+   "options": [
+    "Sil meningiti",
+    "Bakterial meningit",
+    "Virusli meningit",
+    "Karsinomatoz meningit",
+    "Normal natija"
+   ],
+   "correctAnswer": "Sil meningiti"
+  },
+  {
+   "text": "54 yoshli erkak to'satdan boshlangan juda kuchli bosh og'rig'i bilan keltirildi; bosh miya kompyuter tomografiyasi qon quyilishni ko'rsatmadi. Lyumbal punksiya o'tkazildi: birinchi va to'rtinchi probirkada eritrotsitlar soni bir xil ko'p, suyuqlik sentrifugalangandan keyin ustki qism sarg'ish (ksantoxromiya), oqsil yengil yuqori, glyukoza normal. Ushbu natijalar nimani ko'rsatadi?",
+   "options": [
+    "Subaraxnoidal qon quyilish",
+    "Punksiya paytida qon tomir shikastlanishi (yo'l qoni)",
+    "Bakterial meningit",
+    "Virusli ensefalit",
+    "Normal natija"
+   ],
+   "correctAnswer": "Subaraxnoidal qon quyilish"
+  },
+  {
+   "text": "45 yoshli erkak nafas qisishi bilan keldi; ko'krak qafasi rentgenogrammasida o'ng tomonda suyuqlik aniqlandi. Punksiyada olingan plevra suyuqligi: oqsil 42 g/l, qon zardobidagi oqsil 68 g/l; suyuqlik LDG 320 U/l, qon LDG 240 U/l. Suyuqlik loyqa, limfotsitlar ko'p, glyukoza past. Laytning mezonlari bo'yicha baholash talab qilinadi. Ushbu suyuqlik qanday tavsiflanadi?",
+   "options": [
+    "Eksudat (yallig'lanish yoki o'sma kelib chiqishi)",
+    "Transsudat (yurak yoki jigar yetishmovchiligi)",
+    "Qon (gemotoraks)",
+    "Xilotoraks",
+    "Normal plevra suyuqligi"
+   ],
+   "correctAnswer": "Eksudat (yallig'lanish yoki o'sma kelib chiqishi)"
+  },
+  {
+   "text": "60 yoshli erkak jigar sirrozi bilan kuzatiladi; qorin suyuqligi yig'ilgan. Parasentez o'tkazildi: qorin suyuqligi albumini 8 g/l, qon zardobi albumini 30 g/l (zardob-ascit albumin gradienti 22 g/l), suyuqlikda neytrofillar 180/mkl, umumiy oqsil past. Bemorda isitma va qorin og'rig'i bor. Ushbu natijalarga ko'ra eng to'g'ri xulosa qaysi?",
+   "options": [
+    "Portal gipertenziyaga bog'liq ascit va spontan bakterial peritonit",
+    "Portal gipertenziyaga bog'liq ascit, infeksiyasiz",
+    "O'smaga bog'liq (peritoneal karsinomatoz) ascit",
+    "Sil peritoniti",
+    "Pankreatik ascit"
+   ],
+   "correctAnswer": "Portal gipertenziyaga bog'liq ascit va spontan bakterial peritonit"
+  },
+  {
+   "text": "28 yoshli ayol 1-tur qandli diabet bilan og'riydi; qusish va chuqur nafas bilan keltirildi. Arterial qon gaz tahlili: pH 7,12, pCO2 22 mm sim. ust., bikarbonat 7 mmol/l, natriy 134 mmol/l, xlor 100 mmol/l, kaliy 5,0 mmol/l. Hisoblangan anion oraliq 27 mmol/l. Laktat normal, siydikda ketonlar ko'p. Ushbu natijalar qaysi buzilishga xos?",
+   "options": [
+    "Anion oraliq keng metabolik atsidoz, respirator kompensatsiya bilan",
+    "Anion oraliq normal metabolik atsidoz",
+    "Respirator alkaloz",
+    "Metabolik alkaloz",
+    "Aralash respirator va metabolik alkaloz"
+   ],
+   "correctAnswer": "Anion oraliq keng metabolik atsidoz, respirator kompensatsiya bilan"
+  },
+  {
+   "text": "47 yoshli ayol uzoq davom etgan qusish tufayli keltirildi. Arterial qon gaz tahlili: pH 7,52, pCO2 48 mm sim. ust., bikarbonat 38 mmol/l. Elektrolitlar: natriy 136 mmol/l, kaliy 2,9 mmol/l, xlor 88 mmol/l; siydikda xlor past. Bemor diuretik qabul qilmaydi. Ushbu natijalar qaysi buzilishga xos?",
+   "options": [
+    "Xloridga javob beruvchi metabolik alkaloz (qusish hisobidan)",
+    "Respirator alkaloz",
+    "Anion oraliq keng metabolik atsidoz",
+    "Birlamchi giperaldosteronizm hisobidan metabolik alkaloz",
+    "Aralash metabolik atsidoz va respirator alkaloz"
+   ],
+   "correctAnswer": "Xloridga javob beruvchi metabolik alkaloz (qusish hisobidan)"
+  },
+  {
+   "text": "7 yoshli bolada siydik tahlili: oqsil 3+, eritrotsitlar 50-60 ko'rish maydonida (dismorf shaklli), eritrotsitar silindrlar bor, leykotsitlar 5-6, nitritlar salbiy, siydik to'q jigarrang. Qon bosimi yoshiga nisbatan yuqori, kreatinin yengil yuqori. Ushbu siydik tahlili qaysi holatga eng xos?",
+   "options": [
+    "Glomerulyar zararlanish (nefritik sindrom)",
+    "Siydik yo'llari infeksiyasi",
+    "Nefrotik sindrom",
+    "Siydik toshi",
+    "Normal natija"
+   ],
+   "correctAnswer": "Glomerulyar zararlanish (nefritik sindrom)"
+  },
+  {
+   "text": "70 yoshli erkak siydik ajralishining kamayishi bilan keltirildi. Laborator: kreatinin 320 mkmol/l (oldin normal), urea yuqori. Siydik tahlilida qo'ng'ir donador silindrlar va epitelial hujayralar bor, siydik natriysi 60 mmol/l, siydik osmolyarligi 290 mosm/kg, natriyning fraksion ekskretsiyasi 3,2%. Bemorda qon bosimi normal, shish yo'q, siydik yo'llari exoskopiyasida to'siq yo'q. Ushbu natijalar qaysi holatga xos?",
+   "options": [
+    "O'tkir tubulyar nekroz (buyrakning o'zi zararlanishi)",
+    "Prerenal (qon ta'minotiga bog'liq) buyrak yetishmovchiligi",
+    "Postrenal (to'siqqa bog'liq) buyrak yetishmovchiligi",
+    "O'tkir glomerulonefrit",
+    "Surunkali buyrak kasalligi, o'zgarishsiz"
+   ],
+   "correctAnswer": "O'tkir tubulyar nekroz (buyrakning o'zi zararlanishi)"
+  },
+  {
+   "text": "55 yoshli erkak ko'krak qafasi og'rig'i bilan keltirildi; og'riq 3 soat oldin boshlangan. EKG da ST segmenti ko'tarilmagan. Laborator: birinchi olingan yuqori sezgirlikdagi troponin 18 ng/l (me'yor chegarasida), 3 soatdan keyin olingan troponin 240 ng/l. Kreatinkinaza yengil yuqori, D-dimer normal, kreatinin normal. Ushbu dinamika nimani ko'rsatadi?",
+   "options": [
+    "O'tkir miokard shikastlanishi (infarkt) — troponinning sezilarli dinamik o'sishi",
+    "Surunkali troponin ko'tarilishi (buyrak kasalligi hisobidan)",
+    "Natijaning laborator xatosi, takrorlash kerak",
+    "O'pka arteriyasi tromboemboliyasi",
+    "Normal natija, miokard shikastlanishi yo'q"
+   ],
+   "correctAnswer": "O'tkir miokard shikastlanishi (infarkt) — troponinning sezilarli dinamik o'sishi"
+  },
+  {
+   "text": "40 yoshli ayolning qon namunasi laboratoriyaga yetib kelganda zardob pushti-qizil rangda ekani qayd etildi. Natijalar: kaliy 6,8 mmol/l, LDG 480 U/l, AST yuqori, fosfor yuqori; natriy, kreatinin va glyukoza normal. Bemor klinik jihatdan sog'lom, EKG normal, buyrak funksiyasi normal, dori qabul qilmaydi. Ushbu holatda eng to'g'ri qadam qaysi?",
+   "options": [
+    "Namunani gemolizlangan deb hisoblab, qonni qaytadan olish",
+    "Natijani haqiqiy deb qabul qilib, kaliyni pasaytirish davosini boshlash",
+    "Darhol kaltsiy glyukonat yuborish",
+    "Buyrak biopsiyasini rejalashtirish",
+    "Natijani o'zgarishsiz hisobotga kiritish"
+   ],
+   "correctAnswer": "Namunani gemolizlangan deb hisoblab, qonni qaytadan olish"
+  },
+  {
+   "text": "32 yoshli sog'lom ayolning umumiy qon tahlilida trombotsitlar 45x10^9/l deb chiqdi. Bemorda qon talash, petexiya yoki qon ketish belgilari yo'q, boshqa ko'rsatkichlar normal. Periferik qon surtmasini ko'rganda trombotsitlar to'da-to'da bo'lib yopishgani aniqlandi. Namuna EDTA li probirkada olingan. Ushbu holatda eng to'g'ri qadam qaysi?",
+   "options": [
+    "Natriy sitratli yoki geparinli probirkada qonni qaytadan olib, trombotsitlarni qayta sanash",
+    "Darhol trombotsitar massa quyish",
+    "Glyukokortikosteroid bilan davolashni boshlash",
+    "Suyak ko'migi punksiyasini o'tkazish",
+    "Immunoglobulinni vena ichiga yuborish"
+   ],
+   "correctAnswer": "Natriy sitratli yoki geparinli probirkada qonni qaytadan olib, trombotsitlarni qayta sanash"
+  },
+  {
+   "text": "Laboratoriyada glyukoza tahlili uchun olingan qon namunasi vena qonidan oddiy probirkaga (konservantsiz) olingan va sentrifugalash 5 soat kechiktirilgan. Namuna xona haroratida saqlangan. Natija: glyukoza 3,9 mmol/l. Bemor klinik jihatdan qandli diabetga shubhali va ilgari olingan tahlilda nahorda glyukoza 7,4 mmol/l bo'lgan. Ushbu holatda natijaning pasayishiga nima sabab?",
+   "options": [
+    "Namunada eritrotsitlar glyukozani iste'mol qilgani (glikoliz)",
+    "Namunaning muzlab qolgani",
+    "Namunaning gemolizlangani",
+    "Probirkada antikoagulyant ko'p bo'lgani",
+    "Bemorning ovqat yegani"
+   ],
+   "correctAnswer": "Namunada eritrotsitlar glyukozani iste'mol qilgani (glikoliz)"
+  },
+  {
+   "text": "Laboratoriyada ichki nazorat uchun har kuni nazorat namunasi o'lchanadi. Oxirgi 10 kunda nazorat natijalari o'rtacha qiymatdan yuqori tomonda ketma-ket joylashgan va asta-sekin ko'tarilib bormoqda, lekin hech biri +2 standart chetlanishdan oshmagan. Reagent partiyasi bir hafta oldin o'zgargan. Ushbu holat Levi-Jennings grafigida nimani ko'rsatadi?",
+   "options": [
+    "Tizimli xato (trend): kalibrovka yoki reagent bilan bog'liq siljish",
+    "Tasodifiy xato: alohida o'lchov xatosi",
+    "Natijalar to'liq nazorat ostida, chora kerak emas",
+    "Namuna almashib ketgani",
+    "Analizator mexanik nosozligi, darhol to'xtatish kerak"
+   ],
+   "correctAnswer": "Tizimli xato (trend): kalibrovka yoki reagent bilan bog'liq siljish"
+  },
+  {
+   "text": "Yangi skrining testi 1000 kishida sinovdan o'tkazildi. Kasallik haqiqatda 100 kishida mavjud. Test 90 ta kasal odamda musbat, 10 ta kasal odamda salbiy chiqdi; sog'lom 900 kishidan 90 tasida test musbat, 810 tasida salbiy chiqdi. Shu ma'lumotlar bo'yicha testning musbat natijasining prognostik qiymati (PPV) qancha?",
+   "options": [
+    "50%",
+    "90%",
+    "10%",
+    "81%",
+    "45%"
+   ],
+   "correctAnswer": "50%"
+  },
+  {
+   "text": "Yuqoridagi kabi sinovda test 100 ta kasal odamdan 90 tasini to'g'ri aniqladi, 10 tasini o'tkazib yubordi. Sog'lom 900 kishidan 810 tasida test to'g'ri salbiy chiqdi. Klinik vazifa — kasallikni O'TKAZIB YUBORMASLIK (skrining). Testning bu vazifaga mos ko'rsatkichi va uning qiymati qaysi?",
+   "options": [
+    "Sezgirlik: kasallarning qanchasini test topadi — 90%",
+    "Xususiylik: sog'lomlarning qanchasini test to'g'ri salbiy beradi — 90%",
+    "Musbat natijaning prognostik qiymati: musbat chiqqanlarning qanchasi kasal — 50%",
+    "Salbiy natijaning prognostik qiymati: salbiy chiqqanlarning qanchasi sog'lom — 99%",
+    "Aniqlik: barcha to'g'ri natijalar ulushi — 90%"
+   ],
+   "correctAnswer": "Sezgirlik: kasallarning qanchasini test topadi — 90%"
+  },
+  {
+   "text": "45 yoshli erkakda virusli gepatitga shubha qilinib, markerlar olindi. Natijalar: HBsAg musbat, anti-HBc IgM musbat, anti-HBs salbiy, HBeAg musbat, ALT 680 U/l. Bemorda sariqlik va holsizlik bor, kasallik 3 hafta oldin boshlangan. Ushbu natijalar qaysi holatga xos?",
+   "options": [
+    "O'tkir B gepatiti",
+    "Surunkali B gepatiti",
+    "B gepatitidan sog'ayish va immunitet",
+    "B gepatitiga qarshi emlashdan keyingi holat",
+    "O'tkir A gepatiti"
+   ],
+   "correctAnswer": "O'tkir B gepatiti"
+  },
+  {
+   "text": "Tibbiyot xodimi profilaktik ko'rikdan o'tdi. Natijalar: HBsAg salbiy, anti-HBc (umumiy) salbiy, anti-HBs musbat va titri yuqori, ALT normal. Bemor ilgari gepatit bilan kasallanmagan. Ushbu natijalar qaysi holatga xos?",
+   "options": [
+    "Emlashdan keyingi immunitet",
+    "Kasallikdan keyingi tabiiy immunitet",
+    "Surunkali B gepatiti",
+    "O'tkir B gepatiti",
+    "Yashirin (okkult) B gepatiti"
+   ],
+   "correctAnswer": "Emlashdan keyingi immunitet"
+  },
+  {
+   "text": "66 yoshli erkakda bel og'rig'i va anemiya bor. Laborator: gemoglobin 88 g/l, kaltsiy 2,98 mmol/l, kreatinin 180 mkmol/l, umumiy oqsil yuqori, albumin past, eritrotsitlar cho'kish tezligi 110 mm/soat; periferik qon surtmasida eritrotsitlar tanga ustunchasi (rouleaux) hosil qilgan. Zardob oqsillari elektroforezida gamma sohasida tor monoklonal cho'qqi aniqlandi, siydikda yengil zanjirlar topildi. Ushbu natijalar qaysi kasallikka xos?",
+   "options": [
+    "Ko'p sonli mieloma",
+    "Surunkali limfoleykoz",
+    "Surunkali kasallik anemiyasi",
+    "Birlamchi giperparatireoz",
+    "Amiloidoz, mielomasiz"
+   ],
+   "correctAnswer": "Ko'p sonli mieloma"
+  },
+  {
+   "text": "52 yoshli erkak oyoq shishi va nafas qisishi bilan keltirildi. Laborator: D-dimer 2800 ng/ml (yuqori), troponin normal, kreatinin normal; bemor onkologik kasallik bilan davolanmoqda va bir hafta oldin operatsiya bo'lgan. Klinik ehtimollik (Wells) ko'rsatkichi yuqori. Ushbu holatda D-dimer natijasining to'g'ri talqini qaysi?",
+   "options": [
+    "Yuqori klinik ehtimollikda D-dimer tashxisni ham tasdiqlamaydi, ham rad etmaydi — tasvirlash tekshiruvi zarur",
+    "Yuqori D-dimer tromboemboliyani ishonchli tasdiqlaydi, tasvirlash shart emas",
+    "D-dimer yuqori bo'lsa ham, operatsiyadan keyin har doim e'tiborsiz qoldiriladi",
+    "D-dimer salbiy bo'lgandagina tasvirlash kerak bo'ladi",
+    "D-dimer faqat yurak kasalliklarini ko'rsatadi"
+   ],
+   "correctAnswer": "Yuqori klinik ehtimollikda D-dimer tashxisni ham tasdiqlamaydi, ham rad etmaydi — tasvirlash tekshiruvi zarur"
+  },
+  {
+   "text": "70 yoshli ayoldan isitma tufayli qon ekmasi olindi: ikki xil joydan ikki juft probirka. Natija: to'rt probirkadan faqat bittasida 48 soatdan keyin koagulaza-manfiy stafilokokk o'sdi. Bemorda markaziy vena kateteri yo'q, sun'iy klapan yo'q, holati yaxshilangan va antibiotiksiz isitma tushgan. Ushbu natijaning eng to'g'ri talqini qaysi?",
+   "options": [
+    "Namuna olish paytidagi teri florasi bilan ifloslanish (kontaminatsiya)",
+    "Haqiqiy bakteremiya, davolash majburiy",
+    "Laboratoriya analizatorining nosozligi",
+    "Zamburug'li sepsis",
+    "Natijani baholash uchun ma'lumot yetarli emas, yana 6 juft ekma kerak"
+   ],
+   "correctAnswer": "Namuna olish paytidagi teri florasi bilan ifloslanish (kontaminatsiya)"
+  },
+  {
+   "text": "Isitmalanayotgan bemorda malyariyaga shubha qilinmoqda; u endemik hududdan qaytgan. Tez immunoxromatografik test salbiy chiqdi, lekin klinik shubha kuchli: isitma xurujlari, taloq kattalashgan, trombotsitlar past. Ushbu holatda eng to'g'ri qadam qaysi?",
+   "options": [
+    "Qalin tomchi va yupqa surtmani 12-24 soat ichida uch marta takrorlab tekshirish",
+    "Tez test salbiy bo'lgani uchun malyariyani butunlay rad etish",
+    "Faqat serologik tekshiruv (antitanalar) ga tayanish",
+    "Davolashni tashxissiz, empirik boshlab, tekshiruvdan voz kechish",
+    "Suyak ko'migi punksiyasini birinchi tekshiruv sifatida o'tkazish"
+   ],
+   "correctAnswer": "Qalin tomchi va yupqa surtmani 12-24 soat ichida uch marta takrorlab tekshirish"
+  },
+  {
+   "text": "58 yoshli erkakda qalqonsimon bez funksiyasi tekshirildi: TSH 18 mXB/l (yuqori), erkin T4 8 pmol/l (past), anti-TPO antitanalari musbat. Bemorda charchoq, vazn ortishi, teri quruqligi va ich qotishi bor; puls 56/daq. Qalqonsimon bez palpatsiyada zich va yengil kattalashgan. Ushbu natijalar qaysi holatga xos?",
+   "options": [
+    "Birlamchi gipotireoz (autoimmun tireoidit)",
+    "Ikkilamchi (markaziy) gipotireoz",
+    "Subklinik gipotireoz",
+    "Tireotoksikoz",
+    "Og'ir somatik kasallik sindromi (euthyroid sick)"
+   ],
+   "correctAnswer": "Birlamchi gipotireoz (autoimmun tireoidit)"
+  },
+  {
+   "text": "Bemorda zardob osmolyarligi 320 mosm/kg deb o'lchandi. Hisoblangan osmolyarlik (natriy, urea va glyukoza asosida) 292 mosm/kg. Osmolyar oraliq 28 mosm/kg. Bemor hushsiz holatda keltirilgan, metabolik atsidoz bor, anion oraliq keng, ko'rish buzilgani haqida shikoyat qilgan. Ushbu natijalar qaysi holatga eng xos?",
+   "options": [
+    "Toksik spirt (metanol yoki etilenglikol) bilan zaharlanish",
+    "Diabetik ketoatsidoz",
+    "Uremiya",
+    "Laktatatsidoz (sepsis hisobidan)",
+    "Salitsilat bilan zaharlanish"
+   ],
+   "correctAnswer": "Toksik spirt (metanol yoki etilenglikol) bilan zaharlanish"
+  },
+  {
+   "text": "Shoshilinch bo'limga keltirilgan bemorda sepsisga shubha bor: isitma 39°C, taxikardiya, nafas tez. Laborator: leykotsitoz, CRP 180 mg/l, prokaltsitonin 12 ng/ml (sezilarli yuqori), laktat 3,8 mmol/l. Virusli infeksiya ham muhokama qilinmoqda. Prokaltsitonin natijasining eng to'g'ri talqini qaysi?",
+   "options": [
+    "Yuqori prokaltsitonin bakterial infeksiya foydasiga dalil bo'ladi va antibiotik qarorini qo'llab-quvvatlaydi",
+    "Prokaltsitonin faqat virusli infeksiyalarda ko'tariladi",
+    "Prokaltsitonin natijasi antibiotik qarorida hech qanday ahamiyatga ega emas",
+    "Prokaltsitonin faqat zamburug'li infeksiyalarda ko'tariladi",
+    "Prokaltsitonin faqat o'smalarda ko'tariladi"
+   ],
+   "correctAnswer": "Yuqori prokaltsitonin bakterial infeksiya foydasiga dalil bo'ladi va antibiotik qarorini qo'llab-quvvatlaydi"
+  },
+  {
+   "text": "Bemordan bir vaqtda bir necha tahlil uchun qon olinmoqda: qon ekmasi, ivish ko'rsatkichlari (sitratli probirka), biokimyo (gel bilan probirka) va umumiy qon tahlili (EDTA li probirka). Namuna olish tartibi natijalarga ta'sir qiladi: antikoagulyantlarning bir probirkadan boshqasiga o'tishi xatoga olib keladi. Ushbu holatda eng to'g'ri ketma-ketlik qaysi?",
+   "options": [
+    "Avval qon ekmasi, keyin sitratli (ivish), so'ng gel bilan biokimyo, oxirida EDTA li probirka",
+    "Avval EDTA li probirka, keyin sitratli, so'ng qon ekmasi",
+    "Avval biokimyo, keyin qon ekmasi, oxirida ivish",
+    "Tartib ahamiyatga ega emas, barcha probirkalar mustaqil",
+    "Avval sitratli, keyin EDTA li, oxirida qon ekmasi"
+   ],
+   "correctAnswer": "Avval qon ekmasi, keyin sitratli (ivish), so'ng gel bilan biokimyo, oxirida EDTA li probirka"
+  },
+  {
+   "text": "63 yoshli erkak varfarin qabul qiladi (yurak klapani protezi tufayli). Nazorat tahlilida xalqaro normallashtirilgan nisbat (INR) 6,8 deb chiqdi; bemorda qon ketish belgisi yo'q, faqat tanada bir-ikki ko'karish bor. Bir hafta oldin antibiotik (ko-trimoksazol) boshlangan. Trombotsitlar normal, gemoglobin normal. Ushbu holatda eng to'g'ri taktika qaysi?",
+   "options": [
+    "Varfarinni to'xtatish, K vitaminini og'iz orqali berish va INR ni kuzatish",
+    "Varfarin dozasini o'zgartirmasdan davom ettirish",
+    "Darhol yangi muzlatilgan plazma quyish",
+    "Protamin sulfat yuborish",
+    "Varfarinni to'xtatib, geparinga o'tish"
+   ],
+   "correctAnswer": "Varfarinni to'xtatish, K vitaminini og'iz orqali berish va INR ni kuzatish"
+  },
+  {
+   "text": "28 yoshli erkak bepushtlik tufayli spermogramma topshirdi. Natija: hajm 2,5 ml, konsentratsiya 4 mln/ml (past), umumiy harakatchanlik 20% (past), normal morfologiya 2% (past), leykotsitlar normal. Tahlil 3 kunlik jinsiy tiyilishdan keyin olingan va laboratoriyaga 1 soat ichida yetkazilgan. Ushbu holatda eng to'g'ri qadam qaysi?",
+   "options": [
+    "Tahlilni 2-3 hafta oradan keyin takrorlash va natijani tasdiqlash",
+    "Bitta natijaga asoslanib azoospermiya tashxisini qo'yish",
+    "Darhol moyak biopsiyasini o'tkazish",
+    "Natijani normal deb hisoblash",
+    "Faqat gormonal tekshiruv bilan cheklanish"
+   ],
+   "correctAnswer": "Tahlilni 2-3 hafta oradan keyin takrorlash va natijani tasdiqlash"
+  },
+  {
+   "text": "54 yoshli ayoldan yo'tal tufayli balg'am tahlili olindi. Natija: surtmada epitelial hujayralar ko'p (25 dan ziyod ko'rish maydonida), neytrofillar kam, aralash flora o'sgan. Bemorda isitma va ko'krak qafasi rentgenogrammasida infiltratsiya bor. Ushbu natijaning eng to'g'ri talqini qaysi?",
+   "options": [
+    "Namuna so'lak bilan ifloslangan — balg'amni qaytadan, chuqur yo'tal bilan olish kerak",
+    "Natija aralash bakterial pnevmoniyani tasdiqlaydi",
+    "Natija sil kasalligini ko'rsatadi",
+    "Natija normal, qo'shimcha tekshiruv kerak emas",
+    "Natija zamburug'li pnevmoniyani tasdiqlaydi"
+   ],
+   "correctAnswer": "Namuna so'lak bilan ifloslangan — balg'amni qaytadan, chuqur yo'tal bilan olish kerak"
+  },
+  {
+   "text": "32 yoshli ayolda qalqonsimon bez tekshiruvida TSH past, erkin T4 va T3 yuqori chiqdi. Bemor homilador emas, biotin qo'shimchasini kuniga 10 mg dozada ichadi (soch uchun). Klinik jihatdan tireotoksikoz belgilari yo'q: puls 72/daq, vazn barqaror, titroq yo'q, ekzoftalm yo'q. Qalqonsimon bez palpatsiyada normal. Ushbu holatda eng to'g'ri qadam qaysi?",
+   "options": [
+    "Biotinni 3-5 kun to'xtatib, tahlilni takrorlash (biotin immunotahlilga xalaqit beradi)",
+    "Darhol antitiroid terapiyani boshlash",
+    "Radioaktiv yod bilan ablatsiyani rejalashtirish",
+    "Natijani haqiqiy deb qabul qilib, beta-blokator boshlash",
+    "Qalqonsimon bez biopsiyasini o'tkazish"
+   ],
+   "correctAnswer": "Biotinni 3-5 kun to'xtatib, tahlilni takrorlash (biotin immunotahlilga xalaqit beradi)"
+  },
+  {
+   "text": "48 yoshli erkakda surunkali limfoleykoz bilan kuzatilmoqda; qishda qo'l va quloqlari ko'karishi va holsizlik paydo bo'ldi. Laborator: gemoglobin 82 g/l, retikulotsitlar yuqori, LDG yuqori, gaptoglobin past, to'g'ridan-to'g'ri Kumbs sinovi komplement (C3) uchun musbat, IgG uchun salbiy; qon namunasi xona haroratida turganda eritrotsitlar yopishib qolgan va analizator eritrotsitlar sonini juda past ko'rsatgan. Namuna 37°C da isitilganda ko'rsatkichlar normallashgan. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+   "options": [
+    "Sovuq agglutininlar bilan kechuvchi gemolitik anemiya",
+    "Issiq antitanalar bilan kechuvchi autoimmun gemolitik anemiya",
+    "Mikroangiopatik gemolitik anemiya",
+    "Nasliy sferotsitoz",
+    "Temir tanqisligi anemiyasi"
+   ],
+   "correctAnswer": "Sovuq agglutininlar bilan kechuvchi gemolitik anemiya"
+  },
+  {
+   "text": "60 yoshli erkakda prostata saratoni bo'yicha kuzatuv olib borilmoqda; radikal prostatektomiyadan keyin ikki yil o'tgan. Nazorat tahlilida umumiy prostata-spetsifik antigen (PSA) 0,02 ng/ml dan 0,8 ng/ml ga ko'tarildi va ikki marta tasdiqlandi. Bemorda shikoyat yo'q, suyak og'rig'i yo'q, kreatinin normal. Ushbu dinamikaning eng to'g'ri talqini qaysi?",
+   "options": [
+    "Biokimyoviy qaytalanish — onkologik kengashga yo'llash va tasvirlash tekshiruvi kerak",
+    "Natija normal, kuzatishni davom ettirish",
+    "Laborator xatosi, tahlilni bir yildan keyin takrorlash",
+    "Prostata yallig'lanishi, antibiotik yetarli",
+    "PSA operatsiyadan keyin har doim ko'tariladi, ahamiyati yo'q"
+   ],
+   "correctAnswer": "Biokimyoviy qaytalanish — onkologik kengashga yo'llash va tasvirlash tekshiruvi kerak"
+  }
+ ]
+}
