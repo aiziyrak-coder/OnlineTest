@@ -60,6 +60,7 @@ class Command(BaseCommand):
         self.stdout.write("Imtihonlar: %d | har kishiga %d to'plam | rejim: %s"
                           % (len(exams), attempts, "YOZISH" if apply else "ko'rish"))
         jami_kishi = jami_toplam = tegilmadi = yetmadi = 0
+        tor_banklar: list[str] = []
         yozuvlar: list[StudentExam] = []
 
         for e in exams:
@@ -113,6 +114,11 @@ class Command(BaseCommand):
             jami_kishi += kishi
             jami_toplam += toplam
             # Bank qanchalik teng ishlatilgani: bir savol necha kishiga tushgan.
+            # Bank bir odamning hamma urinishiga yetadimi: `attempts` ta
+            # to'plam uchun need*attempts ta boshqa savol kerak.
+            if len(bank) < need * attempts:
+                tor_banklar.append("[%s] %s — bank %d, kerak %d (%d urinish × %d savol)"
+                                   % (e.id, nom, len(bank), need * attempts, attempts, need))
             if kishi:
                 vals = [usage[question_key(q)] for q in bank]
                 self.stdout.write(
@@ -125,6 +131,11 @@ class Command(BaseCommand):
         if yetmadi:
             self.stdout.write(self.style.WARNING(
                 "   %d kishida bank yetmadi — eski savollar qayta ishlatildi" % yetmadi))
+        if tor_banklar:
+            self.stdout.write(self.style.WARNING(
+                "   Bank tor — oxirgi urinishlarda savollar qisman takrorlanadi:"))
+            for t in tor_banklar:
+                self.stdout.write("      " + t)
         if not apply:
             self.stdout.write(self.style.WARNING("Ko'rish rejimi — yozish uchun --apply"))
             return
