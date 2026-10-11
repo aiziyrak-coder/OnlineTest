@@ -213,11 +213,25 @@ class Command(BaseCommand):
             toplamlar: dict[int, list] = {id(se): [] for se, _a in maqsadlar}
             olingan: dict[int, set] = {id(se): set(av) for se, av in maqsadlar}
             for _urinish in range(attempts):
+                # Shu bosqichda boshqalarga tushgan savollar — QATTIQ
+                # chetlanadi. Faqat tartib bilan (kam ishlatilgani oldinda)
+                # yetmaydi: sifat tartibi qat'iy bo'lgani uchun bir sikldan
+                # keyin hamma yana eng kuchli savollarga qaytib kelardi va
+                # qo'shni ikki kishining imtihon to'plami 13 tagacha ustma-ust
+                # tushardi. Tanlov yetmasa chetlash bekor qilinadi — imtihon
+                # savolsiz qolmasligi kerak.
+                band: set = set()
                 for se, _av in maqsadlar:
+                    chetla = olingan[id(se)] | band
+                    qoldiq = sum(1 for q in tanlov if question_key(q) not in chetla)
+                    if qoldiq < need:
+                        chetla = olingan[id(se)]
                     v = build_variants(tanlov, need, 1, usage=usage, rnd=rnd,
-                                       avoid=olingan[id(se)], quality=usmle_score)[0]
+                                       avoid=chetla, quality=usmle_score)[0]
                     toplamlar[id(se)].append(v)
-                    olingan[id(se)] |= {question_key(q) for q in v}
+                    kalitlar = {question_key(q) for q in v}
+                    olingan[id(se)] |= kalitlar
+                    band |= kalitlar
                     if len(v) < need:
                         yetmadi += 1
 
