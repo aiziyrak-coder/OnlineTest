@@ -91,6 +91,18 @@ class BankMigrationTests(TestCase):
         self._run("--apply")
         self.assertEqual(TestBankQuestion.objects.count(), 1)
 
+    def test_a_key_longer_than_the_field_is_not_migrated(self):
+        """Kalit maydoni 500 belgi — uzun javob qirqilsa savol buziladi."""
+        uzun = "A" * 540
+        q = {"id": 1, "text": "45 yoshli bemor. To'liq savol matni?",
+             "options": [uzun, "B", "C", "D"], "correctAnswer": uzun}
+        self._exam("DAK — Patanatomiya", [q, _q(2)], audience="ordinator", course=2,
+                   faculty_subject="Patologik anatomiya")
+        self._run("--apply")
+        self.assertEqual(TestBankQuestion.objects.count(), 1)
+        row = TestBankQuestion.objects.get()
+        self.assertIn(row.correct_answer, json.loads(row.options_json))
+
     def test_the_exam_bank_is_untouched(self):
         bank = [_q(1), _q(2)]
         e = self._exam("DAK — Urologiya", bank, audience="ordinator", course=2,

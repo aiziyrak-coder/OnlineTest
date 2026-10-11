@@ -84,7 +84,7 @@ class Command(BaseCommand):
         # To'plam bo'yicha yig'amiz: (fan, auditoriya, kurs) -> savollar
         guruh: dict[tuple, list[dict]] = {}
         manba: dict[tuple, set[int]] = {}
-        jami_oqildi = nuqsonli = 0
+        jami_oqildi = nuqsonli = uzun_kalit = 0
         for e in exams:
             bank = [q for q in json.loads(e.questions_json or "[]") if isinstance(q, dict)]
             if not bank:
@@ -97,11 +97,17 @@ class Command(BaseCommand):
                 if appeal_risks(q):
                     nuqsonli += 1
                     continue
+                # Kalit maydoni 500 belgi. Undan uzun javob qirqilib yozilsa,
+                # kalit variantlar bilan mos kelmay qoladi va savol butunlay
+                # buziladi — shunday savol ko'chirilmaydi.
+                if len(str(q.get("correctAnswer") or "")) > 500:
+                    uzun_kalit += 1
+                    continue
                 bucket.append(q)
 
         self.stdout.write("Imtihonlardan o'qildi: %d savol | nuqsonli (olinmaydi): %d | "
-                          "to'plam: %d | rejim: %s"
-                          % (jami_oqildi, nuqsonli, len(guruh),
+                          "kaliti 500 belgidan uzun (olinmaydi): %d | to'plam: %d | rejim: %s"
+                          % (jami_oqildi, nuqsonli, uzun_kalit, len(guruh),
                              "YOZISH" if apply else "ko'rish"))
 
         jami_yangi = jami_takror = 0
