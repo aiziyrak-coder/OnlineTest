@@ -171,6 +171,7 @@ const PAGE_PATHS: Record<AdminPage, string> = {
   staff:        '/admin/staff',
   audit:        '/admin/audit',
   test_center:  '/admin/test-markazi',
+  test_base:    '/admin/test-baza',
   bulk_access:  '/admin/ruxsat-berish',
   exam_create:  '/admin/exam/create',
   exam_list:    '/admin/exam/list',
