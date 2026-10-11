@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections import Counter
 
 from django.core.management.base import BaseCommand, CommandError
@@ -27,7 +28,62 @@ from django.db import transaction
 
 from apps.api.exam_variants import build_variants, question_key, set_prepared
 from apps.api.usmle_screen import usmle_score
-from apps.core.models import AuditLog, Exam, StudentExam
+from apps.core.models import AuditLog, Exam, StudentExam, TestBankCategory, TestBankQuestion
+
+
+def _norm_subject(s: str) -> str:
+    """Fan nomini taqqoslash uchun tekislaydi.
+
+    Banklarda bir fan turlicha yozilgan: "Laboratoriya ish" / "Laboratoriya
+    ishi", "Neonatologiya" / "Neonatalogiya", "Yuz jag' jarroxligi" /
+    "Yuz-jag' xirurgiyasi". Oxirgi harflar va tinish belgilari tashlab
+    yuboriladi, shunda bir fanning to'plamlari topiladi.
+    """
+    t = re.sub(r"[^a-zЀ-ӿ ]+", " ", str(s or "").lower().replace("'", ""))
+    t = re.sub(r"\s+", " ", t).strip()
+    return t[:14]
+
+
+def _as_exam_q(row: TestBankQuestion) -> dict:
+    opts = json.loads(row.options_uz_json or row.options_json or "[]")
+    q = {
+        "bank_id": row.id,
+        "source_id": row.id,
+        "text": row.text_uz or row.text,
+        "options": [str(o) for o in opts],
+        "correctAnswer": row.correct_answer_uz or row.correct_answer,
+    }
+    for lang in ("ru", "en"):
+        t = getattr(row, "text_%s" % lang, "") or ""
+        if t:
+            q["text_%s" % lang] = t
+            o = json.loads(getattr(row, "options_%s_json" % lang, "") or "[]")
+            if isinstance(o, list) and len(o) == len(q["options"]):
+                q["options_%s" % lang] = [str(x) for x in o]
+    return q
+
+
+def _base_pool(e: Exam, merge_courses: bool) -> tuple[list[dict], str]:
+    """Markaziy bazadan shu imtihonga mos savollar."""
+    from apps.core.management.commands.migrate_banks_to_base import category_name, subject_of
+
+    fan = subject_of(e)
+    nom = category_name(fan, str(e.audience or ""), int(e.course or 0))
+    cats = list(TestBankCategory.objects.filter(name=nom))
+    if merge_courses:
+        kalit = _norm_subject(fan)
+        for c in TestBankCategory.objects.all():
+            if c.id in [x.id for x in cats]:
+                continue
+            # Bir fanning boshqa kursi / boshqa yozilishi.
+            if _norm_subject(c.name.split("—")[0]) == kalit:
+                cats.append(c)
+    if not cats:
+        return [], "bazada to'plam yo'q"
+    rows = TestBankQuestion.objects.filter(category_id__in=[c.id for c in cats])
+    out = [_as_exam_q(r) for r in rows]
+    out = [q for q in out if q["text"] and q["correctAnswer"] in q["options"]]
+    return out, "baza: %d to'plam" % len(cats)
 
 
 class Command(BaseCommand):
@@ -44,6 +100,12 @@ class Command(BaseCommand):
                                  "yoki aniq son, yoki 'off'")
         parser.add_argument("--force", action="store_true",
                             help="Tayyorlangan to'plamlarni qaytadan yig'adi")
+        parser.add_argument("--from-base", action="store_true",
+                            help="Savollar imtihonning o'z bankidan emas, MARKAZIY "
+                                 "test bazadan olinadi (fan + kurs to'plami)")
+        parser.add_argument("--merge-courses", action="store_true",
+                            help="--from-base bilan: bir fanning boshqa kurs to'plami ham "
+                                 "qo'shiladi (bank torligini yopish uchun)")
         parser.add_argument("--apply", action="store_true", help="Haqiqatan yozish")
 
     def handle(self, *args, **opts):
@@ -68,7 +130,11 @@ class Command(BaseCommand):
         yozuvlar: list[StudentExam] = []
 
         for e in exams:
-            bank = [q for q in json.loads(e.questions_json or "[]") if isinstance(q, dict)]
+            if opts.get("from_base"):
+                bank, manba = _base_pool(e, bool(opts.get("merge_courses")))
+            else:
+                bank = [q for q in json.loads(e.questions_json or "[]") if isinstance(q, dict)]
+                manba = "imtihon banki"
             need = int(e.bank_question_count or 0)
             nom = (e.title or "").split("—")[-1].split("(")[0].strip()[:38]
             if not need or not bank:
@@ -160,10 +226,10 @@ class Command(BaseCommand):
                 vals = [usage[question_key(q)] for q in tanlov]
                 ortacha_matn = sum(len(str(q.get("text") or "")) for q in tanlov) // max(1, len(tanlov))
                 self.stdout.write(
-                    "   [%s] %-34s %3d kishi × %d | tanlov %4d/%4d (USMLE>=%d) | "
-                    "matn o'rt %4d belgi | bir savol %d-%d marta"
-                    % (e.id, nom, kishi, attempts, len(tanlov), len(bank), kesim,
-                       ortacha_matn, min(vals), max(vals)))
+                    "   [%s] %-30s %3d kishi × %d | tanlov %4d/%4d (USMLE>=%d) | "
+                    "matn o'rt %4d belgi | bir savol %d-%d marta | %s"
+                    % (e.id, nom[:30], kishi, attempts, len(tanlov), len(bank), kesim,
+                       ortacha_matn, min(vals), max(vals), manba))
 
         self.stdout.write("")
         self.stdout.write("Tayyorlanadi: %d kishi, %d to'plam | tegilmaydi: %d"
