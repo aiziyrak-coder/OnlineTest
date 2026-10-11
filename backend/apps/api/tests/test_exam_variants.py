@@ -159,6 +159,7 @@ class PreparedVariantFlowTests(TestCase):
 
         self._prepare("--apply")
         se = self.ses[0]
+        se.refresh_from_db()
         before = se.session_questions_json
         req = self.f.post("/x", {}, format="json")
         force_authenticate(req, user=self.people[0])
@@ -172,6 +173,7 @@ class PreparedVariantFlowTests(TestCase):
 
         self._prepare("--attempts", "2", "--apply")
         se = self.ses[1]
+        se.refresh_from_db()
         se.status = "Failed"
         se.started_at = dj_tz.now()
         se.score = 5
