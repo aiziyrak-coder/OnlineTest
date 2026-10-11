@@ -24,23 +24,23 @@ from collections import Counter
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from apps.api.usmle_screen import appeal_risks, usmle_score
+from apps.api.usmle_screen import appeal_risks, review_flags, usmle_score
 from apps.core.models import AuditLog, Exam
 
-# Shu nuqsonlar har qanday holatda chiqariladi — ular bilan savol
-# imtihonda turishi mumkin emas (kalit noto'g'ri yoki ikki javob to'g'ri).
-JIDDIY = (
+# `appeal_risks` ning o'zi mexanik tasdiqlanadigan nuqsonlar ro'yxati —
+# hammasi chiqarilishi kerak. Bank juda kichik bo'lib qolsa, shu yerdagi
+# eng xavflilari (javobi noto'g'ri yoki javobsiz savol) baribir chiqariladi.
+ENG_XAVFLI = (
     "matn yo'q",
     "kalit yo'q",
     "to'g'ri javob variantlar ichida yo'q",
-    "variantlar takrorlangan",
-    "kalit bilan yaqin variant",
+    "ikki variant bir xil matn",
     "rasmga havola, rasm yo'q",
 )
 
 
 def _jiddiy(risks: list[str]) -> bool:
-    return any(r.startswith(JIDDIY) for r in risks)
+    return any(r.startswith(ENG_XAVFLI) for r in risks)
 
 
 class Command(BaseCommand):
@@ -72,6 +72,7 @@ class Command(BaseCommand):
         self.stdout.write("Imtihonlar: %d | rejim: %s"
                           % (len(exams), "YOZISH" if apply else "ko'rish"))
         hammasi: Counter = Counter()
+        shubha: Counter = Counter()
         jami_chiqdi = jami_qoldi = 0
         rejalar: list[tuple[Exam, list[dict], list[dict]]] = []
 
@@ -85,6 +86,10 @@ class Command(BaseCommand):
             for r in risks.values():
                 for x in r:
                     hammasi[x.split(" (")[0].split(":")[0]] += 1
+            # Shubhalar — faqat sanaladi, o'chirilmaydi.
+            for q in bank:
+                for x in review_flags(q):
+                    shubha[x.split(" (")[0]] += 1
 
             yomon = [q for q in bank if risks[id(q)]]
             jiddiy = [q for q in bank if _jiddiy(risks[id(q)])]
@@ -122,6 +127,11 @@ class Command(BaseCommand):
         for k, n in hammasi.most_common():
             self.stdout.write("   %-44s %d" % (k, n))
         self.stdout.write("Chiqariladi: %d | qoladi: %d" % (jami_chiqdi, jami_qoldi))
+        if shubha:
+            self.stdout.write("")
+            self.stdout.write("Shubhalar (O'CHIRILMAYDI — odam ko'rishi uchun):")
+            for k, n in shubha.most_common():
+                self.stdout.write("   %-44s %d" % (k, n))
 
         if not apply:
             self.stdout.write(self.style.WARNING("Ko'rish rejimi — yozish uchun --apply"))
