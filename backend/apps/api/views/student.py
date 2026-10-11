@@ -36,6 +36,11 @@ from apps.api.proctor_ban_reason import (
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+# Oxirgi kirish vaqtidan keyin imtihon oldi tekshiruvini TUGATISHGA berilgan
+# muhlat (daqiqa). Tekshiruvni vaqtida boshlagan odamga tegishli — yangi
+# boshlovchi baribir kira olmaydi.
+ENTRY_GRACE_MINUTES = 10
+
 
 def _notify_student_unblocked(
     student_id: str,
@@ -1110,12 +1115,22 @@ def _student_exams_start_impl(request, pk: int):
     # sessiya to'smaydi (odam o'z muddatigacha ishlaydi), shaxsiy retake
     # oynasi ham bu cheklovdan tashqari — uni admin ataylab beradi.
     if exam.last_entry_at and not in_retake and now > exam.last_entry_at:
-        _running = (
-            StudentExam.objects.filter(student_id=u.id, exam_id=pk, status="In Progress")
-            .exclude(started_at=None)
-            .exists()
+        _row = (
+            StudentExam.objects.filter(student_id=u.id, exam_id=pk)
+            .only("status", "started_at", "vac_consent_at", "identity_verified_at")
+            .first()
         )
-        if not _running:
+        _running = bool(_row and (_row.status or "").strip() == "In Progress" and _row.started_at)
+        # IMTIHON OLDI TEKSHIRUVI UCHUN MUHLAT. Kamera, shaxs tasdiqlash va
+        # rozilik 3-5 daqiqa oladi: oxirgi kirish vaqtidan bir daqiqa oldin
+        # boshlagan odam serverga kechikib yetib kelardi va imkoniyatini
+        # yo'qotardi. Tekshiruvni VAQTIDA boshlaganini rozilik va shaxs
+        # tasdiqlash vaqtidan bilamiz — ular start so'rovidan oldin yoziladi.
+        _marks = [t for t in (getattr(_row, "vac_consent_at", None),
+                              getattr(_row, "identity_verified_at", None)) if t]
+        _in_time = bool(_marks) and min(_marks) <= exam.last_entry_at
+        _grace_ok = _in_time and now <= exam.last_entry_at + timedelta(minutes=ENTRY_GRACE_MINUTES)
+        if not _running and not _grace_ok:
             return Response(
                 {
                     "error": student_api_msg(

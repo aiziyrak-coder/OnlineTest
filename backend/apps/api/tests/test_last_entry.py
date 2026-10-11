@@ -75,6 +75,42 @@ class LastEntryTests(TestCase):
         res = self._start()
         self.assertNotEqual(getattr(res, "data", {}).get("code"), "ENTRY_CLOSED")
 
+    def test_a_check_started_in_time_may_finish_after_the_cutoff(self):
+        """15:44 da tekshiruvni boshlagan odam 15:48 da imkoniyatini yo'qotmasin."""
+        cutoff = dj_tz.now() - timedelta(minutes=4)
+        StudentExam.objects.create(
+            student_id=self.student.id, exam_id=self.exam.id, status="Pending",
+            access_granted=True, vac_consent_at=cutoff - timedelta(minutes=1),
+        )
+        self.exam.last_entry_at = cutoff
+        self.exam.save(update_fields=["last_entry_at"])
+        res = self._start()
+        self.assertNotEqual(getattr(res, "data", {}).get("code"), "ENTRY_CLOSED")
+
+    def test_the_grace_runs_out(self):
+        cutoff = dj_tz.now() - timedelta(minutes=25)
+        StudentExam.objects.create(
+            student_id=self.student.id, exam_id=self.exam.id, status="Pending",
+            access_granted=True, vac_consent_at=cutoff - timedelta(minutes=1),
+        )
+        self.exam.last_entry_at = cutoff
+        self.exam.save(update_fields=["last_entry_at"])
+        res = self._start()
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.data.get("code"), "ENTRY_CLOSED")
+
+    def test_a_consent_given_after_the_cutoff_earns_no_grace(self):
+        cutoff = dj_tz.now() - timedelta(minutes=4)
+        StudentExam.objects.create(
+            student_id=self.student.id, exam_id=self.exam.id, status="Pending",
+            access_granted=True, vac_consent_at=cutoff + timedelta(minutes=1),
+        )
+        self.exam.last_entry_at = cutoff
+        self.exam.save(update_fields=["last_entry_at"])
+        res = self._start()
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.data.get("code"), "ENTRY_CLOSED")
+
     def test_without_the_field_nothing_changes(self):
         self.assertIsNone(self.exam.last_entry_at)
         res = self._start()
