@@ -164,7 +164,7 @@ def review_flags(q: dict) -> list[str]:
 # ilgari bu shakllar tanilmagani uchun neonatologiya savollari klinik holat
 # bayoniga ega bo'lsa ham ball yo'qotardi.
 _AGE = re.compile(
-    r"(\d{1,3}\s*(yosh|yoshli|-yosh|yoshda|kunlik|kunida|kunlar|haftalik|haftada|"
+    r"(\b\d{1,3}\s*(yosh|yoshli|-yosh|yoshda|kunlik|kunida|kunlar|haftalik|haftada|"
     r"oylik|oylarda|soatida|soatlik|sutka|daqiqasida|лет|года|year[- ]old)"
     r"|hayotining\s+\d{1,3}|muddatida tug'ilgan|chala tug'ilgan|yangi tug'ilgan)",
     re.IGNORECASE)
@@ -175,7 +175,7 @@ _FINDINGS = re.compile(
     r"rentgen|ekg|exo|uzi|usm|leykotsit|gemoglobin|kreatinin|troponin|bilirubin|"
     r"auskultatsiya|palpatsiya|ko'rikda|tekshiruvda|g/l|mmol|ml/min|"
     # Neonatologiya va laboratoriya ko'rsatkichlari
-    r"apgar|bilirubin|gematokrit|saturatsiya|gestatsion|surfaktant|ph|"
+    r"apgar|bilirubin|gematokrit|saturatsiya|gestatsion|surfaktant|\bph\b|"
     r"mkmol|retikulotsit|trombotsit|crp|ekma|x10\^9|persentil)",
     re.IGNORECASE)
 _BEST_STEM = re.compile(
