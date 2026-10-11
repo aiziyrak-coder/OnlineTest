@@ -810,6 +810,7 @@ def _exam_row_dict(e: Exam, teacher_name: str | None = None):
         "last_entry_at": (
             e.last_entry_at.isoformat() if getattr(e, "last_entry_at", None) else None
         ),
+        "season": str(getattr(e, "season", "") or ""),
         "duration_minutes": e.duration_minutes,
         "questions_json": e.questions_json,
         "language": e.language,
@@ -1174,6 +1175,10 @@ def _admin_exams_create_impl(request):
         ex = Exam.objects.create(
             teacher_id=_resolve_exam_teacher_id(request, d),
             title=title,
+            # Test mavsumi nomi: hisobot shu bo'yicha guruhlanadi. Berilmasa
+            # mavsum sanalardan aniqlanadi, keyin hisobot sahifasida nom
+            # berish mumkin.
+            season=" ".join(str(d.get("season") or "").split())[:120],
             start_time=st,
             end_time=et,
             duration_minutes=dur,

@@ -64,28 +64,40 @@ def season_report_style(season: dict | None) -> str:
 
 
 def list_seasons() -> list[dict]:
-    """Imtihonlarni auditoriya va sanalar bo'yicha mavsumlarga ajratadi.
+    """Test mavsumlari — hisobot tanlovi uchun.
 
-    Hisobotda o'qituvchilar baholovi, ordinatorlar, talabalar semestri va
-    ishga qabul testlari aralashib ketmasligi kerak. Alohida "mavsum" maydoni
-    yo'q, shuning uchun mavsum imtihon sanalaridan aniqlanadi: 7 kundan uzoq
-    tanaffus yangi mavsum deb hisoblanadi. Yangi test to'lqini yaratilsa,
-    ro'yxatga o'zi qo'shiladi — qo'lda sozlash shart emas.
+    MAVSUM NOMI bo'yicha (Exam.season): "2-kurs ordinatura 1-imkoniyat",
+    "2-kurs ordinatura 2-imkoniyat" va hokazo. Nom hisobotning o'zagi: bir
+    mavsum bir necha kun davom etsa ham bitta hisobot bo'ladi, ikki mavsum
+    ketma-ket kunlarda bo'lsa ham qo'shilib ketmaydi.
+
+    Nomi berilmagan (eski) imtihonlar uchun eski usul saqlanadi: auditoriya +
+    kurs + izoh bo'yicha guruhlanadi va sanalar orasida 7 kundan uzoq tanaffus
+    bo'lsa yangi mavsum deb olinadi. Shunday mavsumga nom berilsa (hisobot
+    sahifasidagi "nom berish"), u shu zahoti nomli mavsumga aylanadi.
     """
     rows = list(
         Exam.objects.exclude(start_time=None)
-        .values("id", "audience", "start_time", "course", "custom_rules")
+        .values("id", "audience", "start_time", "course", "custom_rules", "season")
         .order_by("audience", "course", "start_time")
     )
+    seasons: list[dict] = []
+    named: dict[str, list] = {}
+    unnamed: list[dict] = []
+    for r in rows:
+        nm = str(r.get("season") or "").strip()
+        (named.setdefault(nm, []) if nm else unnamed).append(r)
+    for nm, items in named.items():
+        seasons.append(_make_named_season(nm, items))
+
     # Auditoriya + KURS + hisobot izohi bo'yicha guruhlaymiz: ordinatura
     # 1-kurs va 2-kurs (DAK) imtihonlari bir vaqtda ochiq turadi va sana
     # bo'yicha bitta mavsumga qo'shilib ketardi.
     by_aud: dict[tuple, list] = {}
-    for r in rows:
+    for r in unnamed:
         aud, note = _report_audience(r)
         by_aud.setdefault((aud, int(r.get("course") or 0), note), []).append(r)
 
-    seasons: list[dict] = []
     for (aud, course, note), items in by_aud.items():
         cluster: list = []
         prev = None
@@ -101,6 +113,36 @@ def list_seasons() -> list[dict]:
 
     seasons.sort(key=lambda x: x["date_to"], reverse=True)
     return seasons
+
+
+def _make_named_season(name: str, items: list) -> dict:
+    """Nomlangan mavsum. Sana faqat qo'shimcha ma'lumot, guruhlash emas."""
+    dates = [dj_tz.localtime(r["start_time"]).date() for r in items]
+    d1, d2 = min(dates), max(dates)
+    # Auditoriya/kurs/izoh — hisobot ko'rinishini tanlash uchun; mavsumdagi
+    # eng ko'p uchragani olinadi (nomlangan mavsum bitta toifa bo'ladi).
+    tally: dict[tuple, int] = {}
+    for r in items:
+        aud, note = _report_audience(r)
+        key = (aud, int(r.get("course") or 0), note)
+        tally[key] = tally.get(key, 0) + 1
+    (aud, course, note) = max(tally.items(), key=lambda kv: kv[1])[0]
+    return {
+        "key": "name:" + name,
+        "named": True,
+        "name": name,
+        "audience": aud,
+        "course": int(course or 0),
+        "report_note": note,
+        "audience_label": name,
+        "label": name,
+        "date_label": d1.strftime("%d.%m.%Y") if d1 == d2
+        else (d1.strftime("%d.%m") + "-" + d2.strftime("%d.%m.%Y")),
+        "date_from": d1.isoformat(),
+        "date_to": d2.isoformat(),
+        "exam_count": len(items),
+        "exam_ids": [int(r["id"]) for r in items],
+    }
 
 
 def _make_season(aud: str, items: list, course: int = 0, note: str = "") -> dict:
@@ -121,6 +163,9 @@ def _make_season(aud: str, items: list, course: int = 0, note: str = "") -> dict
     note_key = (":" + note.replace(":", " ")) if note else ""
     return {
         "key": "%s:%d:%s:%s%s" % (aud, int(course or 0), d1.isoformat(), d2.isoformat(), note_key),
+        "named": False,
+        "name": "",
+        "date_label": label_dates,
         "audience": aud,
         "course": int(course or 0),
         "report_note": note,
@@ -485,6 +530,46 @@ def admin_reports_seasons(request):
     if _request_user_role_norm(request.user) != "admin":
         return Response({"error": "Forbidden"}, status=403)
     return Response({"seasons": list_seasons()})
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def admin_reports_season_rename(request):
+    """Mavsumga nom berish / nomini o'zgartirish.
+
+    Nom mavsumning BARCHA imtihonlariga yoziladi — 34 ta imtihonni bitta-bitta
+    tahrirlash kerak emas. Nom bo'sh yuborilsa mavsum yana sanalar bo'yicha
+    aniqlanadigan holatga qaytadi.
+    """
+    if _request_user_role_norm(request.user) != "admin":
+        return Response({"error": "Forbidden"}, status=403)
+    d = request.data or {}
+    key = str(d.get("season") or "").strip()
+    name = " ".join(str(d.get("name") or "").split())[:120]
+    if not key:
+        return Response({"error": "Mavsum tanlanmagan"}, status=400)
+    ids, season = _season_exam_ids(key)
+    if not season or season.get("key") != key:
+        return Response({"error": "Mavsum topilmadi"}, status=404)
+    # Bir xil nom ikki xil mavsumda bo'lsa ular qo'shilib ketadi — buni
+    # oldindan to'xtatamiz, aks holda hisobot aralashib qolardi.
+    if name:
+        band = (
+            Exam.objects.filter(season=name)
+            .exclude(id__in=list(ids or []))
+            .values_list("id", flat=True)
+        )
+        if band:
+            return Response(
+                {"error": "Bu nom boshqa mavsumda ishlatilgan — boshqa nom tanlang",
+                 "code": "SEASON_NAME_TAKEN"},
+                status=409,
+            )
+    with transaction.atomic():
+        Exam.objects.filter(id__in=list(ids or [])).update(season=name)
+    audit(request, "update_exam", "exam", key, name or season.get("label") or "",
+          "mavsum nomi: %s (%d imtihon)" % (name or "olib tashlandi", len(ids or [])))
+    return Response({"ok": True, "name": name, "exam_count": len(ids or [])})
+
 
 def build_participants_report(season_key: str | None = None) -> dict:
     """Topshirgan har bir kishi — kafedra kesimida, ball va natija bilan.

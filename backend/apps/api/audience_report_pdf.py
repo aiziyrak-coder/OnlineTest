@@ -238,8 +238,13 @@ class _Doc:
 
 
 def _subtitle(d: dict) -> str:
+    """Mavsum nomi · (sanalar) · tayyorlangan vaqt."""
     sn = d.get("season") or {}
-    return "%s · %s" % (sn.get("label") or "", d.get("generated_label") or "")
+    label = str(sn.get("label") or "")
+    dates = str(sn.get("date_label") or "")
+    if sn.get("named") and dates:
+        label = "%s (%s)" % (label, dates)
+    return "%s · %s" % (label, d.get("generated_label") or "")
 
 
 # --------------------------------------------------------------- ordinator --

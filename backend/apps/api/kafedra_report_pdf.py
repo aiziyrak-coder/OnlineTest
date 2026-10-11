@@ -48,9 +48,17 @@ COLUMNS = [
 
 
 def _season_label(data: dict) -> str:
-    """Hisobot qaysi test mavsumiga tegishli ekani."""
+    """Hisobot qaysi test mavsumiga tegishli ekani.
+
+    Mavsum NOMI asosiy; sanalar qavs ichida qo'shimcha ma'lumot sifatida
+    qoladi (hujjat qaysi kunlarga tegishli ekani ko'rinib turishi uchun).
+    """
     sn = data.get("season") or {}
-    return str(sn.get("label") or "Imtihon hisoboti")
+    label = str(sn.get("label") or "Imtihon hisoboti")
+    dates = str(sn.get("date_label") or "")
+    if sn.get("named") and dates:
+        return "%s (%s)" % (label, dates)
+    return label
 
 def _pct_color(pct: int, participated: int):
     if not participated:

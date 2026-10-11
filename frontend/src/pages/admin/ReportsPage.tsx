@@ -33,7 +33,13 @@ import { PeopleDrillModal, type DrillPerson, type DrillState } from './PeopleDri
 
 interface Props { token: string; lang: Language; }
 
-interface Season { key: string; label: string; audience: string; exam_count: number; course?: number; }
+interface Season {
+  key: string; label: string; audience: string; exam_count: number; course?: number;
+  /** Mavsumga nom berilganmi — berilmagan bo'lsa sanalardan aniqlangan. */
+  named?: boolean;
+  name?: string;
+  date_label?: string;
+}
 
 interface KafStatRow {
   kafedra_id: number;
@@ -94,6 +100,14 @@ const TXT = {
     unban: 'Banni ochish', unbanReason: 'Sabab (kamida 8 belgi)', unbanFile: 'Asos hujjati (rasm yoki PDF)', chooseFile: 'Fayl tanlash', noFile: 'Fayl tanlanmagan',
     noBanned: "Chetlatilgan foydalanuvchi yo'q.", shown: "ko'rsatilmoqda",
     sheetKaf: 'Kafedralar', sheetRes: 'Natijalar', sheetAbs: 'Qatnashmaganlar', sheetBan: 'Chetlatilganlar',
+    seasonRename: 'Mavsumga nom berish',
+    seasonRenameHint:
+      "Nom mavsumning barcha imtihonlariga yoziladi va hisobot shu nom bo'yicha guruhlanadi — sana bo'yicha emas. Masalan: «2-kurs ordinatura 1-imkoniyat».",
+    seasonNamePlaceholder: '2-kurs ordinatura 2-imkoniyat',
+    seasonNameClear: 'Nomni olib tashlash',
+    seasonRenameFailed: 'Nom saqlanmadi',
+    seasonUnnamed: 'nomsiz',
+    seasonExams: 'imtihon',
   },
   ru: {
     aud: { faculty: 'Преподаватели', ordinator: 'Ординаторы', magistr: 'Магистранты', student: 'Студенты', vacancy: 'Кандидаты', entrant: 'Спец. поступающие' } as Record<string, string>,
@@ -112,6 +126,14 @@ const TXT = {
     unban: 'Разблокировать', unbanReason: 'Причина (не менее 8 символов)', unbanFile: 'Документ-основание (фото или PDF)', chooseFile: 'Выбрать файл', noFile: 'Файл не выбран',
     noBanned: 'Заблокированных нет.', shown: 'показано',
     sheetKaf: 'Кафедры', sheetRes: 'Результаты', sheetAbs: 'Не участвовали', sheetBan: 'Заблокированные',
+    seasonRename: 'Назвать сезон',
+    seasonRenameHint:
+      'Имя запишется во все экзамены сезона, и отчёт будет группироваться по нему, а не по датам.',
+    seasonNamePlaceholder: 'Ординатура 2 курс — 2-я попытка',
+    seasonNameClear: 'Убрать имя',
+    seasonRenameFailed: 'Имя не сохранено',
+    seasonUnnamed: 'без имени',
+    seasonExams: 'экз.',
   },
   en: {
     aud: { faculty: 'Teachers', ordinator: 'Residents', magistr: 'Master students', student: 'Students', vacancy: 'Applicants', entrant: 'Special entrants' } as Record<string, string>,
@@ -130,6 +152,14 @@ const TXT = {
     unban: 'Lift ban', unbanReason: 'Reason (at least 8 characters)', unbanFile: 'Supporting document (image or PDF)', chooseFile: 'Choose file', noFile: 'No file selected',
     noBanned: 'No banned users.', shown: 'shown',
     sheetKaf: 'Departments', sheetRes: 'Results', sheetAbs: 'Did not take', sheetBan: 'Banned',
+    seasonRename: 'Name this season',
+    seasonRenameHint:
+      'The name is written to every exam in the season, and the report is grouped by it rather than by date.',
+    seasonNamePlaceholder: 'Residency year 2 — second attempt',
+    seasonNameClear: 'Remove the name',
+    seasonRenameFailed: 'The name was not saved',
+    seasonUnnamed: 'unnamed',
+    seasonExams: 'exams',
   },
 };
 
@@ -238,6 +268,11 @@ export function ReportsPage({ token, lang }: Props) {
   const [seasonsLoaded, setSeasonsLoaded] = useState(false);
   const [audience, setAudience] = useState('');
   const [seasonKey, setSeasonKey] = useState('');
+  /** Mavsumga nom berish oynasi (nom butun mavsumga yoziladi). */
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState('');
 
   const [kafStat, setKafStat] = useState<KafStat | null>(null);
   const [part, setPart] = useState<PartReport | null>(null);
@@ -291,6 +326,32 @@ export function ReportsPage({ token, lang }: Props) {
   }, [h]);
 
   useEffect(() => { loadSeasons(); }, [loadSeasons]);
+
+  /* Mavsumga nom berish. Nom mavsumning hamma imtihoniga yoziladi, shuning
+   * uchun hisobot shu zahoti nom bo'yicha guruhlanadi. */
+  const saveSeasonName = async () => {
+    setRenameBusy(true);
+    setRenameError('');
+    try {
+      const res = await fetch(apiUrl('/api/admin/reports/seasons/rename'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token, lang) },
+        body: JSON.stringify({ season: seasonKey, name: renameValue.trim() }),
+      });
+      if (!checkAdminAuthResponse(res)) return;
+      const j = await readJsonSafe<{ error?: string }>(res);
+      if (!res.ok) {
+        setRenameError(j?.error || t.seasonRenameFailed);
+        return;
+      }
+      const nextKey = renameValue.trim() ? 'name:' + renameValue.trim() : '';
+      setRenameOpen(false);
+      await loadSeasons();
+      if (nextKey) setSeasonKey(nextKey);
+    } finally {
+      setRenameBusy(false);
+    }
+  };
 
   const audiences = useMemo(() => {
     const present = new Set(seasons.map((s) => s.audience));
@@ -640,12 +701,42 @@ export function ReportsPage({ token, lang }: Props) {
 
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
         <label className="block min-w-0">
-          <span className="mb-1.5 block text-[12px] font-semibold text-gray-500">{t.season}</span>
+          <span className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-gray-500">
+            {t.season}
+            {seasonKey ? (
+              <button
+                type="button"
+                title={t.seasonRename}
+                aria-label={t.seasonRename}
+                onClick={() => {
+                  const cur = ownSeasons.find((s) => s.key === seasonKey);
+                  setRenameValue(cur?.name || '');
+                  setRenameError('');
+                  setRenameOpen(true);
+                }}
+                className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-indigo-700"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            ) : null}
+          </span>
           <AdminSelect value={seasonKey} onChange={(e) => setSeasonKey(e.target.value)} disabled={!ownSeasons.length}>
             {ownSeasons.map((s) => (
-              <option key={s.key} value={s.key}>{s.label}</option>
+              <option key={s.key} value={s.key}>
+                {s.named ? s.label : `${s.label} · ${t.seasonUnnamed}`}
+              </option>
             ))}
           </AdminSelect>
+          {(() => {
+            const cur = ownSeasons.find((x) => x.key === seasonKey);
+            return cur?.date_label ? (
+              <span className="mt-1 block text-[11.5px] text-gray-400">
+                {cur.date_label} · {cur.exam_count} {t.seasonExams}
+              </span>
+            ) : null;
+          })()}
         </label>
         {!tailored ? (
           <>
@@ -1081,6 +1172,39 @@ export function ReportsPage({ token, lang }: Props) {
           ) : <AdminEmpty title={t.noBanned} />
         ) : null}
       </section>
+
+      <AdminModal
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+        title={t.seasonRename}
+        subtitle={ownSeasons.find((x) => x.key === seasonKey)?.label}
+      >
+        <div className="space-y-3">
+          <p className="text-[12.5px] leading-relaxed text-gray-600">{t.seasonRenameHint}</p>
+          <AdminInput
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            placeholder={t.seasonNamePlaceholder}
+            maxLength={120}
+          />
+          {renameError ? <p className="text-[12.5px] font-medium text-red-600">{renameError}</p> : null}
+          <div className="flex flex-wrap justify-end gap-2 pt-1">
+            <AdminBtn variant="ghost" onClick={() => setRenameOpen(false)} disabled={renameBusy}>{t.cancel}</AdminBtn>
+            {ownSeasons.find((x) => x.key === seasonKey)?.named ? (
+              <AdminBtn
+                variant="red-ghost"
+                onClick={() => { setRenameValue(''); void saveSeasonName(); }}
+                disabled={renameBusy}
+              >
+                {t.seasonNameClear}
+              </AdminBtn>
+            ) : null}
+            <AdminBtn variant="blue" onClick={saveSeasonName} loading={renameBusy} disabled={!renameValue.trim()}>
+              {t.save}
+            </AdminBtn>
+          </div>
+        </div>
+      </AdminModal>
 
       <AdminModal open={!!unbanFor} onClose={() => setUnbanFor(null)} title={t.unban} subtitle={unbanFor?.name}>
         <div className="space-y-3">

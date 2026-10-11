@@ -2233,6 +2233,10 @@ def admin_exam_detail(request, pk: int):
             e.bank_category_ids = bank_cats_json
             e.bank_question_count = bank_count
             e.imentor_subject_codes = imentor_codes_json
+            # Test mavsumi: bitta imtihonni boshqa mavsumga ko'chirish uchun.
+            # Butun mavsumga nom berish — /admin/reports/seasons/rename.
+            if "season" in d:
+                e.season = " ".join(str(d.get("season") or "").split())[:120]
             # Oxirgi kirish vaqti: bo'sh yuborilsa cheklov olib tashlanadi.
             # Oynadan tashqarida bo'lsa ma'nosiz — oyna ichiga qisqartiramiz.
             if "last_entry_at" in d:

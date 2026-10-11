@@ -60,6 +60,7 @@ urlpatterns = [
     path("staff/exams/<int:pk>/results", views.staff_exams_results),
     path("admin/review-queue", views.admin_review_queue),
     path("admin/reports/seasons", views.admin_reports_seasons),
+    path("admin/reports/seasons/rename", views.admin_reports_season_rename),
     path("admin/reports/kafedra", views.admin_reports_kafedra),
     path("admin/reports/kafedra.pdf", views.admin_reports_kafedra_pdf),
     path("admin/reports/full.pdf", views.admin_reports_full_pdf),

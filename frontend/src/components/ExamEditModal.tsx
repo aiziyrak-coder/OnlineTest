@@ -44,6 +44,8 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
   const [endLocal, setEndLocal] = useState('');
   /** Oxirgi kirish vaqti — bo'sh bo'lsa cheklov yo'q (oyna oxirigacha kiradi). */
   const [lastEntryLocal, setLastEntryLocal] = useState('');
+  /** Test mavsumi nomi — hisobot shu nom bo'yicha guruhlanadi. */
+  const [season, setSeason] = useState('');
   const [duration, setDuration] = useState(60);
   const [language, setLanguage] = useState('uz');
   /** Tashqi shovqin nazorati (talabaning o'z nutqiga ta'sir qilmaydi). */
@@ -104,6 +106,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         setStartLocal(fromIsoToDatetimeLocal(data.start_time));
         setEndLocal(fromIsoToDatetimeLocal(data.end_time));
         setLastEntryLocal(data.last_entry_at ? fromIsoToDatetimeLocal(data.last_entry_at) : '');
+        setSeason(String(data.season || ''));
         setDuration(Number(data.duration_minutes) || 60);
         setLanguage(data.language || 'uz');
         setAmbientAudioEnabled(data.ambient_audio_enabled !== false);
@@ -177,6 +180,7 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
         start_time: startIso,
         end_time: endIso,
         last_entry_at: lastEntryLocal ? toIsoOrNull(lastEntryLocal) : null,
+        season: season.trim(),
         duration_minutes: duration,
         language,
         ambient_audio_enabled: ambientAudioEnabled,
@@ -411,6 +415,16 @@ export function ExamEditModal({ token, lang, examId, groups, onClose, onSaved }:
                 {/* Title */}
                 <AdminField label={t.title} required>
                   <AdminInput value={title} onChange={(e) => setTitle(e.target.value)} />
+                </AdminField>
+
+                <AdminField label={t.examSeason}>
+                  <AdminInput
+                    value={season}
+                    onChange={(e) => setSeason(e.target.value)}
+                    placeholder={t.examSeasonPlaceholder}
+                    maxLength={120}
+                  />
+                  <p className="mt-1 text-[12px] leading-snug text-gray-500">{t.examSeasonHint}</p>
                 </AdminField>
 
                 {/* Start + End */}

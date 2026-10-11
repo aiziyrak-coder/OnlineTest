@@ -36,6 +36,10 @@ export const translations = {
     examTitlePlaceholder: "Masalan: Akusherlik — 2026 bahorgi imtihon",
     startTime: "Boshlanish vaqti",
     endTime: "Tugash vaqti",
+    examSeason: "Test mavsumi",
+    examSeasonPlaceholder: "2-kurs ordinatura 2-imkoniyat",
+    examSeasonHint:
+      "Hisobotlar shu nom bo‘yicha guruhlanadi, sana bo‘yicha emas. Bitta mavsumdagi hamma imtihonga bir xil nom yoziladi.",
     examLastEntry: "Oxirgi kirish",
     examLastEntryClear: "Cheklovni olib tashlash",
     examLastEntryHint:
@@ -976,6 +980,10 @@ export const translations = {
     examTitlePlaceholder: "Например: Акушерство — весенний экзамен 2026",
     startTime: "Время начала",
     endTime: "Время окончания",
+    examSeason: "Сезон тестирования",
+    examSeasonPlaceholder: "Ординатура 2 курс — 2-я попытка",
+    examSeasonHint:
+      "Отчёты группируются по этому имени, а не по датам. У всех экзаменов одного сезона имя одинаковое.",
     examLastEntry: "Последний вход",
     examLastEntryClear: "Снять ограничение",
     examLastEntryHint:
@@ -1909,6 +1917,10 @@ export const translations = {
     examTitlePlaceholder: "e.g. Obstetrics — Spring 2026 exam",
     startTime: "Start Time",
     endTime: "End Time",
+    examSeason: "Test season",
+    examSeasonPlaceholder: "Residency year 2 — second attempt",
+    examSeasonHint:
+      "Reports are grouped by this name rather than by date. Every exam in one season carries the same name.",
     examLastEntry: "Last entry",
     examLastEntryClear: "Remove the limit",
     examLastEntryHint:

@@ -17,6 +17,12 @@ class Exam(models.Model):
     # NULL = cheklov yo'q (oyna oxirigacha kirish mumkin).
     last_entry_at = models.DateTimeField(null=True, blank=True)
     duration_minutes = models.IntegerField()
+    # TEST MAVSUMI — hisobotlar shu nom bo'yicha guruhlanadi, sana bo'yicha
+    # emas. Masalan "2-kurs ordinatura 1-imkoniyat" va "2-kurs ordinatura
+    # 2-imkoniyat": ikkisi ham oktabrda bo'lsa ham alohida hisobot, va mavsum
+    # kunlarga bo'linib ketmaydi. Bo'sh bo'lsa mavsum eski usulda sanalardan
+    # aniqlanadi (nomlanmagan eski imtihonlar uchun).
+    season = models.CharField(max_length=120, blank=True, default="")
     questions_json = models.TextField(default="[]")
     language = models.CharField(max_length=10, default="uz")
     pin = models.CharField(max_length=50, blank=True)
@@ -77,6 +83,7 @@ class Exam(models.Model):
     class Meta:
         app_label = "core"
         db_table = "exams"
+        indexes = [models.Index(fields=["season"], name="core_exam_season_idx")]
 
 
 class ExamGroup(models.Model):
