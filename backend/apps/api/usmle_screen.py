@@ -159,14 +159,24 @@ def review_flags(q: dict) -> list[str]:
 
 # ------------------------------------------------------ USMLE darajasi --
 
-_AGE = re.compile(r"\b(\d{1,3})\s*(yosh|yoshli|-yosh|yoshda|kunlik|haftalik|oylik|"
-                  r"лет|года|year[- ]old)", re.IGNORECASE)
+# Yoshni ko'rsatuvchi shakllar. Chaqaloq savollarida yosh boshqacha aytiladi
+# ("hayotining 3-kunida", "36-soatida", "2-sutka", "34 haftalik muddatda") —
+# ilgari bu shakllar tanilmagani uchun neonatologiya savollari klinik holat
+# bayoniga ega bo'lsa ham ball yo'qotardi.
+_AGE = re.compile(
+    r"(\d{1,3}\s*(yosh|yoshli|-yosh|yoshda|kunlik|kunida|kunlar|haftalik|haftada|"
+    r"oylik|oylarda|soatida|soatlik|sutka|daqiqasida|лет|года|year[- ]old)"
+    r"|hayotining\s+\d{1,3}|muddatida tug'ilgan|chala tug'ilgan|yangi tug'ilgan)",
+    re.IGNORECASE)
 _SEX = re.compile(r"(erkak|ayol|o'g'il|qiz|bola|chaqaloq|bemor|мужчина|женщина|"
                   r"male|female)", re.IGNORECASE)
 _FINDINGS = re.compile(
     r"(qon bosimi|puls|harorat|nafas|mm sim|mmhg|°c|laborator|tahlil|mri|\bkt\b|ktsi|"
     r"rentgen|ekg|exo|uzi|usm|leykotsit|gemoglobin|kreatinin|troponin|bilirubin|"
-    r"auskultatsiya|palpatsiya|ko'rikda|tekshiruvda|g/l|mmol|ml/min)",
+    r"auskultatsiya|palpatsiya|ko'rikda|tekshiruvda|g/l|mmol|ml/min|"
+    # Neonatologiya va laboratoriya ko'rsatkichlari
+    r"apgar|bilirubin|gematokrit|saturatsiya|gestatsion|surfaktant|ph|"
+    r"mkmol|retikulotsit|trombotsit|crp|ekma|x10\^9|persentil)",
     re.IGNORECASE)
 _BEST_STEM = re.compile(
     r"(eng ehtimolli|eng to'g'ri|keyingi qadam|keyingi bosqich|eng yaxshi|"
