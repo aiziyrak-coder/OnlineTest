@@ -27,8 +27,9 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.api.exam_variants import build_variants, question_key, set_prepared
-from apps.api.usmle_screen import usmle_score
-from apps.core.models import AuditLog, Exam, StudentExam, TestBankCategory, TestBankQuestion
+from apps.api.usmle_screen import norm, usmle_score
+from apps.core.models import (AuditLog, Exam, StudentExam, StudentExamAttempt,
+                              TestBankCategory, TestBankQuestion)
 
 
 def _norm_subject(s: str) -> str:
@@ -42,6 +43,37 @@ def _norm_subject(s: str) -> str:
     t = re.sub(r"[^a-zЀ-ӿ ]+", " ", str(s or "").lower().replace("'", ""))
     t = re.sub(r"\s+", " ", t).strip()
     return t[:14]
+
+
+def _seen_texts(student_id: str, exam_id: int) -> set[str]:
+    """Shu odamga ILGARI berilgan savollar matni.
+
+    Savol raqamiga tayanib bo'lmaydi: imtihonning o'z bankidagi raqam va
+    markaziy bazadagi raqam boshqa-boshqa, bitta savol ikki joyda ikki xil
+    raqam bilan turadi. Shuning uchun matn bo'yicha solishtiriladi — sentabr
+    imtihonida ko'rilgan savol oktabrda qaytib tushmaydi.
+    """
+    out: set[str] = set()
+
+    def yig(raw):
+        for q in json.loads(raw or "[]") or []:
+            if isinstance(q, dict) and q.get("text"):
+                out.add(norm(q["text"])[:200])
+
+    for row in (StudentExam.objects.filter(student_id=student_id)
+                .exclude(exam_id=exam_id).values_list("session_questions_json", flat=True)):
+        yig(row)
+    # Arxivda alohida maydon yo'q: butun sessiya `snapshot` ichida JSON
+    # bo'lib saqlanadi.
+    for snap in (StudentExamAttempt.objects.filter(student_id=student_id)
+                 .values_list("snapshot", flat=True)):
+        try:
+            d = json.loads(snap or "{}")
+        except (TypeError, ValueError):
+            continue
+        if isinstance(d, dict):
+            yig(d.get("session_questions_json"))
+    return out
 
 
 def _as_exam_q(row: TestBankQuestion) -> dict:
@@ -106,6 +138,9 @@ class Command(BaseCommand):
         parser.add_argument("--merge-courses", action="store_true",
                             help="--from-base bilan: bir fanning boshqa kurs to'plami ham "
                                  "qo'shiladi (bank torligini yopish uchun)")
+        parser.add_argument("--keep-seen", action="store_true",
+                            help="Odamga ilgari berilgan savollarni ham tanlovda qoldirish "
+                                 "(standart: ular chetlanadi)")
         parser.add_argument("--apply", action="store_true", help="Haqiqatan yozish")
 
     def handle(self, *args, **opts):
@@ -201,7 +236,14 @@ class Command(BaseCommand):
                             avoid.add(int(x))
                         except (TypeError, ValueError):
                             continue
-                maqsadlar.append((se, avoid))
+                # ILGARI KO'RILGAN SAVOLLAR chetlanadi (matn bo'yicha): sentabr
+                # imtihonida tushgan savol oktabrda qaytmasligi kerak. Tanlov
+                # yetmay qolsa chetlash bekor qilinadi, aks holda imtihon
+                # savolsiz qolardi.
+                korilgan: set[str] = set()
+                if not opts.get("keep_seen"):
+                    korilgan = _seen_texts(str(se.student_id), e.id)
+                maqsadlar.append((se, avoid, korilgan))
 
             # NAVBAT MUHIM: avval HAMMAGA 1-to'plam, keyin hammaga 2-to'plam.
             # Ilgari bir odamning uchta to'plami ketma-ket yig'ilardi: uning
@@ -210,8 +252,28 @@ class Command(BaseCommand):
             # tushardi. Shu sababli imtihonda qo'shni ikki kishining
             # savollari 19 tagacha ustma-ust tushgan edi. Endi birinchi
             # to'plamlar butun bank bo'ylab birinchi navbatda taqsimlanadi.
-            toplamlar: dict[int, list] = {id(se): [] for se, _a in maqsadlar}
-            olingan: dict[int, set] = {id(se): set(av) for se, av in maqsadlar}
+            toplamlar: dict[int, list] = {id(se): [] for se, _a, _k in maqsadlar}
+            olingan: dict[int, set] = {id(se): set(av) for se, av, _k in maqsadlar}
+            # Har bir odam uchun o'z tanlovi: ilgari ko'rgan savollari olib
+            # tashlangan. Yetmasa to'liq tanlov qoldiriladi.
+            shaxsiy: dict[int, list] = {}
+            chetlangan = 0
+            for se, _av, korilgan in maqsadlar:
+                if not korilgan:
+                    shaxsiy[id(se)] = tanlov
+                    continue
+                qisqa = [q for q in tanlov if norm(q.get("text"))[:200] not in korilgan]
+                if len(qisqa) >= need * attempts:
+                    chetlangan += len(tanlov) - len(qisqa)
+                    shaxsiy[id(se)] = qisqa
+                elif len(qisqa) >= need:
+                    chetlangan += len(tanlov) - len(qisqa)
+                    shaxsiy[id(se)] = qisqa
+                else:
+                    shaxsiy[id(se)] = tanlov
+            if chetlangan:
+                self.stdout.write("        ilgari ko'rilgani uchun chetlandi: %d (jami urinish)"
+                                  % chetlangan)
             for _urinish in range(attempts):
                 # Shu bosqichda boshqalarga tushgan savollar — QATTIQ
                 # chetlanadi. Faqat tartib bilan (kam ishlatilgani oldinda)
@@ -221,12 +283,13 @@ class Command(BaseCommand):
                 # tushardi. Tanlov yetmasa chetlash bekor qilinadi — imtihon
                 # savolsiz qolmasligi kerak.
                 band: set = set()
-                for se, _av in maqsadlar:
+                for se, _av, _k in maqsadlar:
+                    mening = shaxsiy[id(se)]
                     chetla = olingan[id(se)] | band
-                    qoldiq = sum(1 for q in tanlov if question_key(q) not in chetla)
+                    qoldiq = sum(1 for q in mening if question_key(q) not in chetla)
                     if qoldiq < need:
                         chetla = olingan[id(se)]
-                    v = build_variants(tanlov, need, 1, usage=usage, rnd=rnd,
+                    v = build_variants(mening, need, 1, usage=usage, rnd=rnd,
                                        avoid=chetla, quality=usmle_score)[0]
                     toplamlar[id(se)].append(v)
                     kalitlar = {question_key(q) for q in v}
@@ -235,7 +298,7 @@ class Command(BaseCommand):
                     if len(v) < need:
                         yetmadi += 1
 
-            for se, avoid in maqsadlar:
+            for se, avoid, _k in maqsadlar:
                 variants = toplamlar[id(se)]
                 se.session_questions_json = json.dumps(variants[0], ensure_ascii=False)
                 set_prepared(se, variants[1:])

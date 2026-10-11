@@ -219,6 +219,35 @@ class PreparedVariantFlowTests(TestCase):
         se.refresh_from_db()
         self.assertEqual(se.session_questions_json, before)
 
+    def test_a_question_seen_in_an_earlier_exam_does_not_come_back(self):
+        """Sentabrda tushgan savol oktabrda qaytmasligi kerak.
+
+        Savol raqamiga tayanib bo'lmaydi (bank va markaziy bazada raqamlar
+        boshqa), shuning uchun matn bo'yicha chetlanadi.
+        """
+        from datetime import timedelta
+
+        admin = AppUser.objects.get(id="pv-admin")
+        eski = Exam.objects.create(
+            teacher_id=admin.id, title="Eski imtihon — Fan", audience="ordinator", course=2,
+            start_time=dj_tz.now() - timedelta(days=30),
+            end_time=dj_tz.now() - timedelta(days=30) + timedelta(hours=2),
+            duration_minutes=60, questions_json=json.dumps(_bank(10)),
+            language="uz", exam_mode="static", bank_category_ids="[]", bank_question_count=25,
+        )
+        korilgan = _bank(300)[:40]
+        StudentExam.objects.create(
+            student_id=self.people[0].id, exam_id=eski.id, status="Completed",
+            started_at=dj_tz.now() - timedelta(days=30), score=10,
+            session_questions_json=json.dumps(korilgan),
+        )
+        self._prepare("--attempts", "2", "--apply")
+        se = StudentExam.objects.get(student_id=self.people[0].id, exam_id=self.exam.id)
+        matnlar = {q["text"] for v in [json.loads(se.session_questions_json)]
+                   + json.loads(se.prepared_variants_json) for q in v}
+        self.assertFalse(matnlar & {q["text"] for q in korilgan},
+                         "ilgari ko'rilgan savol qaytib tushdi")
+
     def test_take_prepared_reports_an_empty_queue(self):
         se = self.ses[3]
         self.assertFalse(take_prepared(se))
