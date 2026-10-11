@@ -231,7 +231,11 @@ def auth_center_login(request):
         logger.warning("[CENTER-LOGIN] ruxsatsiz IP: %s", ip)
         return Response(
             {"error": "Bu kompyuterdan imtihonga kirib bo'lmaydi. Test markazidagi "
-                      "kompyuterdan foydalaning.", "code": "CENTER_IP_DENIED"},
+                      "kompyuterdan foydalaning.", "code": "CENTER_IP_DENIED",
+             # Nazoratchi shu manzilni adminga aytadi: markaz tashqi IP si
+             # o'zgarsa (provayder almashtirsa) sababini topish uchun yarim
+             # kun ketardi, chunki xatoda hech qanday belgi yo'q edi.
+             "client_ip": ip},
             status=403,
         )
     expected = center_pin()
@@ -246,17 +250,46 @@ def auth_center_login(request):
     passport = normalize_passport(d.get("passport") or d.get("login"))
     pin = "".join(ch for ch in str(d.get("pin") or "") if ch.isdigit())
 
-    key = "centerlogin:%s" % ip
-    tries = int(cache.get(key) or 0)
-    if tries >= int(os.environ.get("CENTER_LOGIN_MAX_WRONG", "40") or 40):
+    # NOTO'G'RI URINISHLAR PASPORT BO'YICHA SANALADI. Ilgari hisob faqat IP
+    # bo'yicha yuritilardi, markazdagi o'nlab kompyuter esa bitta tashqi IP
+    # ortida: 118 kishidan bir nechtasi pasportini xato yozsa (40 ta xato
+    # yetarli edi) BUTUN markaz 10 daqiqaga qulflanib qolardi. Endi har bir
+    # pasport alohida sanaladi; IP uchun esa faqat juda baland umumiy shift
+    # qoladi — u haqiqiy hujumni (ming-minglab urinish) to'sadi.
+    key = "centerlogin:pp:%s" % (passport or "-")
+    key_ip = "centerlogin:ip:%s" % ip
+    max_pass = int(os.environ.get("CENTER_LOGIN_MAX_WRONG", "10") or 10)
+    max_ip = int(os.environ.get("CENTER_LOGIN_MAX_WRONG_IP", "2000") or 2000)
+    if int(cache.get(key) or 0) >= max_pass:
+        return Response(
+            {"error": "Bu pasport bilan juda ko'p noto'g'ri urinish bo'ldi. "
+                      "Nazoratchiga murojaat qiling.",
+             "code": "CENTER_LOCKED"},
+            status=429,
+        )
+    if int(cache.get(key_ip) or 0) >= max_ip:
+        logger.error("[CENTER-LOGIN] IP shifti to'ldi: %s", ip)
         return Response(
             {"error": "Juda ko'p noto'g'ri urinish. Nazoratchiga murojaat qiling.",
              "code": "CENTER_LOCKED"},
             status=429,
         )
 
+    def _bump() -> None:
+        """Xato urinishni sanaydi — oyna qo'zg'almas (TTL yangilanmaydi).
+
+        Ilgari har xatoda TTL qaytadan 10 daqiqaga surilardi, ya'ni bitta-ikkita
+        xato muntazam kelsa qulf hech qachon ochilmasdi.
+        """
+        for k in (key, key_ip):
+            if not cache.add(k, 1, 10 * 60):
+                try:
+                    cache.incr(k)
+                except ValueError:  # oraliqda muddati tugagan bo'lsa
+                    cache.add(k, 1, 10 * 60)
+
     if not valid_passport(passport):
-        cache.set(key, tries + 1, 10 * 60)
+        _bump()
         return Response(
             {"error": "Pasport raqami noto'g'ri yozilgan. Namuna: AB1234567.",
              "code": "PASSPORT_INVALID"},
@@ -265,7 +298,7 @@ def auth_center_login(request):
     import hmac as _hmac
 
     if not _hmac.compare_digest(pin.encode(), expected.encode()):
-        cache.set(key, tries + 1, 10 * 60)
+        _bump()
         logger.warning("[CENTER-LOGIN] noto'g'ri PIN ip=%s pasport=%s***", ip, passport[:4])
         return Response({"error": "PIN kod noto'g'ri.", "code": "WRONG_PIN"}, status=403)
 
@@ -273,7 +306,7 @@ def auth_center_login(request):
         AppUser.objects.select_related("group", "kafedra").filter(passport=passport)[:2]
     )
     if not matches:
-        cache.set(key, tries + 1, 10 * 60)
+        _bump()
         return Response(
             {"error": "Bu pasport raqami ro'yxatda topilmadi. Nazoratchiga murojaat qiling.",
              "code": "PASSPORT_NOT_FOUND"},

@@ -102,8 +102,18 @@ export function CenterLoginPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ passport, pin }),
       });
-      const data = await readJsonSafe<{ token?: string; user?: any; error?: string }>(res);
-      if (!res.ok || !data?.token || !data?.user) throw new Error(data?.error || t.failed);
+      const data = await readJsonSafe<{
+        token?: string; user?: any; error?: string; code?: string; client_ip?: string;
+      }>(res);
+      if (!res.ok || !data?.token || !data?.user) {
+        // Markazning tashqi IP si o'zgarsa xatoda hech qanday belgi yo'q edi
+        // va sababini topish uzoq vaqt olardi. Endi manzil ko'rsatiladi —
+        // nazoratchi uni adminga aytadi.
+        const suffix = data?.code === 'CENTER_IP_DENIED' && data?.client_ip
+          ? ` (${data.client_ip})`
+          : '';
+        throw new Error((data?.error || t.failed) + suffix);
+      }
       onLogin(data.token, data.user);
     } catch (err: any) {
       setError(err?.message || t.failed);

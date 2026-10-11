@@ -88,6 +88,35 @@ class CenterLoginTests(TestCase):
                      for i in range(7)]
         self.assertIn(429, codes)
 
+    def test_one_persons_typos_do_not_lock_the_whole_centre(self):
+        """Markazdagi hamma kompyuter bitta tashqi IP ortida.
+
+        Bir kishi pasportini necha marta xato yozsa ham, qo'shnisi
+        imtihonga kirishi kerak.
+        """
+        AppUser.objects.create(id="nbr-1", role="student", name="Qo'shni",
+                               passport="ZZ9999999", status="Active")
+        with mock.patch.dict("os.environ", {**PIN, "CENTER_LOGIN_MAX_WRONG": "3"}, clear=False):
+            for i in range(6):
+                self._post(passport="AB1234567", pin="%04d" % i)
+            res = self._post(passport="ZZ9999999", pin="2005")
+        self.assertEqual(res.status_code, 200, getattr(res, "data", None))
+
+    def test_guessing_one_passport_still_locks_that_passport(self):
+        with mock.patch.dict("os.environ", {**PIN, "CENTER_LOGIN_MAX_WRONG": "3"}, clear=False):
+            for i in range(4):
+                self._post(passport="AB1234567", pin="%04d" % i)
+            res = self._post(passport="AB1234567", pin="2005")
+        self.assertEqual(res.status_code, 429)
+        self.assertEqual(res.data["code"], "CENTER_LOCKED")
+
+    def test_the_refusal_names_the_computers_address(self):
+        """Markaz IP si o'zgarsa sababi darhol ko'rinsin."""
+        with mock.patch.dict("os.environ", {**PIN, "TEST_CENTER_IPS": "45.150.24."}, clear=False):
+            res = self._post(passport="AB1234567", pin="2005")
+        self.assertEqual(res.data["code"], "CENTER_IP_DENIED")
+        self.assertTrue(res.data.get("client_ip"))
+
     def test_same_passport_on_two_accounts_is_reported(self):
         AppUser.objects.create(id="dup-1", role="student", name="Boshqa", passport="AB1234567")
         with mock.patch.dict("os.environ", PIN, clear=False):
