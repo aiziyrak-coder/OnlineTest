@@ -1,0 +1,442 @@
+[
+ {
+  "text": "4 oylik o'g'il bola ikki oy ichida uchinchi marta pnevmoniya bilan yotqizilmoqda. Tug'ilgandan keyin vazn qo'shishi to'xtagan, surunkali suvli diareya bor va og'iz bo'shlig'ida davolashga chidamli kandidoz aniqlanadi. Ko'rikda og'irligi 3 persentildan past, limfa tugunlari va bodomsimon bezlar palpatsiyada topilmaydi. Ko'krak qafasi rentgenogrammasida timus soyasi ko'rinmaydi, o'pkada ikki tomonlama interstitsial infiltratsiya bor. Qonda limfotsitlar soni 1,1x10^9/l (mutlaq limfopeniya), immunoglobulinlar barcha sinflarda past. Tug'ilganda BCJ emlangan va emlash joyida yara bitmay, qo'ltiq osti limfa tugunlari kattalashgan. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Og'ir kombinatsiyalangan immun tanqislik (SCID)",
+   "X-ga bog'langan agammaglobulinemiya (Bruton kasalligi)",
+   "Umumiy o'zgaruvchan immun tanqislik (CVID)",
+   "Chaqaloqlarning o'tkinchi gipogammaglobulinemiyasi",
+   "Surunkali granulematoz kasallik"
+  ],
+  "correctAnswer": "Og'ir kombinatsiyalangan immun tanqislik (SCID)"
+ },
+ {
+  "text": "5 oylik qiz bolada og'ir kombinatsiyalangan immun tanqislik (SCID) tasdiqlandi va gemopoetik hujayra transplantatsiyasiga tayyorlanmoqda. Ota-onasi emlash jadvali haqida so'raydi: bolaga yoshiga mos emlashlar qilinmagan. Oilada katta akasi bor va u ham emlanishi kerak. Immunologik tekshiruvda T-hujayralar deyarli yo'q, B-hujayralar mavjud, immunoglobulinlar past. Bemorga hozirda oyma-oy immunoglobulin o'rnini bosuvchi terapiya va infeksiyalarga qarshi profilaktika tayinlangan. Emlash bo'yicha eng to'g'ri taktika qaysi?",
+  "options": [
+   "Barcha tirik vaksinalar man etiladi, inaktivlangan vaksinalar esa immun javob kutilmasa ham xavfsiz",
+   "Faqat BCJ man etiladi, qolgan tirik vaksinalar yoshiga mos qilinadi",
+   "Transplantatsiyagacha barcha emlashlar, inaktivlanganlari ham, to'xtatilib, keyin boshidan boshlanadi",
+   "Tirik vaksinalar immunoglobulin terapiyasi fonida xavfsiz bo'ladi va jadval bo'yicha qilinadi",
+   "Faqat rotavirus vaksinasi man etiladi, chunki u ichak orqali tarqaladi"
+  ],
+  "correctAnswer": "Barcha tirik vaksinalar man etiladi, inaktivlangan vaksinalar esa immun javob kutilmasa ham xavfsiz"
+ },
+ {
+  "text": "Yangi tug'ilgan o'g'il bolada tug'ilgandan 36 soat o'tib umumiy tirishish kuzatildi. Tug'ilish vazni 2900 g, Apgar 7/8. Ko'rikda tana harorati 36,8°C, puls 158/daq, nafas 56/daq, qon bosimi 62/38 mm sim. ust., saturatsiya 88% (kislorod berilganda sezilarli oshmaydi). Pastki jag' kichik, quloqlar past joylashgan, filtrum qisqa. Yurak auskultatsiyasida qo'pol sistolik shovqin eshitiladi, exokardiografiyada Fallo tetradasi aniqlanadi. Laborator: kaltsiy 1,42 mmol/l, fosfor yuqori, paratgormon past, magniy normal. Ko'krak qafasi rentgenogrammasida timus soyasi yo'q. Oqim sitometriyasida T-limfotsitlar soni past, B-limfotsitlar normal. Ushbu bemorda kasallikning genetik asosi nima?",
+  "options": [
+   "22q11.2 xromosoma qismining deletsiyasi (Di Jorj sindromi)",
+   "BTK genidagi mutatsiya (Bruton agammaglobulinemiyasi)",
+   "WAS genidagi mutatsiya (Viskott-Oldrich sindromi)",
+   "ATM genidagi mutatsiya (ataksiya-telangiektaziya)",
+   "CYBB genidagi mutatsiya (surunkali granulematoz kasallik)"
+  ],
+  "correctAnswer": "22q11.2 xromosoma qismining deletsiyasi (Di Jorj sindromi)"
+ },
+ {
+  "text": "14 yoshli o'g'il bola ikkinchi marta meningokokk infeksiyasi bilan kasalxonaga yotqizildi: 11 yoshida serogrupp Y meningit, hozir esa serogrupp W sepsisi. Oilasida amakisi yoshligida meningit bilan o'tib ketgan. Ko'rikda petexial toshma, isitma, meningeal belgilar bor. Umumiy qon tahlili va immunoglobulinlar normal, T va B hujayralar soni normal, HIV salbiy, taloq exoskopiyada mavjud va normal hajmda. Ushbu bemorda birinchi navbatda qaysi tekshiruvni tanlash kerak?",
+  "options": [
+   "Komplementning umumiy gemolitik faolligi (CH50) va terminal komponentlar",
+   "Dihidrorodamin (DHR) testi bilan neytrofillar oksidlanish faolligi",
+   "Immunoglobulin sinflari va subklasslarini qayta aniqlash",
+   "Limfotsitlar subpopulyatsiyasini oqim sitometriyasida baholash",
+   "Alfa-fetoprotein darajasini aniqlash"
+  ],
+  "correctAnswer": "Komplementning umumiy gemolitik faolligi (CH50) va terminal komponentlar"
+ },
+ {
+  "text": "6 yoshli qiz bola yurishida beqarorlik va qo'llarining qaltirashi tufayli nevrolog ko'rigidan o'tgan. Simptomlar 2 yoshdan boshlangan va asta-sekin kuchaygan: hozir yolg'iz yurganda devorga suyanadi. Anamnezida yiliga 4-5 marta sinusit va bronxit, ikki marta pnevmoniya. Ko'rikda tana harorati 36,9°C, puls 92/daq, ataksik yurish, dizartriya, nistagm; ko'z konyunktivasida va quloq suprasida telangiektaziyalar bor. Laborator: IgA 0,05 g/l (juda past), IgG subklass 2 past, IgM normal, alfa-fetoprotein 180 ng/ml (sezilarli yuqori), limfotsitlar 1,4x10^9/l. Ushbu bemorni olib borishda qaysi chora eng muhim?",
+  "options": [
+   "Ionlashtiruvchi nurlanish bilan tekshiruvlardan (KT, rentgen) imkon qadar voz kechish",
+   "Uzoq muddatli tizimli glyukokortikosteroid terapiyasini boshlash",
+   "Tirik vaksinalarni jadval bo'yicha to'liq qilish",
+   "Antifungal profilaktikani umrbod tayinlash",
+   "Taloqni profilaktik olib tashlash"
+  ],
+  "correctAnswer": "Ionlashtiruvchi nurlanish bilan tekshiruvlardan (KT, rentgen) imkon qadar voz kechish"
+ },
+ {
+  "text": "7 yoshli o'g'il bolada hayotining birinchi yilidan boshlab terida takroriy «sovuq» abstsesslar (atrofida yallig'lanish belgilari kuchsiz), ikki marta stafilokokk pnevmoniyasi bo'lgan va o'pkada pnevmatotsela qolgan. Ko'rikda yuz qo'pol tortilgan, peshona keng, burun ko'prigi yassi, terida surunkali ekzematoz toshma. Sut tishlari o'z vaqtida tushmagan. Laborator: umumiy IgE 9800 XB/ml, eozinofiliya, neytrofillar soni normal, DHR testi normal. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Giper-IgE sindromi (STAT3 nuqsoni)",
+   "Og'ir atopik dermatit va atopik marsh",
+   "Surunkali granulematoz kasallik",
+   "Viskott-Oldrich sindromi",
+   "Leykotsitlar adgeziyasi tanqisligi"
+  ],
+  "correctAnswer": "Giper-IgE sindromi (STAT3 nuqsoni)"
+ },
+ {
+  "text": "Yangi tug'ilgan qiz bolada kindik qoldig'i 28 kun o'tgach ham tushmagan va kindik atrofida qizarish bor, lekin yiring ajralmaydi. Ikkinchi oyda o'ng sonda teri yarasi paydo bo'lgan: yara atrofi qizargan, biroq yiring yo'q va yara juda sekin bitadi. Ko'rikda tana harorati 38,2°C, puls 150/daq, bola bezovta, vazn qo'shishi sekinlashgan. Umumiy qon tahlilida leykotsitlar 42x10^9/l, neytrofillar mutlaq soni 31x10^9/l, CRP yuqori; yara tubidan olingan materialning mikroskopiyasida bakteriyalar ko'p, neytrofillar esa deyarli topilmaydi. Immunoglobulinlar yoshiga mos. Ushbu bemorda kasallikning asosiy mexanizmi nima?",
+  "options": [
+   "Neytrofillarning endoteliyga adgeziyasi va to'qimaga chiqishi buzilgan",
+   "Neytrofillarda NADPH-oksidaza faolligi yo'q",
+   "T-limfotsitlar yetilishi butunlay to'xtagan",
+   "B-limfotsitlarda immunoglobulin sintezi buzilgan",
+   "Komplementning klassik yo'li ishdan chiqqan"
+  ],
+  "correctAnswer": "Neytrofillarning endoteliyga adgeziyasi va to'qimaga chiqishi buzilgan"
+ },
+ {
+  "text": "9 yoshli o'g'il bola oziq-ovqat yutishda qiyinchilik va ovqat «tomoqda tiqilib qolishi» shikoyatlari bilan keldi. Oxirgi yarim yilda ikki marta go'sht bo'lagi qizilo'ngachda tiqilib, endoskopik olib tashlangan. Anamnezida atopik dermatit va allergik rinit bor. Protonlar nasosi inhibitori bilan 8 haftalik davolash yetarli yengillik bermagan. Endoskopiyada qizilo'ngach shilliq qavatida halqasimon burmalar va oq g'uborlar; biopsiyada epiteliyda eozinofillar 15 dan ko'p (ko'rish maydonida). Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Eozinofil ezofagit",
+   "Gastroezofageal reflyuks kasalligi",
+   "Oziq-ovqatga IgE vositachiligidagi tezkor allergiya",
+   "Axalaziya kardiya",
+   "Qizilo'ngach eozinofil granulemasi (yot jism reaksiyasi)"
+  ],
+  "correctAnswer": "Eozinofil ezofagit"
+ },
+ {
+  "text": "7 oylik bolaga birinchi marta guruch bo'tqasi berilgan. Ikki soatdan keyin bola to'xtovsiz qusa boshlagan (6 marta), rangi oqargan, letargik bo'lgan va suvsizlanish belgilari paydo bo'lgan. Qon bosimi past, terisi sovuq. Teri toshmasi, qichishish, qizarish va nafas qisishi YO'Q. Shoshilinch yordam bo'limida vena ichiga suyuqlik quyilgandan keyin holati tez yaxshilangan. Guruchga spetsifik IgE va teri prik-testi salbiy. Keyingi oyda aynan shu holat yana takrorlangan. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Oziq-ovqat oqsili keltirib chiqargan enterokolit sindromi (FPIES)",
+   "IgE vositachiligidagi anafilaksiya",
+   "O'tkir virusli gastroenterit",
+   "Oziq-ovqat oqsili keltirib chiqargan proktokolit",
+   "Tseliakiya"
+  ],
+  "correctAnswer": "Oziq-ovqat oqsili keltirib chiqargan enterokolit sindromi (FPIES)"
+ },
+ {
+  "text": "13 yoshli qiz bolada uch yildan beri bahorda (aprel-may) qayin changiga allergik rinit va konyunktivit bor, teri prik-testi qayin changiga musbat. Shu yil davomida xom olma, shaftoli va sabzi iste'mol qilganda og'iz bo'shlig'i, lablar va tomoqda qichishish va yengil shish paydo bo'ladi; belgilar 15-20 daqiqada o'zi o'tib ketadi. Pishirilgan olma, olma sharbati va murabbo muammosiz iste'mol qilinadi. Ko'rikda qon bosimi 112/68 mm sim. ust., puls 76/daq, terisi toza, o'pkada xirillash yo'q. Tizimli reaksiya, nafas qisishi, qusish yoki qon bosimi pasayishi hech qachon bo'lmagan. Ushbu holatning asosiy mexanizmi nima?",
+  "options": [
+   "Chang allergenlari bilan meva oqsillari o'rtasidagi krest-reaktivlik (oral allergiya sindromi)",
+   "Mevalardagi gistaminga o'xshash moddalarning bevosita ta'siri",
+   "Mevalarga IgG vositachiligidagi kechikkan sezuvchanlik",
+   "Salitsilatlarga nisbatan nospetsifik ko'tarmaslik",
+   "Og'iz bo'shlig'i shilliq qavatining kontakt dermatiti (IV tur)"
+  ],
+  "correctAnswer": "Chang allergenlari bilan meva oqsillari o'rtasidagi krest-reaktivlik (oral allergiya sindromi)"
+ },
+ {
+  "text": "25 kg vaznli 8 yoshli bola maktab oshxonasida yong'oqli pirojnoe yegandan 10 daqiqa keyin bo'g'ilish, ovozning bo'g'iqlashi, butun tanada eshakemi toshmasi va qusish bilan tibbiyot xonasiga keltirildi. Qon bosimi 80/40 mm sim. ust., puls 140/daq, o'pkada tarqoq xirillashlar. Tibbiyot xonasida adrenalin (1 mg/ml) ampulasi, antigistamin tabletka, ingalyatsion salbutamol va prednizolon bor. Birinchi navbatda nima qilinadi?",
+  "options": [
+   "0,25 ml adrenalin (1 mg/ml) son mushagiga yuborish",
+   "0,25 ml adrenalin (1 mg/ml) teri ostiga yuborish",
+   "Ingalyatsion salbutamol berib, javobni kutish",
+   "Antigistamin preparatni og'iz orqali berish",
+   "Prednizolonni vena ichiga yuborish"
+  ],
+  "correctAnswer": "0,25 ml adrenalin (1 mg/ml) son mushagiga yuborish"
+ },
+ {
+  "text": "10 yoshli bola anafilaksiya bilan shoshilinch bo'limga keltirilgan: mushak ichiga adrenalin yuborilgandan keyin toshma, nafas qisishi va gipotenziya 20 daqiqada bartaraf bo'lgan. Hozir bola yaxshi, shikoyat yo'q, qon bosimi va saturatsiya normal. Ota-onasi uyga ketishni so'rashadi. Allergen - kesh yong'og'i, oldin bunday reaksiya bo'lmagan. Keyingi eng to'g'ri taktika qaysi?",
+  "options": [
+   "Kamida 4-6 soat kuzatuvda qoldirish va adrenalin avtoinyektori bilan harakat rejasini berib yuborish",
+   "Darhol uyga javob berish va bir hafta ichida allergologga yo'llash",
+   "Uch kun statsionarda glyukokortikosteroid kursini o'tkazish",
+   "Darhol kesh yong'og'i bilan provokatsion sinov o'tkazib, tashxisni tasdiqlash",
+   "Uyga javob berib, faqat antigistamin preparatni uzoq muddat tayinlash"
+  ],
+  "correctAnswer": "Kamida 4-6 soat kuzatuvda qoldirish va adrenalin avtoinyektori bilan harakat rejasini berib yuborish"
+ },
+ {
+  "text": "6 yoshli qiz bolada 10 kun davomida tanada ko'chib yuruvchi, qattiq qichishuvchi eshakemi toshmalari bor; har bir dog' 24 soatdan kam yashaydi, iz qoldirmaydi. Isitma, bo'g'im og'rig'i, vazn yo'qotish yo'q. Angioedema epizodlari yo'q. Oilada atopiya bor. Standart dozada ikkinchi avlod antigistamin preparati 2 hafta berilgan, lekin toshma davom etmoqda va bola uyqusi buzilgan. Umumiy qon tahlili, CRP, qalqonsimon bez funksiyasi normal. Keyingi eng to'g'ri qadam qaysi?",
+  "options": [
+   "Shu antigistamin preparatining dozasini bosqichma-bosqich 4 barobarga oshirish",
+   "Birinchi avlod antigistamin preparatiga almashtirish",
+   "Uzoq muddatli tizimli glyukokortikosteroid kursini boshlash",
+   "Keng qamrovli oziq-ovqat allergenlari paneliga qon tekshiruvi yuborish",
+   "Darhol omalizumab (anti-IgE) terapiyasini boshlash"
+  ],
+  "correctAnswer": "Shu antigistamin preparatining dozasini bosqichma-bosqich 4 barobarga oshirish"
+ },
+ {
+  "text": "11 yoshli o'g'il bolada 4 yildan beri surunkali spontan eshakemi bor. Ikkinchi avlod antigistamin preparati to'rt barobar dozada, montelukast qo'shilgan holda ham nazorat ta'minlanmadi; yiliga bir necha marta tizimli glyukokortikosteroid kursi talab qilinadi. Qalqonsimon bez funksiyasi, autoantitanalar va umumiy qon tahlili normal. Bola maktabni qoldirmoqda, uyqusi buzilgan. Keyingi eng to'g'ri qadam qaysi?",
+  "options": [
+   "Omalizumab (anti-IgE) terapiyasini boshlash",
+   "Doimiy past dozada prednizolonga o'tish",
+   "Antigistamin preparatlar dozasini sakkiz barobarga oshirish",
+   "Immunoglobulinni vena ichiga uzoq muddat quyish",
+   "Allergen-spetsifik immunoterapiyani boshlash"
+  ],
+  "correctAnswer": "Omalizumab (anti-IgE) terapiyasini boshlash"
+ },
+ {
+  "text": "9 yoshli qiz bolaga bronxit tufayli sefaklor tayinlangan. Preparatning 8-kunida tana harorati 38,4°C ga ko'tarilgan, tanada urtikar va halqasimon toshmalar, oyoq-qo'l bo'g'imlarida og'riq va shish, limfa tugunlari kattalashgan. Toshma paydo bo'lishi preparat qabulidan bir hafta o'tib boshlangan. Qonda eozinofillar normal, kreatinin normal, siydikda o'zgarish yo'q, jigar fermentlari normal. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Zardobga o'xshash reaksiya (serum sickness-like reaction)",
+   "IgE vositachiligidagi dori anafilaksiyasi",
+   "DRESS sindromi",
+   "Stivens-Jonson sindromi",
+   "O'tkir revmatik isitma"
+  ],
+  "correctAnswer": "Zardobga o'xshash reaksiya (serum sickness-like reaction)"
+ },
+ {
+  "text": "12 yoshli o'g'il bolaga epilepsiya tufayli karbamazepin boshlangan. Preparatning 28-kunida 39°C isitma, yuz shishi, tanada tarqoq makulopapulyoz toshma (tana yuzasining 60% dan ko'pi) paydo bo'lgan, bo'yin limfa tugunlari kattalashgan. Laborator: eozinofillar 2,4x10^9/l, ALT 240 U/l, AST 180 U/l, kreatinin normal. Shilliq qavatlar zararlanmagan, Nikolskiy belgisi salbiy. Ushbu bemorda eng to'g'ri taktika qaysi?",
+  "options": [
+   "Karbamazepinni darhol to'xtatish va tizimli glyukokortikosteroid boshlash",
+   "Karbamazepin dozasini kamaytirib, antigistamin preparat qo'shish",
+   "Karbamazepinni davom ettirib, faqat mahalliy steroid qo'llash",
+   "Immunoglobulinni vena ichiga yuborib, preparatni saqlab qolish",
+   "Karbamazepinni to'xtatib, darhol desensibilizatsiya o'tkazish"
+  ],
+  "correctAnswer": "Karbamazepinni darhol to'xtatish va tizimli glyukokortikosteroid boshlash"
+ },
+ {
+  "text": "5 yoshli bolada bir yil oldin amoksisillin qabulidan 30 daqiqa o'tib eshakemi, lablar shishi va nafas qisishi bo'lgan; adrenalin bilan davolangan. Hozir bolada o'rta otit aniqlandi va antibiotik kerak. Ota-onasi «penitsillin guruhiga allergiya» deb aytadi. Bolada astma yo'q, boshqa dori allergiyasi yo'q. Hududda pnevmokokkning makrolidlarga chidamligi yuqori. Keyingi eng to'g'ri taktika qaysi?",
+  "options": [
+   "Beta-laktam bo'lmagan antibiotik tayinlash va allergologda penitsillinga teri sinovi va provokatsion sinov rejalashtirish",
+   "Amoksisillinni past dozadan boshlab, uyda bosqichma-bosqich oshirish",
+   "Sefalosporinni darhol to'liq dozada boshlash, chunki krest-reaktivlik mutlaqo yo'q",
+   "Amoksisillinni antigistamin preparat himoyasida qayta tayinlash",
+   "Antibiotiksiz kuzatish, chunki har qanday antibiotik xavfli"
+  ],
+  "correctAnswer": "Beta-laktam bo'lmagan antibiotik tayinlash va allergologda penitsillinga teri sinovi va provokatsion sinov rejalashtirish"
+ },
+ {
+  "text": "3 yoshli qiz bolada umumiy o'zgaruvchan immun tanqislik tufayli har 4 haftada vena ichiga immunoglobulin quyiladi. Oxirgi quyilish 2 hafta oldin bo'lgan. Ota-onasi qizarish-parotit-qizilcha (MMR) emlashini so'raydi: bolaning yoshiga mos emlashi kechikkan. Bolaning hozirgi holati barqaror, infeksiya yo'q. Emlash bo'yicha eng to'g'ri taktika qaysi?",
+  "options": [
+   "MMR emlashi tavsiya etilmaydi, chunki bu tirik vaksina va immun tanqislikda man etiladi",
+   "MMR darhol qilinadi, chunki immunoglobulin himoya beradi",
+   "MMR keyingi immunoglobulin quyilishi bilan bir kunda qilinadi",
+   "MMR 2 hafta kutib, keyin qilinadi",
+   "MMR o'rniga ikki barobar dozada inaktivlangan qizamiq vaksinasi qilinadi"
+  ],
+  "correctAnswer": "MMR emlashi tavsiya etilmaydi, chunki bu tirik vaksina va immun tanqislikda man etiladi"
+ },
+ {
+  "text": "2 yoshli bolaga qon ketish tufayli eritrotsitar massa quyilgan. Quyish boshlanganidan 20 daqiqa o'tib bolada qattiq bo'g'ilish, tarqoq eshakemi, qon bosimining 70/35 mm sim. ust. gacha pasayishi kuzatildi. Quyish to'xtatilib, adrenalin yuborildi. Anamnezida tez-tez sinusit va diareya epizodlari bo'lgan. Keyingi tekshiruvda IgG va IgM normal, IgA esa aniqlanmaydigan darajada past, IgA ga qarshi antitanalar topildi. Ushbu bemorga kelgusida qon komponentlari kerak bo'lsa, eng to'g'ri taktika qaysi?",
+  "options": [
+   "IgA tanqisligi bo'lgan donorlardan olingan yoki yuvilgan eritrotsitlar quyish",
+   "Quyishdan oldin antigistamin va glyukokortikosteroid berib, oddiy komponent quyish",
+   "Faqat avtologik qon ishlatish, boshqa variant yo'q",
+   "Quyishdan oldin immunoglobulinni vena ichiga yuborish",
+   "Quyish tezligini sekinlashtirib, oddiy komponent quyish"
+  ],
+  "correctAnswer": "IgA tanqisligi bo'lgan donorlardan olingan yoki yuvilgan eritrotsitlar quyish"
+ },
+ {
+  "text": "15 oylik o'g'il bolada 7 oylikdan boshlab o'rta otit (3 epizod) va ikki marta bronxit bo'lgan, lekin hammasi oddiy antibiotiklar bilan tuzalgan. O'sishi va rivojlanishi yoshiga mos, og'iz bo'shlig'ida kandidoz yo'q, bodomsimon bezlar va limfa tugunlari palpatsiyada mavjud. Laborator: IgG 3,1 g/l (yoshiga nisbatan past), IgA va IgM yoshiga mos quyi chegarada, B-limfotsitlar soni normal, tetanus toksoidiga emlashdan keyin antitana titri yetarli oshgan. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Chaqaloqlarning o'tkinchi gipogammaglobulinemiyasi",
+   "X-ga bog'langan agammaglobulinemiya",
+   "Umumiy o'zgaruvchan immun tanqislik",
+   "Og'ir kombinatsiyalangan immun tanqislik",
+   "Giper-IgM sindromi"
+  ],
+  "correctAnswer": "Chaqaloqlarning o'tkinchi gipogammaglobulinemiyasi"
+ },
+ {
+  "text": "4 yoshli o'g'il bolada hayotining birinchi yilidan Pnevmotsista pnevmoniyasi, keyin esa takroriy sinusitlar va kriptosporidiyali surunkali diareya bo'lgan. Laborator: IgG va IgA juda past, IgM esa yuqori, B-limfotsitlar soni normal, neytropeniya epizodlari qayd etilgan. Oilada onasining ukasi bolalikda og'ir infeksiyadan vafot etgan. Ushbu bemorda kasallikning asosiy mexanizmi nima?",
+  "options": [
+   "T-hujayrada CD40 ligand nuqsoni tufayli immunoglobulin sinfi almashinuvining buzilishi",
+   "B-hujayra tirozinkinazasi (BTK) nuqsoni tufayli B-hujayra yetilishining to'xtashi",
+   "NADPH-oksidaza nuqsoni tufayli fagotsitar o'ldirishning buzilishi",
+   "Komplement terminal komponentlari tanqisligi",
+   "Timus agneziyasi tufayli T-hujayralar yetishmasligi"
+  ],
+  "correctAnswer": "T-hujayrada CD40 ligand nuqsoni tufayli immunoglobulin sinfi almashinuvining buzilishi"
+ },
+ {
+  "text": "8 yoshli qiz bolada o'rta og'ir persistlovchi bronxial astma bor va ingalyatsion glyukokortikosteroid bilan nazorat qilinadi. Yozda jismoniy tarbiya darsida yugurgandan 5-8 daqiqa o'tib yo'tal, hansirash va ko'krakda siqilish paydo bo'ladi, 30 daqiqada o'zi o'tib ketadi. Kunduzgi va kechasi astma belgilari yo'q, spirometriya normal, nazorat test balli yaxshi. Jismoniy yuklama paytidagi belgilarni oldini olish uchun eng to'g'ri taktika qaysi?",
+  "options": [
+   "Mashqdan 10-15 daqiqa oldin qisqa ta'sirli beta-2-agonist ingalyatsiyasi",
+   "Ingalyatsion glyukokortikosteroid dozasini ikki barobarga oshirish",
+   "Mashqdan oldin antigistamin preparat berish",
+   "Jismoniy tarbiya darslaridan butunlay ozod qilish",
+   "Mashqdan oldin uzoq ta'sirli antixolinergik ingalyatsiyasi"
+  ],
+  "correctAnswer": "Mashqdan 10-15 daqiqa oldin qisqa ta'sirli beta-2-agonist ingalyatsiyasi"
+ },
+ {
+  "text": "10 yoshli bolada bir yildan beri kechasi yo'tal va jismoniy yuklamada hansirash bor; otasida astma. Ko'rikda tana harorati normal, puls 84/daq, nafas 20/daq, saturatsiya 97%, o'pkada nafas chiqarishda tarqoq xirillashlar eshitiladi. Astma tashxisini tasdiqlash uchun spirometriya o'tkazilmoqda. Boshlang'ich natija: FEV1 kutilganidan 72%, FVC kutilganidan 94%, FEV1/FVC 0,68 (pasaygan). Salbutamol 400 mkg ingalyatsiyasidan 15 daqiqa o'tib takroriy o'lchov qilindi; bola tekshiruv paytida yaxshi hamkorlik qildi, o'lchovlar sifat mezonlariga javob berdi. Qaysi natija bronxial obstruksiyaning qaytarligini tasdiqlaydi?",
+  "options": [
+   "FEV1 ning boshlang'ich qiymatdan 12% va 200 ml dan ko'proq oshishi",
+   "FEV1 ning 5% ga oshishi",
+   "FVC ning o'zgarmasligi va FEV1/FVC nisbatining pasayishi",
+   "Pik oqim tezligining kun ichida 5% o'zgarishi",
+   "Umumiy o'pka sig'imining oshishi"
+  ],
+  "correctAnswer": "FEV1 ning boshlang'ich qiymatdan 12% va 200 ml dan ko'proq oshishi"
+ },
+ {
+  "text": "13 yoshli o'g'il bolada uy changi kanasiga allergik rinit bor va allergen-spetsifik immunoterapiya rejalashtirilgan. Ko'rikda bemorda shu bilan birga bronxial astma aniqlandi: oxirgi uch oyda haftada bir necha marta tungi uyg'onishlar, FEV1 kutilganining 62%, qisqa ta'sirli beta-2-agonistni kunda bir necha marta ishlatadi. Immunoterapiya bo'yicha eng to'g'ri qarorni ko'rsating.",
+  "options": [
+   "Immunoterapiya kechiktiriladi: avval astma nazorati ta'minlanishi kerak",
+   "Immunoterapiya darhol boshlanadi, chunki u astmani ham davolaydi",
+   "Immunoterapiya boshlanadi, lekin faqat til osti shaklida",
+   "Immunoterapiya boshlanadi, dozasi ikki barobar kamaytirilgan holda",
+   "Immunoterapiya umrbod man etiladi, chunki astma mutlaq qarshi ko'rsatma"
+  ],
+  "correctAnswer": "Immunoterapiya kechiktiriladi: avval astma nazorati ta'minlanishi kerak"
+ },
+ {
+  "text": "6 yoshli bolaga allergologda teri prik-testlari rejalashtirilgan. Ota-onasi bolaning qichishish tufayli oxirgi besh kun davomida har kuni setirizin qabul qilganini aytadi. Bolada astma yo'q, terisi hozirda toza, beta-blokator qabul qilmaydi. Prik-test natijasini ishonchli qilish uchun eng to'g'ri taktika qaysi?",
+  "options": [
+   "Antigistamin preparatni kamida 5-7 kun to'xtatib, keyin sinov o'tkazish",
+   "Sinovni rejalashtirilgan kuni o'tkazish, antigistamin natijaga ta'sir qilmaydi",
+   "Antigistamin o'rniga tizimli glyukokortikosteroid berib, sinovni o'tkazish",
+   "Prik-test o'rniga faqat umumiy IgE darajasini aniqlash",
+   "Sinovni o'tkazib, natija salbiy chiqsa ikki barobar allergen konsentratsiyasini qo'llash"
+  ],
+  "correctAnswer": "Antigistamin preparatni kamida 5-7 kun to'xtatib, keyin sinov o'tkazish"
+ },
+ {
+  "text": "2 yoshli bolada sigir suti oqsiliga allergiya tasdiqlangan va keng gidrolizlangan aralashma tayinlangan. Ikki hafta o'tgach, ona bolada diareya, qonli najas aralashmasi va teri toshmasi davom etayotganini aytadi; vazn qo'shishi to'xtagan. Boshqa oziq-ovqat mahsulotlari kiritilmagan, aralashma to'g'ri tayyorlanmoqda. Keyingi eng to'g'ri qadam qaysi?",
+  "options": [
+   "Aminokislotalar asosidagi aralashmaga o'tkazish",
+   "Sigir suti aralashmasini kichik dozada qaytarib, chidamlilikni oshirish",
+   "Echki suti asosidagi aralashmaga o'tkazish",
+   "Soya asosidagi aralashmaga o'tkazib, kuzatishni davom ettirish",
+   "Laktozasiz sigir suti aralashmasiga o'tkazish"
+  ],
+  "correctAnswer": "Aminokislotalar asosidagi aralashmaga o'tkazish"
+ },
+ {
+  "text": "5 yoshli bolada og'ir atopik dermatit bor. Ikki kun ichida terida yuz va bo'yin sohasida ko'p sonli bir xil o'lchamdagi tarang pufakchalar va o'ymali eroziyalar paydo bo'lgan, tana harorati 38,8°C, bola bezovta, limfa tugunlari kattalashgan. Toshmalar og'riqli. Oilada bir hafta oldin lab ucha (gerpes) bo'lgan. Ushbu bemorda eng to'g'ri taktika qaysi?",
+  "options": [
+   "Tizimli asiklovir boshlash",
+   "Mahalliy glyukokortikosteroid dozasini oshirish",
+   "Tizimli glyukokortikosteroid boshlash",
+   "Faqat mahalliy antiseptik va emollient bilan davolash",
+   "Tizimli antifungal preparat boshlash"
+  ],
+  "correctAnswer": "Tizimli asiklovir boshlash"
+ },
+ {
+  "text": "7 yoshli qiz bolada surunkali granulematoz kasallik tasdiqlangan (DHR testi patologik). Hozirda infeksiya belgilari yo'q, o'sishi normal. Ota-onasiga uzoq muddatli profilaktika rejasini tushuntirish kerak. Bolada dori ko'tarmaslik yo'q, jigar va buyrak funksiyasi normal. Uzoq muddatli profilaktika uchun eng to'g'ri kombinatsiya qaysi?",
+  "options": [
+   "Trimetoprim-sulfametoksazol va itrakonazol",
+   "Amoksisillin va asiklovir",
+   "Azitromitsin va flukonazol bir martalik dozada",
+   "Faqat yiliga ikki marta immunoglobulin quyish",
+   "Faqat pnevmokokk va meningokokk vaksinalari"
+  ],
+  "correctAnswer": "Trimetoprim-sulfametoksazol va itrakonazol"
+ },
+ {
+  "text": "9 yoshli o'g'il bolada o'roqsimon hujayrali anemiya bor; ikki yil oldin taloq sekvestratsiyasi epizodi bo'lgan va exoskopiyada taloq kichraygan, funksional asplenia aniqlangan. Ko'rikda tana harorati 36,8°C, puls 88/daq, terisi va shilliq qavatlari rangpar, jigar 2 sm kattalashgan. Laborator: gemoglobin 82 g/l, retikulotsitlar yuqori, periferik qonda Xauell-Jolli tanachalari bor. Bola yoshiga mos emlangan, oxirgi bir yilda kasalxonaga yotqizilmagan, hozirda infeksiya belgisi yo'q. Ota-onasi infeksiyalardan himoya haqida so'raydi. Ushbu bemorda qaysi mikroorganizmlardan himoya birinchi darajali ahamiyatga ega?",
+  "options": [
+   "Kapsulali bakteriyalar (pnevmokokk, meningokokk, gemofil tayoqcha)",
+   "Hujayra ichidagi viruslar (sitomegalovirus, Epshteyn-Barr)",
+   "Mikobakteriyalar va atipik mikobakteriyalar",
+   "Mog'or zamburug'lari (aspergillus, mukor)",
+   "Ichak parazitlari (askarida, lyambliya)"
+  ],
+  "correctAnswer": "Kapsulali bakteriyalar (pnevmokokk, meningokokk, gemofil tayoqcha)"
+ },
+ {
+  "text": "4 yoshli o'g'il bolada orqa miya churrasi (spina bifida) tufayli uch marta operatsiya va ko'p marta siydik yo'llari kateterizatsiyasi bo'lgan. Oxirgi operatsiya paytida jarrohlik qo'lqoplari bilan ishlash boshlangandan 20 daqiqa o'tib bolada qon bosimi pasayishi, bronxospazm va tanada eshakemi paydo bo'lgan. Dori preparatlari o'zgartirilmagan, antibiotik oldin ham ishlatilgan va reaksiya bermagan. Ushbu bemorda eng ehtimolli sabab nima?",
+  "options": [
+   "Tabiiy kauchuk lateksiga IgE vositachiligidagi allergiya",
+   "Antibiotikka kechikkan sezuvchanlik reaksiyasi",
+   "Anestetikka nospetsifik gistamin ajralishi",
+   "Xlorgeksidinga kontakt dermatit",
+   "Operatsiya stressiga vegetativ reaksiya"
+  ],
+  "correctAnswer": "Tabiiy kauchuk lateksiga IgE vositachiligidagi allergiya"
+ },
+ {
+  "text": "14 yoshli o'g'il bolada og'ir atopik bronxial astma bor: uy changi kanasiga va mushuk epiteliysiga sensibilizatsiya tasdiqlangan, umumiy IgE 480 XB/ml. Yuqori dozali ingalyatsion glyukokortikosteroid va uzoq ta'sirli beta-2-agonist fonida ham yil ichida uch marta tizimli steroid talab qilgan qo'zish bo'lgan, texnika va rejimga rioya qilinadi, nazorat ta'minlanmagan. Keyingi eng to'g'ri qadam qaysi?",
+  "options": [
+   "Omalizumab (anti-IgE) biologik terapiyasini boshlash",
+   "Doimiy og'iz orqali prednizolonga o'tish",
+   "Ingalyatsion steroid dozasini yana ikki barobarga oshirish",
+   "Faqat allergen-spetsifik immunoterapiya bilan davom etish",
+   "Teofillin preparatlarini asosiy terapiya sifatida tayinlash"
+  ],
+  "correctAnswer": "Omalizumab (anti-IgE) biologik terapiyasini boshlash"
+ },
+ {
+  "text": "12 yoshli qiz bolada bronxial astma bor. Oxirgi oyda holati og'irlashgan: hansirash kuchaygan, yo'tal bilan qo'ng'ir-jigarrang quyuq balg'am ajraladi. Laborator: eozinofillar 1,8x10^9/l, umumiy IgE 2400 XB/ml, Aspergillus fumigatus ga spetsifik IgE va IgG musbat, teri prik-testi aspergillusga musbat. Ko'krak qafasi KT da markaziy bronxoektazlar va shilliq probkalar bor. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Allergik bronxopulmonal aspergillyoz",
+   "Invaziv o'pka aspergillyozi",
+   "Mukovistsidoz",
+   "Eozinofil granulematoz polianggiit",
+   "Og'ir eozinofil astma, boshqa sababsiz"
+  ],
+  "correctAnswer": "Allergik bronxopulmonal aspergillyoz"
+ },
+ {
+  "text": "3 yoshli qiz bolada tug'ilgandan keyingi oylarda tanada va oyoq-qo'llarda bir necha jigarrang-sarg'ish, aniq chegaralangan dog'lar paydo bo'lgan. Ota-onasining aytishicha, dog'ni ishqalaganda u qizarib, ko'tarilib shishadi va qichishadi; issiq vannadan keyin terida qizarish va qichishish kuchayadi, ba'zan ich ketishi kuzatiladi. Ko'rikda tana harorati 36,7°C, puls 104/daq, qon bosimi 92/58 mm sim. ust., jigar va taloq kattalashmagan. Laborator: umumiy qon tahlili normal, zardob triptazasi 14 ng/ml (yengil yuqori). Anafilaksiya epizodi bo'lmagan, o'sishi va rivojlanishi yoshiga mos. Ushbu bemorda tashxisni ko'rsatuvchi belgi qanday nomlanadi?",
+  "options": [
+   "Dare belgisi (teri mastotsitozida)",
+   "Nikolskiy belgisi",
+   "Dermografik eshakemi (oddiy dermografizm)",
+   "Koebner fenomeni",
+   "Auspits belgisi"
+  ],
+  "correctAnswer": "Dare belgisi (teri mastotsitozida)"
+ },
+ {
+  "text": "8 oylik o'g'il bolada hayotining birinchi oylaridan og'iz bo'shlig'ida va tirnoq burmalarida qaytalanuvchi kandidoz bor: mahalliy va tizimli antifungal davolashdan keyin vaqtincha tuzaladi, so'ng yana qaytadi. 6 oylikda umumiy tirishish bo'lgan, o'sha paytda kaltsiy 1,55 mmol/l va paratgormon past aniqlangan. Ko'rikda tana harorati 36,9°C, puls 128/daq, og'iz shilliq qavatida oq karashlar, tirnoqlar distrofik; vazn va bo'y 3 persentil atrofida. Og'ir bakterial infeksiyalar va pnevmoniya bo'lmagan. Ota-onasi qarindosh. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Autoimmun poliendokrin sindrom bilan kechuvchi surunkali shilliq-teri kandidozi (APECED)",
+   "Og'ir kombinatsiyalangan immun tanqislik",
+   "Surunkali granulematoz kasallik",
+   "X-ga bog'langan agammaglobulinemiya",
+   "Di Jorj sindromi"
+  ],
+  "correctAnswer": "Autoimmun poliendokrin sindrom bilan kechuvchi surunkali shilliq-teri kandidozi (APECED)"
+ },
+ {
+  "text": "6 yoshli bolada tuxum oqiga tasdiqlangan IgE allergiyasi bor: oldin tuxum yegandan keyin eshakemi va qusish bo'lgan, anafilaksiya bo'lmagan. Grippga qarshi emlash mavsumi boshlandi va bolada astma bor, shuning uchun emlash tavsiya etiladi. Ota-onasi vaksinada tuxum oqsili bo'lishi mumkinligidan xavotirda. Emlash bo'yicha eng to'g'ri taktika qaysi?",
+  "options": [
+   "Gripp vaksinasi oddiy tartibda qilinadi, qo'shimcha cheklov talab etilmaydi",
+   "Gripp vaksinasi umuman man etiladi",
+   "Vaksina faqat reanimatsiya sharoitida, ikki bosqichda bo'lib qilinadi",
+   "Emlashdan oldin majburiy ravishda vaksinaga teri sinovi o'tkaziladi",
+   "Emlash o'rniga umrbod antivirusli profilaktika tayinlanadi"
+  ],
+  "correctAnswer": "Gripp vaksinasi oddiy tartibda qilinadi, qo'shimcha cheklov talab etilmaydi"
+ },
+ {
+  "text": "10 yoshli o'g'il bolada uy changi kanasiga allergik rinit bor; intranazal glyukokortikosteroid va antigistamin preparat fonida burun bitishi va aksirish davom etmoqda, belgilar yil bo'yi kuzatiladi va maktab faoliyatiga xalaqit beradi. Teri prik-testi va spetsifik IgE faqat kana allergenlariga musbat. Astma yo'q, spirometriya normal, boshqa sensibilizatsiya topilmagan. Keyingi eng to'g'ri qadam qaysi?",
+  "options": [
+   "Kana allergeni bilan allergen-spetsifik immunoterapiyani boshlash",
+   "Tizimli glyukokortikosteroidni uzoq muddatga tayinlash",
+   "Intranazal steroid dozasini ikki barobarga oshirib, cheksiz davom ettirish",
+   "Faqat burun yuvish bilan cheklanish",
+   "Omalizumab terapiyasini boshlash"
+  ],
+  "correctAnswer": "Kana allergeni bilan allergen-spetsifik immunoterapiyani boshlash"
+ },
+ {
+  "text": "7 yoshli qiz bolada bir yil ichida ikki marta pnevmokokk pnevmoniyasi va to'rt marta yiringli otit bo'lgan. Laborator: IgG, IgA, IgM yoshiga mos normal, IgG subklasslari normal, T va B hujayralar soni normal, komplement faolligi normal. 23-valentli polisaxarid pnevmokokk vaksinasidan 6 hafta o'tib serotiplarga antitana javobi juda past qoldi. Ushbu bemorda eng ehtimolli tashxis qaysi?",
+  "options": [
+   "Spetsifik antitana tanqisligi (polisaxarid antigenlarga javob buzilgan)",
+   "Umumiy o'zgaruvchan immun tanqislik",
+   "X-ga bog'langan agammaglobulinemiya",
+   "Komplement terminal komponentlari tanqisligi",
+   "Surunkali granulematoz kasallik"
+  ],
+  "correctAnswer": "Spetsifik antitana tanqisligi (polisaxarid antigenlarga javob buzilgan)"
+ },
+ {
+  "text": "11 yoshli o'g'il bolada hayotining ikkinchi yilidan boshlab qo'l va yuzda og'riqsiz, qichishmaydigan shishlar epizodlari bor; shish 48-72 soat davom etadi va o'zi o'tib ketadi. Epizodlar paytida eshakemi hech qachon bo'lmagan. Qorin og'rig'i bilan kechgan epizodlarda bir marta appendektomiyaga shubha qilingan. Antigistamin preparatlar va glyukokortikosteroidlar yengillik bermagan. Otasida ham xuddi shunday epizodlar bor. Ushbu bemorda tashxisni tasdiqlash uchun qaysi tekshiruv eng to'g'ri?",
+  "options": [
+   "C4 va C1-inhibitor miqdori hamda funksional faolligini aniqlash",
+   "Umumiy va spetsifik IgE darajasini aniqlash",
+   "Teri prik-testlari o'tkazish",
+   "Triptaza darajasini aniqlash",
+   "Antinuklear antitanalarni aniqlash"
+  ],
+  "correctAnswer": "C4 va C1-inhibitor miqdori hamda funksional faolligini aniqlash"
+ },
+ {
+  "text": "9 yoshli qiz bolada irsiy angioedema tasdiqlangan. Hozir u shoshilinch bo'limga til va tomoq shishi bilan keltirildi: ovozi bo'g'iq, yutinishi qiyin, stridor boshlanmoqda. Qon bosimi normal, eshakemi yo'q, qichishish yo'q. Bo'limda adrenalin, antigistamin, glyukokortikosteroid, C1-inhibitor konsentrati va ikatibant mavjud. Eng to'g'ri taktika qaysi?",
+  "options": [
+   "Nafas yo'lini ta'minlashga tayyor turib, C1-inhibitor konsentrati yoki ikatibant yuborish",
+   "Adrenalin, antigistamin va glyukokortikosteroid uchligini yuborish",
+   "Faqat yuqori dozada antigistamin yuborib, kuzatish",
+   "Faqat tizimli glyukokortikosteroid yuborib, kuzatish",
+   "Darhol yangi muzlatilgan plazma quyib, boshqa chora ko'rmaslik"
+  ],
+  "correctAnswer": "Nafas yo'lini ta'minlashga tayyor turib, C1-inhibitor konsentrati yoki ikatibant yuborish"
+ },
+ {
+  "text": "5 oylik o'g'il bolada ko'krak suti bilan ovqatlanish fonida najasda qon ipchalari va shilimshiq paydo bo'lgan. Bola faol, yaxshi emadi, vazn qo'shishi yoshiga mos, isitma yo'q, qusish yo'q, qorin yumshoq. Najas tahlilida yashirin qon musbat, infeksion qo'zg'atuvchilar topilmadi. Onaning ratsionida sut mahsulotlari ko'p. Ushbu bemorda eng to'g'ri taktika qaysi?",
+  "options": [
+   "Onaning ratsionidan sigir suti oqsilini chiqarib, emizishni davom ettirish",
+   "Emizishni to'xtatib, darhol aminokislotalar aralashmasiga o'tkazish",
+   "Bolaga tizimli glyukokortikosteroid boshlash",
+   "Darhol kolonoskopiya o'tkazish va biopsiya olish",
+   "Keng qamrovli antibiotik kursini boshlash"
+  ],
+  "correctAnswer": "Onaning ratsionidan sigir suti oqsilini chiqarib, emizishni davom ettirish"
+ }
+]
